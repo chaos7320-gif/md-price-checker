@@ -1,14 +1,18 @@
 import { put, list } from '@vercel/blob';
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-  },
-};
-
 const BLOB_KEY = 'md-dashboard-data.json';
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let raw = '';
+    req.on('data', chunk => { raw += chunk; });
+    req.on('end', () => {
+      try { resolve(JSON.parse(raw)); }
+      catch (e) { reject(new Error('JSON 파싱 실패: ' + e.message)); }
+    });
+    req.on('error', reject);
+  });
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -36,7 +40,8 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const payload = JSON.stringify(req.body);
+      const data = await readBody(req);
+      const payload = JSON.stringify(data);
       await put(BLOB_KEY, payload, {
         access: 'public',
         addRandomSuffix: false,
