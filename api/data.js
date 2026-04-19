@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     try {
       const { blobs } = await list({ prefix: BLOB_KEY });
       if (!blobs.length) return res.status(200).json(null);
-      const r = await fetch(blobs[0].downloadUrl || blobs[0].url);
+      const r = await fetch(blobs[0].downloadUrl || blobs[0].url, { cache: 'no-store' });
       if (!r.ok) return res.status(200).json(null);
       const data = await r.json();
       return res.status(200).json(data);
