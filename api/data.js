@@ -1,6 +1,6 @@
 import { put, list, del } from '@vercel/blob';
 
-const BLOB_KEY = 'md-dashboard-data.json';
+const BLOB_PREFIX = 'md-dashboard-data';
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -26,10 +26,11 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const { blobs } = await list({ prefix: BLOB_KEY, token: process.env.BLOB_READ_WRITE_TOKEN });
+      const { blobs } = await list({ prefix: BLOB_PREFIX });
       if (!blobs.length) return res.status(200).json(null);
-      // private blob의 downloadUrl은 CDN을 우회하는 서명된 URL
-      const r = await fetch(blobs[0].downloadUrl, { cache: 'no-store' });
+      // 가장 최근에 업로드된 blob 사용
+      blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+      const r = await fetch(blobs[0].url + '?t=' + Date.now(), { cache: 'no-store' });
       if (!r.ok) return res.status(200).json(null);
       const data = await r.json();
       return res.status(200).json(data);
@@ -43,11 +44,13 @@ export default async function handler(req, res) {
     try {
       const data = await readBody(req);
       const payload = JSON.stringify(data);
-      await put(BLOB_KEY, payload, {
-        access: 'private',          // CDN 캐싱 없음 - 항상 최신 데이터 반환
-        addRandomSuffix: false,
+      // 기존 blob 전부 삭제 후 새로 저장 (랜덤 suffix로 CDN 캐싱 우회)
+      const { blobs: old } = await list({ prefix: BLOB_PREFIX });
+      if (old.length) await del(old.map(b => b.url));
+      await put(BLOB_PREFIX + '.json', payload, {
+        access: 'public',
+        addRandomSuffix: true,   // 매번 새 URL → CDN 캐싱 문제 없음
         contentType: 'application/json',
-        token: process.env.BLOB_READ_WRITE_TOKEN,
       });
       return res.status(200).json({ ok: true });
     } catch (e) {
@@ -58,8 +61,8 @@ export default async function handler(req, res) {
 
   if (req.method === 'DELETE') {
     try {
-      const { blobs } = await list({ prefix: BLOB_KEY, token: process.env.BLOB_READ_WRITE_TOKEN });
-      if (blobs.length) await del(blobs.map(b => b.url), { token: process.env.BLOB_READ_WRITE_TOKEN });
+      const { blobs } = await list({ prefix: BLOB_PREFIX });
+      if (blobs.length) await del(blobs.map(b => b.url));
       return res.status(200).json({ ok: true });
     } catch (e) {
       return res.status(500).json({ error: e.message });
