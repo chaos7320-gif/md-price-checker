@@ -1,4 +1,4 @@
-import { put, list } from '@vercel/blob';
+import { put, head } from '@vercel/blob';
 
 const BLOB_KEY = 'md-dashboard-data.json';
 
@@ -26,9 +26,10 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const { blobs } = await list({ prefix: BLOB_KEY });
-      if (!blobs.length) return res.status(200).json(null);
-      const r = await fetch(blobs[0].downloadUrl || blobs[0].url, { cache: 'no-store' });
+      // head()로 blob 메타데이터 직접 조회 (CDN 캐싱 우회)
+      const blob = await head(BLOB_KEY, { token: process.env.BLOB_READ_WRITE_TOKEN }).catch(() => null);
+      if (!blob) return res.status(200).json(null);
+      const r = await fetch(blob.downloadUrl, { cache: 'no-store' });
       if (!r.ok) return res.status(200).json(null);
       const data = await r.json();
       return res.status(200).json(data);
