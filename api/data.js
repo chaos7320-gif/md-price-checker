@@ -1,4 +1,5 @@
 import { put, list, del } from '@vercel/blob';
+import { createGunzip } from 'zlib';
 
 const BLOB_PREFIX = 'md-dashboard-data';
 
@@ -11,6 +12,20 @@ function readBody(req) {
       catch (e) { reject(new Error('JSON 파싱 실패: ' + e.message)); }
     });
     req.on('error', reject);
+  });
+}
+
+function readGzipBody(req) {
+  return new Promise((resolve, reject) => {
+    const gunzip = createGunzip();
+    const chunks = [];
+    req.pipe(gunzip);
+    gunzip.on('data', chunk => chunks.push(chunk));
+    gunzip.on('end', () => {
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
+      catch (e) { reject(new Error('Gzip 파싱 실패: ' + e.message)); }
+    });
+    gunzip.on('error', reject);
   });
 }
 
@@ -42,7 +57,8 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const data = await readBody(req);
+      const ct = req.headers['content-type'] || '';
+      const data = ct.includes('gzip') ? await readGzipBody(req) : await readBody(req);
       const payload = JSON.stringify(data);
       // 기존 blob 전부 삭제 후 새로 저장 (랜덤 suffix로 CDN 캐싱 우회)
       const { blobs: old } = await list({ prefix: BLOB_PREFIX });
