@@ -3906,7 +3906,7 @@ function renderChannel(filtered,filteredP,f){
   <div class="kpi-card">
     <div class="kpi-label">매출처 수</div>
     <div class="kpi-val">${wonNo(chList.length)}개</div>
-    <div class="kpi-sub">활성 쳸널</div>
+    <div class="kpi-sub">활성 채널</div>
   </div>
   <div class="kpi-card">
     <div class="kpi-label">1위 매출처</div>
@@ -3919,9 +3919,9 @@ function renderChannel(filtered,filteredP,f){
     <div class="kpi-sub">수량 합산</div>
   </div>
   <div class="kpi-card">
-    <div class="kpi-label">쳸널 평균 매출</div>
+    <div class="kpi-label">채널 평균 매출</div>
     <div class="kpi-val">${won(avgS)}</div>
-    <div class="kpi-sub">쳸널당 평균</div>
+    <div class="kpi-sub">채널당 평균</div>
   </div>
 </div>
 
@@ -3994,9 +3994,9 @@ function renderChannel(filtered,filteredP,f){
     </select>
   </div>
   ${_chDrillCh==='ALL'||!drillData.length?`
-  <div style="padding:40px;text-align:center;color:var(--hint);font-size:13px">위에서 매출처를 선택하면 해당 쳸널의 상품별 매출을 볼 수 있어요</div>
+  <div style="padding:40px;text-align:center;color:var(--hint);font-size:13px">위에서 매출처를 선택하면 해당 채널의 상품별 매출을 볼 수 있어요</div>
   `:`
-  <div style="padding:8px 0 12px;font-size:12px;color:var(--muted)">📍 <strong style="color:var(--green)">${escHtml(_chDrillCh)}</strong> 쳸널 상품 TOP ${drillData.length}개</div>
+  <div style="padding:8px 0 12px;font-size:12px;color:var(--muted)">📍 <strong style="color:var(--green)">${escHtml(_chDrillCh)}</strong> 채널 상품 TOP ${drillData.length}개</div>
   <div class="table-wrap"><table>
     <thead><tr>
       <th>순위</th><th>상품명</th><th>브랜드</th>
