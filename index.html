@@ -602,6 +602,27 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 /* ── 사이즈 상세 툴팁 ── */
 #sz-detail-tip{position:fixed;background:#0c1a2e;color:#fff;padding:12px 14px;border-radius:12px;font-size:12px;z-index:9999;min-width:160px;box-shadow:0 8px 28px rgba(0,0,0,.45);pointer-events:none;line-height:1.6;display:none}
 
+/* ── 환경 설정 모달 ── */
+#settings-modal{display:none;position:fixed;inset:0;background:rgba(8,15,28,.55);z-index:9100;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
+#settings-modal.open{display:flex;animation:fadeIn .15s ease-out}
+.settings-box{max-width:480px!important}
+.settings-section{padding:14px 0;border-bottom:1px solid var(--hairline)}
+.settings-section:last-of-type{border-bottom:none}
+.settings-section-title{font-size:11px;font-weight:600;color:var(--steel);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px}
+.settings-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}
+.settings-row:last-child{margin-bottom:0}
+.settings-row-main{flex:1;min-width:0}
+.settings-row-label{font-size:13px;font-weight:600;color:var(--ink);letter-spacing:-0.005em}
+.settings-row-sub{font-size:11px;color:var(--stone);margin-top:3px;letter-spacing:-0.005em}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--hairline);border-radius:9999px;padding:3px;gap:0}
+.seg-btn{padding:6px 12px;font-size:12px;font-weight:500;color:var(--steel);background:transparent;border:none;border-radius:9999px;cursor:pointer;transition:color .15s,background .15s;font-family:inherit;letter-spacing:-0.005em}
+.seg-btn.active{background:var(--ink);color:#fff;font-weight:600}
+.seg-btn:not(.active):hover{color:var(--ink)}
+.settings-shortcut{display:flex;align-items:center;gap:12px;padding:8px 0;font-size:12px}
+.settings-shortcut > span:first-child{display:inline-flex;gap:3px;min-width:74px}
+.settings-shortcut-desc{color:var(--slate);letter-spacing:-0.005em}
+[data-theme="dark"] .seg-btn.active{background:#fff;color:var(--canvas)}
+
 /* ── 마진 권한 인증 모달 ── */
 #cost-auth-modal{display:none;position:fixed;inset:0;background:rgba(8,15,28,.55);z-index:9100;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
 #cost-auth-modal.open{display:flex;animation:fadeIn .15s ease-out}
@@ -667,6 +688,67 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 <div id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 <div id="sz-detail-tip"></div>
 <div id="ol-tip"></div>
+
+<!-- 환경 설정 모달 -->
+<div id="settings-modal" onclick="if(event.target===this)closeSettings()">
+  <div class="ca-box settings-box" role="dialog" aria-label="환경 설정">
+    <div class="ca-header" style="background:var(--surface);color:var(--ink);border-bottom:1px solid var(--hairline)">
+      <span style="font-size:18px">⚙️</span>
+      <span style="font-size:14px;font-weight:700">환경 설정</span>
+    </div>
+    <div class="ca-body" style="padding:20px;max-height:60vh;overflow-y:auto">
+      <!-- 외관 -->
+      <div class="settings-section">
+        <div class="settings-section-title">외관</div>
+        <div class="settings-row">
+          <div class="settings-row-main">
+            <div class="settings-row-label">테마</div>
+            <div class="settings-row-sub">시스템 설정 따름 / 라이트 / 다크</div>
+          </div>
+          <div class="seg" id="settings-theme-seg">
+            <button class="seg-btn" data-val="system" onclick="setThemePref('system')">시스템</button>
+            <button class="seg-btn" data-val="light" onclick="setThemePref('light')">라이트</button>
+            <button class="seg-btn" data-val="dark" onclick="setThemePref('dark')">다크</button>
+          </div>
+        </div>
+      </div>
+      <!-- 화면 -->
+      <div class="settings-section">
+        <div class="settings-section-title">화면</div>
+        <div class="settings-row">
+          <div class="settings-row-main">
+            <div class="settings-row-label">상단 안내 배너</div>
+            <div class="settings-row-sub">이전에 닫은 배너를 다시 표시</div>
+          </div>
+          <button class="btn-outline-muted" style="padding:8px 14px;font-size:12px" onclick="resetPromoBanner()">다시 보기</button>
+        </div>
+      </div>
+      <!-- 정보 -->
+      <div class="settings-section">
+        <div class="settings-section-title">키보드 단축키</div>
+        <div class="settings-shortcut">
+          <span><kbd>Ctrl</kbd><kbd>K</kbd></span>
+          <span class="settings-shortcut-desc">통합 검색 (브랜드 / 매출처 / 상품)</span>
+        </div>
+        <div class="settings-shortcut">
+          <span><kbd>Esc</kbd></span>
+          <span class="settings-shortcut-desc">모달 닫기</span>
+        </div>
+        <div class="settings-shortcut">
+          <span><kbd>↑</kbd><kbd>↓</kbd></span>
+          <span class="settings-shortcut-desc">검색 결과 이동</span>
+        </div>
+        <div class="settings-shortcut">
+          <span><kbd>Enter</kbd></span>
+          <span class="settings-shortcut-desc">검색 결과 선택</span>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <button type="button" onclick="closeSettings()" class="upload-btn" style="width:100%;padding:11px;justify-content:center">완료</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- 마진 권한 인증 모달 -->
 <div id="cost-auth-modal" onclick="if(event.target===this)closeCostAuth()">
@@ -776,6 +858,10 @@ button:focus-visible,select:focus-visible,input:focus-visible{
       <button class="menu-action" id="theme-toggle" onclick="toggleTheme()">
         <span class="ma-ico" id="theme-icon">🌙</span>
         <span id="theme-label">다크모드</span>
+      </button>
+      <button class="menu-action" onclick="openSettings();closeSideMenu()">
+        <svg class="ma-ico" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="2.2"/><path d="M14.5 9c0-.4-.04-.8-.1-1.2l1.5-1.1-1.4-2.4-1.7.7c-.6-.5-1.3-.9-2-1.1L10.5 2h-3l-.3 1.9c-.7.2-1.4.6-2 1.1l-1.7-.7-1.4 2.4 1.5 1.1c-.06.4-.1.8-.1 1.2s.04.8.1 1.2L2.1 11.3l1.4 2.4 1.7-.7c.6.5 1.3.9 2 1.1L7.5 16h3l.3-1.9c.7-.2 1.4-.6 2-1.1l1.7.7 1.4-2.4-1.5-1.1c.06-.4.1-.8.1-1.2z"/></svg>
+        환경 설정
       </button>
       <div class="menu-divider"></div>
       <button class="menu-action muted" onclick="doLogout()">
@@ -1000,13 +1086,16 @@ function onCostLockClick(){
 function openCostAuth(){
   const m=document.getElementById('cost-auth-modal');if(!m)return;
   m.classList.add('open');
+  trapFocus(m);
   const err=document.getElementById('ca-err');if(err)err.textContent='';
   const id=document.getElementById('ca-id');if(id)id.value='';
   const pw=document.getElementById('ca-pw');if(pw)pw.value='';
   setTimeout(()=>document.getElementById('ca-id')?.focus(),50);
 }
 function closeCostAuth(){
-  document.getElementById('cost-auth-modal')?.classList.remove('open');
+  const m=document.getElementById('cost-auth-modal');if(!m)return;
+  m.classList.remove('open');
+  releaseFocus(m);
 }
 function submitCostAuth(){
   const id=document.getElementById('ca-id')?.value||'';
@@ -1024,10 +1113,79 @@ function submitCostAuth(){
 document.addEventListener('DOMContentLoaded',syncCostAuth);
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
-    const m=document.getElementById('cost-auth-modal');
-    if(m&&m.classList.contains('open')) closeCostAuth();
+    const cm=document.getElementById('cost-auth-modal');
+    if(cm&&cm.classList.contains('open')){closeCostAuth();return;}
+    const sm=document.getElementById('settings-modal');
+    if(sm&&sm.classList.contains('open')){closeSettings();return;}
   }
 });
+
+// ── 환경 설정 모달 ──
+function openSettings(){
+  const m=document.getElementById('settings-modal');if(!m)return;
+  m.classList.add('open');
+  trapFocus(m);
+  syncThemeSeg();
+  setTimeout(()=>m.querySelector('.seg-btn.active')?.focus(),50);
+}
+function closeSettings(){
+  const m=document.getElementById('settings-modal');if(!m)return;
+  m.classList.remove('open');
+  releaseFocus(m);
+}
+function setThemePref(pref){
+  try{
+    if(pref==='system'){
+      localStorage.removeItem('md-theme');
+      const sysDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
+      if(sysDark)document.documentElement.setAttribute('data-theme','dark');
+      else document.documentElement.removeAttribute('data-theme');
+    } else if(pref==='dark'){
+      localStorage.setItem('md-theme','dark');
+      document.documentElement.setAttribute('data-theme','dark');
+    } else {
+      localStorage.setItem('md-theme','light');
+      document.documentElement.removeAttribute('data-theme');
+    }
+  }catch(e){}
+  syncThemeLabel();
+  syncThemeSeg();
+  if(typeof apply==='function') try{apply();}catch(e){}
+}
+function syncThemeSeg(){
+  const seg=document.getElementById('settings-theme-seg');if(!seg)return;
+  let pref='system';
+  try{const v=localStorage.getItem('md-theme');if(v==='dark'||v==='light')pref=v;}catch(e){}
+  seg.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.val===pref));
+}
+function resetPromoBanner(){
+  try{localStorage.removeItem('promo-dismissed-v1');}catch(e){}
+  const b=document.getElementById('promo-banner');if(b)b.classList.remove('hidden');
+  showToast('✅ 안내 배너 다시 표시됨',3000);
+}
+
+// ── Focus trap 헬퍼 ──
+let _focusReturn=null,_focusTrapHandler=null;
+function trapFocus(modal){
+  if(!modal)return;
+  _focusReturn=document.activeElement;
+  const sel='button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  function nodes(){return [...modal.querySelectorAll(sel)].filter(el=>el.offsetParent!==null);}
+  _focusTrapHandler=function(e){
+    if(e.key!=='Tab')return;
+    const list=nodes();if(!list.length)return;
+    const first=list[0],last=list[list.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+  };
+  modal.addEventListener('keydown',_focusTrapHandler);
+}
+function releaseFocus(modal){
+  if(modal&&_focusTrapHandler) modal.removeEventListener('keydown',_focusTrapHandler);
+  _focusTrapHandler=null;
+  if(_focusReturn&&typeof _focusReturn.focus==='function'){try{_focusReturn.focus();}catch(e){}}
+  _focusReturn=null;
+}
 
 // ── 통합 검색 ──
 let _gsLast=[],_gsActive=0;
@@ -1035,11 +1193,13 @@ function openGlobalSearch(){
   const m=document.getElementById('global-search');if(!m)return;
   m.classList.add('open');
   _gsActive=0;
+  trapFocus(m);
   setTimeout(()=>{const i=document.getElementById('gs-input');if(i){i.value='';i.focus();}document.getElementById('gs-results').innerHTML='';},40);
 }
 function closeGlobalSearch(){
   const m=document.getElementById('global-search');if(!m)return;
   m.classList.remove('open');
+  releaseFocus(m);
   const i=document.getElementById('gs-input');if(i)i.value='';
   document.getElementById('gs-results').innerHTML='';
   _gsLast=[];_gsActive=0;
