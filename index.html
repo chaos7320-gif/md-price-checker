@@ -3983,7 +3983,18 @@ function rstFilter(){
   const tbody=document.getElementById('rst-tbody');
   if(!tbody) return;
   const rows=q?_rstAllData.filter(r=>r[1].toLowerCase().includes(q)):_rstAllData;
-  tbody.innerHTML=rows.map((r,i)=>`<tr style="background:${r[4]<=4?'#fff8f8':r[4]<=8?'#fffdf0':''}">
+  const urgentCount=rows.filter(r=>r[4]<=4).length;
+  const soonCount=rows.filter(r=>r[4]>4&&r[4]<=8).length;
+  const cautionCount=rows.filter(r=>r[4]>8&&r[4]<=12).length;
+  // KPI 갱신
+  const setTxt=(id,t)=>{const el=document.getElementById(id);if(el)el.textContent=t;};
+  setTxt('rst-kpi-total',wonNo(rows.length)+'개');
+  setTxt('rst-kpi-urgent',wonNo(urgentCount)+'개');
+  setTxt('rst-kpi-soon',wonNo(soonCount)+'개');
+  setTxt('rst-kpi-caution',wonNo(cautionCount)+'개');
+  setTxt('rst-kpi-total-sub',q?`'${q}' 검색결과`:'최근 4주 판매속도 ≥ 3/주');
+  // 테이블 갱신 (결과 없을 때 안내)
+  tbody.innerHTML=rows.length?rows.map((r,i)=>`<tr style="background:${r[4]<=4?'#fff8f8':r[4]<=8?'#fffdf0':''}">
     <td><span class="rank ${i===0?'gold':i===1?'silver':i===2?'bronze':''}">${i+1}</span></td>
     <td><span style="font-size:10px;padding:2px 6px;border-radius:10px;background:${BBGS[r[0]]};color:${BTCS[r[0]]};font-weight:600">${BNAMES[r[0]]}</span></td>
     <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r[1]}">${r[1]}</td>
@@ -3991,7 +4002,19 @@ function rstFilter(){
     <td class="nr" style="color:var(--green);font-weight:600">${r[3].toFixed(1)}/주</td>
     <td class="nr" style="font-weight:700;color:${rstUrgencyColor(r[4])}">${r[4].toFixed(1)}주</td>
     <td><span style="padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;background:${rstUrgencyBg(r[4])};color:${rstUrgencyColor(r[4])}">${rstUrgencyLabel(r[4])}</span></td>
-  </tr>`).join('');
+  </tr>`).join(''):`<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--hint)">검색 결과가 없습니다</td></tr>`;
+  // 차트 갱신
+  if(charts.pie){
+    charts.pie.data.datasets[0].data=[urgentCount,soonCount,cautionCount];
+    charts.pie.update('none');
+  }
+  if(charts.bar){
+    const top10=rows.slice(0,10);
+    charts.bar.data.labels=top10.map(r=>r[1].length>14?r[1].slice(0,14)+'…':r[1]);
+    charts.bar.data.datasets[0].data=top10.map(r=>r[3]);
+    charts.bar.data.datasets[0].backgroundColor=top10.map(r=>rstUrgencyColor(r[4])+'CC');
+    charts.bar.update('none');
+  }
 }
 
 function buildRstData(){
@@ -4027,22 +4050,22 @@ function renderRestock(f){
 <div class="kpi-grid">
   <div class="kpi-card accent">
     <div class="kpi-label">재입고 대상 상품</div>
-    <div class="kpi-val">${wonNo(data.length)}개</div>
-    <div class="kpi-sub">최근 4주 판매속도 ≥ 3/주</div>
+    <div class="kpi-val" id="rst-kpi-total">${wonNo(data.length)}개</div>
+    <div class="kpi-sub" id="rst-kpi-total-sub">최근 4주 판매속도 ≥ 3/주</div>
   </div>
   <div class="kpi-card">
     <div class="kpi-label">🔴 긴급 (4주 이내)</div>
-    <div class="kpi-val" style="color:var(--red)">${wonNo(urgentCount)}개</div>
+    <div class="kpi-val" id="rst-kpi-urgent" style="color:var(--red)">${wonNo(urgentCount)}개</div>
     <div class="kpi-sub">즉시 재입고 필요</div>
   </div>
   <div class="kpi-card">
     <div class="kpi-label">🟡 주의 (4~8주)</div>
-    <div class="kpi-val" style="color:var(--amber)">${wonNo(soonCount)}개</div>
+    <div class="kpi-val" id="rst-kpi-soon" style="color:var(--amber)">${wonNo(soonCount)}개</div>
     <div class="kpi-sub">발주 준비 필요</div>
   </div>
   <div class="kpi-card">
     <div class="kpi-label">🟢 관찰 (8~12주)</div>
-    <div class="kpi-val" style="color:var(--green)">${wonNo(cautionCount)}개</div>
+    <div class="kpi-val" id="rst-kpi-caution" style="color:var(--green)">${wonNo(cautionCount)}개</div>
     <div class="kpi-sub">모니터링 필요</div>
   </div>
   <div class="kpi-card">
