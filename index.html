@@ -1503,14 +1503,15 @@ ${f.b==='ALL'?`
     // ── 채널별 연도 비교 도넛 ──
     // cmpYrs[0]년, cmpYrs[1]년 각각 채널 TOP10 집계
     function getChByYr(yr){
-      const rows=TOP_DATA.filter(r=>(bIdx2<0||r[0]===bIdx2)&&(yr===null||r[1]===yr)
-        &&(f.mo==='ALL'||r[2]===parseInt(f.mo))
-        &&(f.wk==='ALL'||r[3]===parseInt(f.wk))
-        &&chOk(r,f));
+      const moF=f.mos&&f.mos.length?f.mos:null;
+      const wkF=f.wks&&f.wks.length?f.wks:null;
+      const moOk=r=>moF?moF.includes(r[2]):(f.mo==='ALL'||r[2]===parseInt(f.mo));
+      const wkOk=r=>wkF?wkF.includes(r[3]):(f.wk==='ALL'||r[3]===parseInt(f.wk));
+      const rows=TOP_DATA.filter(r=>(bIdx2<0||r[0]===bIdx2)&&(yr===null||r[1]===yr)&&moOk(r)&&wkOk(r)&&chOk(r,f));
       // prod 필터: 해당 상품 비율로 보정
       let ratio=1;
       if(hasProdFilter){
-        const prodMoData=filteredP.filter(r=>(bIdx2<0||r[0]===bIdx2)&&r[1]===yr&&(f.mo==='ALL'||r[2]===parseInt(f.mo))&&(f.wk==='ALL'||r[3]===parseInt(f.wk)));
+        const prodMoData=filteredP.filter(r=>(bIdx2<0||r[0]===bIdx2)&&r[1]===yr&&moOk(r)&&wkOk(r));
         const prodSum=prodMoData.reduce((s,r)=>s+r[6],0);
         const topSum=rows.reduce((s,r)=>s+r[6],0);
         ratio=topSum>0?prodSum/topSum:0;
@@ -1701,10 +1702,14 @@ function renderTop20(filtP,filtered,filteredP,f){
   const wkDataCurrQ=allWkNums.map(w=>wkByNum_currQ[w]||0);
 
   function getChByYr(yr){
-    const rows=TOP_DATA.filter(r=>(bIdx2<0||r[0]===bIdx2)&&(yr===null||r[1]===yr)&&(f.mo==='ALL'||r[2]===parseInt(f.mo))&&(f.wk==='ALL'||r[3]===parseInt(f.wk))&&chOk(r,f));
+    const moF=f.mos&&f.mos.length?f.mos:null;
+    const wkF=f.wks&&f.wks.length?f.wks:null;
+    const moOk=r=>moF?moF.includes(r[2]):(f.mo==='ALL'||r[2]===parseInt(f.mo));
+    const wkOk=r=>wkF?wkF.includes(r[3]):(f.wk==='ALL'||r[3]===parseInt(f.wk));
+    const rows=TOP_DATA.filter(r=>(bIdx2<0||r[0]===bIdx2)&&(yr===null||r[1]===yr)&&moOk(r)&&wkOk(r)&&chOk(r,f));
     let ratio=1;
     if(hasProdFilter){
-      const prodMoData=filteredP.filter(r=>(bIdx2<0||r[0]===bIdx2)&&r[1]===yr&&(f.mo==='ALL'||r[2]===parseInt(f.mo))&&(f.wk==='ALL'||r[3]===parseInt(f.wk)));
+      const prodMoData=filteredP.filter(r=>(bIdx2<0||r[0]===bIdx2)&&r[1]===yr&&moOk(r)&&wkOk(r));
       const prodSum=prodMoData.reduce((s,r)=>s+r[6],0);
       const topSum=rows.reduce((s,r)=>s+r[6],0);
       ratio=topSum>0?prodSum/topSum:0;
@@ -3778,6 +3783,22 @@ function renderChannel(filtered,filteredP,f){
     return rows;
   })();
 
+  // ── 채널별 매출 비중 (연도 비교 도넛) — filtered 기반(모든 필터 반영) ──
+  const cmpYrsCh=yrs.length>=2?[yrs[0],yrs[yrs.length-1]]:yrs.length===1?[yrs[0]]:[];
+  function chTopByYr(yr){
+    const m={};
+    filtered.forEach(r=>{
+      if(yr!==null&&r[1]!==yr)return;
+      if(!m[r[4]])m[r[4]]=0;
+      m[r[4]]+=r[6];
+    });
+    return Object.entries(m).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  }
+  const chPrev=cmpYrsCh.length>=1?chTopByYr(cmpYrsCh[0]):[];
+  const chCurr=cmpYrsCh.length>=2?chTopByYr(cmpYrsCh[1]):(cmpYrsCh.length===0?chTopByYr(null):[]);
+  const totalPrevCh=chPrev.reduce((s,[,v])=>s+v,0);
+  const totalCurrCh=chCurr.reduce((s,[,v])=>s+v,0);
+
   destroyCharts();
   document.getElementById('content').innerHTML=`
 <div class="kpi-grid">
@@ -3808,18 +3829,38 @@ function renderChannel(filtered,filteredP,f){
   </div>
 </div>
 
-<div class="charts-grid" style="grid-template-columns:1fr 1.6fr;margin-bottom:16px">
-  <div class="chart-card">
-    <div class="chart-header"><div class="chart-title">매출처별 비중 (TOP 10)</div></div>
-    <div style="position:relative;height:220px"><canvas id="c-ch-pie"></canvas></div>
-  </div>
-  <div class="chart-card">
-    <div class="chart-header">
-      <div class="chart-title" id="ch-trend-title">${(f.yrs&&f.yrs.length>=2)?'연도별 동월 비교':'기간별 매출처 트렌드 (TOP 5)'}</div>
-      <div class="chart-sub" id="ch-trend-sub">${(f.yrs&&f.yrs.length>=2)?'월별 합산 기준':(useWk?'주차별':'월별')+' 추이'}</div>
+<div class="chart-card" style="margin-bottom:16px">
+  <div class="chart-header">
+    <div>
+      <div class="chart-title">${cmpYrsCh.length===2?`🏪 채널별 매출 비중 — ${cmpYrsCh[0]}년 vs ${cmpYrsCh[1]}년`:cmpYrsCh.length===1?`🏪 채널별 매출 비중 — ${cmpYrsCh[0]}년`:'🏪 채널별 매출 비중 — 전체'}</div>
+      <div class="chart-sub">TOP 10 채널 기준 · 비중은 해당 연도 전체 대비</div>
     </div>
-    <div style="position:relative;height:220px"><canvas id="c-ch-trend"></canvas></div>
   </div>
+  <div style="display:grid;grid-template-columns:${cmpYrsCh.length>=2?'1fr 1fr':'1fr'};gap:20px">
+    <div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:#94a3b8;color:#fff;font-size:11px;font-weight:700">${cmpYrsCh.length>=1?String(cmpYrsCh[0]).slice(2):''}</span>
+        <span style="font-size:13px;font-weight:600;color:var(--muted)">${cmpYrsCh.length>=1?cmpYrsCh[0]+'년':'전체'}</span>
+      </div>
+      <div style="position:relative;height:200px"><canvas id="c-ch-prev"></canvas></div>
+      <div id="ch-legend-prev" style="margin-top:12px;font-size:12px"></div>
+    </div>
+    ${cmpYrsCh.length>=2?`<div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:linear-gradient(135deg,var(--green) 0%,var(--green2) 100%);color:#fff;font-size:11px;font-weight:700">${String(cmpYrsCh[1]).slice(2)}</span>
+        <span style="font-size:13px;font-weight:700;color:var(--green)">${cmpYrsCh[1]}년</span>
+      </div>
+      <div style="position:relative;height:200px"><canvas id="c-ch-curr"></canvas></div>
+      <div id="ch-legend-curr" style="margin-top:12px;font-size:12px"></div>
+    </div>`:''}
+  </div>
+</div>
+<div class="chart-card" style="margin-bottom:16px">
+  <div class="chart-header">
+    <div class="chart-title" id="ch-trend-title">${(f.yrs&&f.yrs.length>=2)?'연도별 동월 비교':'기간별 매출처 트렌드 (TOP 5)'}</div>
+    <div class="chart-sub" id="ch-trend-sub">${(f.yrs&&f.yrs.length>=2)?'월별 합산 기준':(useWk?'주차별':'월별')+' 추이'}</div>
+  </div>
+  <div style="position:relative;height:220px"><canvas id="c-ch-trend"></canvas></div>
 </div>
 
 <div class="table-card" style="margin-bottom:16px">
@@ -3891,20 +3932,55 @@ function renderChannel(filtered,filteredP,f){
 
   // 차트 렌더
   setTimeout(()=>{
-    if(!document.getElementById('c-ch-pie'))return;
-    const pie10=chList.slice(0,10);
-    const pieColors=['#0284c7','#0ea5e9','#38bdf8','#7dd3fc','#bae6fd','#f97316','#f59e0b','#8b5cf6','#f43f5e','#34d399'];
-    charts.chPie=new Chart(document.getElementById('c-ch-pie'),{
-      type:'doughnut',
-      data:{
-        labels:pie10.map(d=>d.ch.length>14?d.ch.slice(0,14)+'…':d.ch),
-        datasets:[{data:pie10.map(d=>d.s),backgroundColor:pieColors,borderWidth:2,borderColor:'#fff'}]
-      },
-      options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
-        plugins:{legend:{position:'right',labels:{font:{size:10},boxWidth:10,padding:6}},
-          tooltip:{callbacks:{label:c=>`${c.label}: ${won(c.raw)} (${(c.raw/totalS*100).toFixed(1)}%)`}}}
-      }
-    });
+    // ── 채널별 매출 비중 듀얼 도넛 ──
+    const CH_COLORS=['#0284c7','#0ea5e9','#38bdf8','#7dd3fc','#bae6fd','#f97316','#fb923c','#fbbf24','#8b5cf6','#a78bfa'];
+    const CH_COLORS_G=['#a0adb8','#b4b2a9','#c8c6bd','#d3d1c7','#dddbd2','#c4c2b9','#abaaa2','#929088','#79786f','#636157'];
+    const prevMapCh=Object.fromEntries(chPrev),currMapCh=Object.fromEntries(chCurr);
+    function buildChLegend(el,items,colors,total,cmpMap){
+      if(!el)return;
+      el.innerHTML=items.map(([ch,v],i)=>{
+        const pct=(total>0?v/total*100:0).toFixed(1);
+        const name=ch.length>14?ch.slice(0,14)+'…':ch;
+        const cmpV=cmpMap?cmpMap[ch]||0:0;
+        const yoy=cmpMap&&cmpV>0?((v-cmpV)/cmpV*100):null;
+        const yoyStr=yoy!==null?` ${yoy>=0?'▲':'▼'}${Math.abs(yoy).toFixed(0)}%`:'';
+        const yoyColor=yoy===null?'#a0adb8':yoy>=0?'#e05252':'#378ADD';
+        return`<div style="display:flex;align-items:center;justify-content:space-between;gap:4px;padding:3px 0;border-bottom:1px solid #f5f7fa">
+          <div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex:1;min-width:0">
+            <span style="width:8px;height:8px;border-radius:2px;background:${colors[i]};flex-shrink:0"></span>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:10px">${name}</span>
+          </div>
+          <span style="font-weight:600;white-space:nowrap;color:var(--text);font-size:11px">${pct}%</span>
+          ${yoyStr?`<span style="font-size:10px;font-weight:700;color:${yoyColor};white-space:nowrap">${yoyStr}</span>`:''}
+        </div>`;
+      }).join('');
+    }
+    if(document.getElementById('c-ch-prev')&&chPrev.length){
+      charts.chPrev=new Chart(document.getElementById('c-ch-prev'),{type:'doughnut',
+        data:{labels:chPrev.map(([c])=>c),datasets:[{data:chPrev.map(([,v])=>v),backgroundColor:cmpYrsCh.length>=2?CH_COLORS_G:CH_COLORS,borderWidth:0}]},
+        options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{
+            const v=c.raw,pct=(totalPrevCh>0?v/totalPrevCh*100:0).toFixed(1);
+            const cv=currMapCh[c.label]||0;
+            const yoy=v>0&&cmpYrsCh.length>=2?((cv-v)/v*100):null;
+            const yoyStr=yoy!==null?` | ${cmpYrsCh[0]}→${cmpYrsCh[1]} ${yoy>=0?'▲':'▼'}${Math.abs(yoy).toFixed(1)}%`:'';
+            return ` ${won(v)} (${pct}%)${yoyStr}`;
+          }}}}}});
+      buildChLegend(document.getElementById('ch-legend-prev'),chPrev,cmpYrsCh.length>=2?CH_COLORS_G:CH_COLORS,totalPrevCh,cmpYrsCh.length>=2?currMapCh:null);
+    }
+    if(cmpYrsCh.length>=2&&document.getElementById('c-ch-curr')&&chCurr.length){
+      charts.chCurr=new Chart(document.getElementById('c-ch-curr'),{type:'doughnut',
+        data:{labels:chCurr.map(([c])=>c),datasets:[{data:chCurr.map(([,v])=>v),backgroundColor:CH_COLORS,borderWidth:0}]},
+        options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{
+            const v=c.raw,pct=(totalCurrCh>0?v/totalCurrCh*100:0).toFixed(1);
+            const pv=prevMapCh[c.label]||0;
+            const yoy=pv>0?((v-pv)/pv*100):null;
+            const yoyStr=yoy!==null?` | YoY ${yoy>=0?'▲':'▼'}${Math.abs(yoy).toFixed(1)}%`:'';
+            return ` ${won(v)} (${pct}%)${yoyStr}`;
+          }}}}}});
+      buildChLegend(document.getElementById('ch-legend-curr'),chCurr,CH_COLORS,totalCurrCh,prevMapCh);
+    }
     if(!document.getElementById('c-ch-trend'))return;
     const multiYear=f&&f.yrs&&f.yrs.length>=2;
     if(multiYear){
