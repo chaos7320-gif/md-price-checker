@@ -435,6 +435,30 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 
 /* ── 사이즈 상세 툴팁 ── */
 #sz-detail-tip{position:fixed;background:#0c1a2e;color:#fff;padding:12px 14px;border-radius:12px;font-size:12px;z-index:9999;min-width:160px;box-shadow:0 8px 28px rgba(0,0,0,.45);pointer-events:none;line-height:1.6;display:none}
+
+/* ── 통합 검색 모달 ── */
+#global-search{display:none;position:fixed;inset:0;background:rgba(8,15,28,.55);z-index:9000;align-items:flex-start;justify-content:center;padding:80px 16px 16px;backdrop-filter:blur(4px)}
+#global-search.open{display:flex;animation:fadeIn .15s ease-out}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.gs-box{background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:540px;box-shadow:0 24px 60px rgba(0,0,0,.45);overflow:hidden;animation:menuIn .18s ease-out}
+.gs-input-wrap{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.gs-input-wrap svg{flex-shrink:0;color:var(--muted)}
+#gs-input{flex:1;border:none;outline:none;font-size:15px;font-weight:500;color:var(--text);background:transparent;padding:0}
+.gs-list{max-height:55vh;overflow-y:auto;padding:6px}
+.gs-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;transition:background .12s}
+.gs-item:hover,.gs-item.active{background:var(--sky-light)}
+.gs-type{font-size:10px;font-weight:700;padding:3px 7px;border-radius:8px;flex-shrink:0;letter-spacing:.02em;min-width:36px;text-align:center}
+.gs-type.brand{background:#fef3c7;color:#92400e}
+.gs-type.channel{background:#dbeafe;color:#1d4ed8}
+.gs-type.product{background:#dcfce7;color:#15803d}
+.gs-label{flex:1;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gs-empty{padding:30px;text-align:center;color:var(--hint);font-size:13px}
+.gs-hint{padding:8px 18px;border-top:1px solid var(--border);font-size:11px;color:var(--hint);background:var(--sky-light)}
+[data-theme="dark"] .gs-hint{background:#1e293b}
+[data-theme="dark"] .gs-item:hover,[data-theme="dark"] .gs-item.active{background:#1e293b}
+[data-theme="dark"] .gs-type.brand{background:#451a03;color:#fbbf24}
+[data-theme="dark"] .gs-type.channel{background:#1e3a8a;color:#93c5fd}
+[data-theme="dark"] .gs-type.product{background:#14532d;color:#86efac}
 #ol-tip{position:fixed;background:#0c1a2e;color:#fff;padding:14px 16px;border-radius:14px;font-size:12px;z-index:9999;min-width:260px;box-shadow:0 8px 28px rgba(0,0,0,.45);pointer-events:none;line-height:1.65;display:none}
 </style>
 </head>
@@ -462,6 +486,21 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 <div id="toast"></div>
 <div id="sz-detail-tip"></div>
 <div id="ol-tip"></div>
+
+<!-- 통합 검색 모달 -->
+<div id="global-search" onclick="if(event.target===this)closeGlobalSearch()">
+  <div class="gs-box" role="dialog" aria-label="통합 검색">
+    <div class="gs-input-wrap">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="8" cy="8" r="6"/><line x1="13" y1="13" x2="17" y2="17"/>
+      </svg>
+      <input id="gs-input" type="text" placeholder="브랜드 / 매출처 / 상품 검색..." oninput="doGlobalSearch()" onkeydown="onGlobalSearchKey(event)" autocomplete="off">
+      <span style="font-size:10px;padding:3px 7px;border-radius:6px;background:var(--sky-light);color:var(--sky);font-weight:700;letter-spacing:.05em">ESC</span>
+    </div>
+    <div class="gs-list" id="gs-results"></div>
+    <div class="gs-hint">↑↓ 이동 · Enter 선택 · Esc 닫기</div>
+  </div>
+</div>
 <div class="topbar">
   <div class="logo"><div class="logo-dot">MD</div>브랜드 매출 대시보드</div>
   <nav class="nav">
@@ -476,6 +515,12 @@ button:focus-visible,select:focus-visible,input:focus-visible{
     <button class="nav-item" onclick="setTab('inbound',this)">📦 입고 현황</button>
   </nav>
   <div class="topbar-right">
+    <!-- 통합 검색 버튼 -->
+    <button class="menu-btn" id="gs-btn" onclick="openGlobalSearch()" title="통합 검색 (Ctrl+K)" aria-label="통합 검색">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <circle cx="7" cy="7" r="5"/><line x1="11" y1="11" x2="14.5" y2="14.5"/>
+      </svg>
+    </button>
     <!-- 메뉴 버튼 -->
     <button class="menu-btn" id="menu-btn" onclick="toggleSideMenu()" title="메뉴">
       <svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -647,6 +692,81 @@ function syncThemeLabel(){
   if(lb) lb.textContent=isDark?'라이트모드':'다크모드';
 }
 document.addEventListener('DOMContentLoaded',syncThemeLabel);
+
+// ── 통합 검색 ──
+let _gsLast=[],_gsActive=0;
+function openGlobalSearch(){
+  const m=document.getElementById('global-search');if(!m)return;
+  m.classList.add('open');
+  _gsActive=0;
+  setTimeout(()=>{const i=document.getElementById('gs-input');if(i){i.value='';i.focus();}document.getElementById('gs-results').innerHTML='';},40);
+}
+function closeGlobalSearch(){
+  const m=document.getElementById('global-search');if(!m)return;
+  m.classList.remove('open');
+  const i=document.getElementById('gs-input');if(i)i.value='';
+  document.getElementById('gs-results').innerHTML='';
+  _gsLast=[];_gsActive=0;
+}
+function doGlobalSearch(){
+  const inp=document.getElementById('gs-input');
+  const q=(inp?.value||'').trim().toLowerCase();
+  const list=document.getElementById('gs-results');
+  if(!q){list.innerHTML='';_gsLast=[];return;}
+  const r=[];
+  // 브랜드
+  BNAMES.forEach((b,i)=>{if(b.toLowerCase().includes(q))r.push({type:'brand',label:b,bi:i});});
+  // 채널 (브랜드 통합 unique)
+  const allCh=new Set();
+  Object.entries(CHANNELS||{}).forEach(([b,arr])=>{if(b!=='ALL')(arr||[]).forEach(c=>allCh.add(c));});
+  [...allCh].forEach(c=>{if(c.toLowerCase().includes(q))r.push({type:'channel',label:c});});
+  // 상품
+  const allProds=new Set();
+  Object.values(PRODUCTS||{}).forEach(bp=>Object.keys(bp||{}).forEach(p=>allProds.add(p)));
+  [...allProds].forEach(p=>{if(p.toLowerCase().includes(q))r.push({type:'product',label:p});});
+  _gsLast=r.slice(0,40);
+  _gsActive=0;
+  if(!_gsLast.length){list.innerHTML='<div class="gs-empty">결과 없음</div>';return;}
+  const typeKr={brand:'브랜드',channel:'채널',product:'상품'};
+  list.innerHTML=_gsLast.map((x,i)=>`<div class="gs-item${i===0?' active':''}" data-i="${i}" onclick="pickGlobalSearch(${i})"><span class="gs-type ${x.type}">${typeKr[x.type]}</span><span class="gs-label">${escHtml(x.label)}</span></div>`).join('');
+}
+function onGlobalSearchKey(e){
+  if(e.key==='Escape'){closeGlobalSearch();return;}
+  if(!_gsLast.length)return;
+  if(e.key==='ArrowDown'){e.preventDefault();_gsActive=Math.min(_gsActive+1,_gsLast.length-1);refreshGsActive();}
+  else if(e.key==='ArrowUp'){e.preventDefault();_gsActive=Math.max(_gsActive-1,0);refreshGsActive();}
+  else if(e.key==='Enter'){e.preventDefault();pickGlobalSearch(_gsActive);}
+}
+function refreshGsActive(){
+  const items=document.querySelectorAll('#gs-results .gs-item');
+  items.forEach((el,i)=>el.classList.toggle('active',i===_gsActive));
+  items[_gsActive]?.scrollIntoView({block:'nearest'});
+}
+function pickGlobalSearch(i){
+  const x=_gsLast[i];if(!x)return;
+  closeGlobalSearch();
+  if(x.type==='brand'){
+    const bs=document.getElementById('f-brand');if(bs){bs.value=String(x.bi);if(typeof onBrandChange==='function')onBrandChange();}
+    document.querySelector('.nav-item[onclick*="dashboard1"]')?.click();
+  } else if(x.type==='channel'){
+    SELECTED_CHS=[x.label];
+    if(typeof renderChCheckboxes==='function')renderChCheckboxes('');
+    document.querySelector('.nav-item[onclick*="channel"]')?.click();
+  } else if(x.type==='product'){
+    SELECTED_PRODS=[x.label];
+    if(typeof renderProdDrop==='function')renderProdDrop('');
+    document.querySelector('.nav-item[onclick*="top20"]')?.click();
+  }
+  if(typeof apply==='function')try{apply();}catch(e){}
+}
+// 단축키 Ctrl/Cmd+K
+document.addEventListener('keydown',function(e){
+  if((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K')){
+    e.preventDefault();
+    const m=document.getElementById('global-search');
+    if(m&&m.classList.contains('open')) closeGlobalSearch(); else openGlobalSearch();
+  }
+});
 document.addEventListener('click',function(e){
   const m=document.getElementById('side-menu');
   const b=document.getElementById('menu-btn');
