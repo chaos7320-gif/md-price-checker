@@ -540,6 +540,9 @@ button:focus-visible,select:focus-visible,input:focus-visible{
       <button class="menu-action" onclick="backupData();closeSideMenu()">
         <span style="font-size:16px">💾</span> 데이터 백업
       </button>
+      <button class="menu-action" onclick="exportAllVisible();closeSideMenu()">
+        <span style="font-size:16px">📥</span> 현재 화면 CSV
+      </button>
       <button class="menu-action danger" onclick="closeSideMenu();resetAllData()">
         <span style="font-size:16px">🗑️</span> 데이터 초기화
       </button>
@@ -767,6 +770,40 @@ document.addEventListener('keydown',function(e){
     if(m&&m.classList.contains('open')) closeGlobalSearch(); else openGlobalSearch();
   }
 });
+
+// ── 현재 화면 표 일괄 CSV 내보내기 ──
+function exportAllVisible(){
+  const content=document.getElementById('content');
+  if(!content){alert('내보낼 화면이 없습니다');return;}
+  const tables=content.querySelectorAll('table');
+  if(!tables.length){alert('현재 화면에 표가 없습니다');return;}
+  const tabName=(document.querySelector('.nav-item.active')?.textContent||'export').trim();
+  const lines=[];
+  lines.push([`[${tabName}]`,new Date().toLocaleString('ko-KR')]);
+  lines.push([]);
+  tables.forEach((tbl,i)=>{
+    const card=tbl.closest('.table-card,.chart-card');
+    const title=(card?.querySelector('.chart-title')?.textContent||`표 ${i+1}`).trim();
+    lines.push([`■ ${title}`]);
+    tbl.querySelectorAll('tr').forEach(tr=>{
+      const cells=[...tr.querySelectorAll('th,td')].map(c=>(c.textContent||'').replace(/\s+/g,' ').trim());
+      if(cells.some(v=>v!=='')) lines.push(cells);
+    });
+    lines.push([]);
+  });
+  const csv=lines.map(r=>r.map(c=>{
+    const v=String(c==null?'':c);
+    return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
+  }).join(',')).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const fname=tabName.replace(/[^\w가-힣]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40)+'_'+new Date().toISOString().slice(0,10)+'.csv';
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=fname;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  if(typeof showToast==='function') showToast(`📥 ${fname} 다운로드 완료 · 표 ${tables.length}개 포함`);
+}
 document.addEventListener('click',function(e){
   const m=document.getElementById('side-menu');
   const b=document.getElementById('menu-btn');
