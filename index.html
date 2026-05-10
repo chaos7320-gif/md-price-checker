@@ -2467,9 +2467,9 @@ function parseWB(wb,fname){
   const cm={};
   keys.forEach(k=>{const kl=k.replace(/\s/g,'');
     if(kl.includes('매출월일')||kl==='날짜')cm.date=k;
-    if(kl==='연도'||kl==='연도도')cm.yr=k;
+    if(kl==='연도'||kl==='연도도'||kl==='매출년도'||kl==='매출연도'||kl==='년도')cm.yr=k;
     if(kl==='주차')cm.wk=k;
-    if(kl==='월'&&!kl.includes('매출'))cm.mo=k;
+    if((kl==='월'||kl==='매출월')&&!kl.includes('월일'))cm.mo=k;
     if(kl==='브랜드')cm.brand=k;
     if(kl==='매출처명')cm.ch=k;
     if(kl==='상품명')cm.prod=k;
