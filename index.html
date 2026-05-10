@@ -32,6 +32,21 @@ function dismissPromo(){
   try{localStorage.setItem('promo-dismissed-v1','1');}catch(e){}
   const b=document.getElementById('promo-banner');if(b)b.classList.add('hidden');
 }
+// KPI 카드 클릭 시 같은 컨텐츠 영역의 첫 차트/표로 부드럽게 스크롤
+document.addEventListener('click',function(e){
+  const card=e.target.closest('.kpi-card');
+  if(!card)return;
+  // 카드 내부 input/button 클릭은 무시 (예: 검색창)
+  if(e.target.closest('input,button,select,a,.upload-btn'))return;
+  const grid=card.closest('.kpi-grid');if(!grid)return;
+  // 다음 형제부터 첫 .chart-card 또는 .table-card 찾기
+  let n=grid.nextElementSibling;
+  while(n){
+    const t=n.matches('.chart-card,.table-card,.charts-grid')?n:n.querySelector('.chart-card,.table-card');
+    if(t){const target=t.matches('.charts-grid')?t.querySelector('.chart-card'):t;if(target){target.scrollIntoView({behavior:'smooth',block:'start'});return;}}
+    n=n.nextElementSibling;
+  }
+});
 document.addEventListener('DOMContentLoaded',function(){
   try{
     if(localStorage.getItem('promo-dismissed-v1')==='1'){
@@ -197,9 +212,13 @@ select:focus,input:focus{border-color:var(--brand-blue-deep);box-shadow:0 0 0 3p
 
 /* ── 본문 ── */
 .main{padding:24px;max-width:1520px;margin:0 auto}
-.kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:24px}
-.kpi-card{background:var(--card);border:1px solid var(--hairline);border-radius:16px;padding:20px;transition:border-color .15s}
+.kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:24px;animation:fadeUp .25s ease-out}
+.charts-grid{animation:fadeUp .28s ease-out .04s backwards}
+.table-card{animation:fadeUp .3s ease-out .08s backwards}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.kpi-card{background:var(--card);border:1px solid var(--hairline);border-radius:16px;padding:20px;transition:border-color .15s,transform .15s;cursor:pointer}
 .kpi-card:hover{border-color:var(--ink)}
+.kpi-card:active{transform:scale(.985)}
 /* MiniMax 액센트: 코럴 그라디언트 (제품 카드 톤) — 32px hero radius */
 .kpi-card.accent{background:linear-gradient(135deg,var(--brand-coral) 0%,var(--brand-coral-deep) 100%);border-color:transparent;border-radius:32px}
 .kpi-card.accent .kpi-label,.kpi-card.accent .kpi-sub{color:rgba(255,255,255,.85)}
@@ -215,8 +234,10 @@ select:focus,input:focus{border-color:var(--brand-blue-deep);box-shadow:0 0 0 3p
 .kpi-badge.red{background:#fef2f2;color:var(--red);border-color:#fecaca}
 .kpi-badge.amber{background:#fffbeb;color:var(--amber);border-color:#fed7aa}
 .charts-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:20px}
-.chart-card{background:var(--card);border:1px solid var(--hairline);border-radius:16px;padding:28px;transition:border-color .15s}
+.chart-card{background:var(--card);border:1px solid var(--hairline);border-radius:16px;padding:28px;transition:border-color .15s,opacity .2s,filter .2s}
 .chart-card:hover{border-color:var(--hairline-strong)}
+/* 차트 호버 시 같은 그리드 내 다른 카드 dim (focus 모드) */
+.charts-grid:has(.chart-card:hover) .chart-card:not(:hover){opacity:.5;filter:saturate(.7)}
 .chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:12px}
 .chart-title{font-size:16px;font-weight:600;color:var(--ink);letter-spacing:-0.02em;line-height:1.3}
 .chart-sub{font-size:12px;color:var(--stone);margin-top:4px;letter-spacing:-0.005em;line-height:1.5}
@@ -237,6 +258,9 @@ th.sortable.sort-desc::after{content:'↓';color:var(--ink);font-weight:600}
 td{padding:12px 10px;border-bottom:1px solid var(--hairline-soft);color:var(--ink);vertical-align:middle;letter-spacing:-0.005em}
 tr:last-child td{border-bottom:none}
 tr{transition:background .12s}
+/* zebra: 짝수행 미세 배경 */
+tbody tr:nth-child(even) td{background:rgba(0,0,0,.015)}
+[data-theme="dark"] tbody tr:nth-child(even) td{background:rgba(255,255,255,.025)}
 tbody tr:hover td{background:var(--surface-soft)}
 tbody tr:hover td:first-child{box-shadow:inset 3px 0 0 var(--ink)}
 .nr{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
