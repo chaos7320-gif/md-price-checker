@@ -511,6 +511,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{
     <button class="nav-item" onclick="setTab('discount',this)">🏷️ 할인율 분석</button>
     <button class="nav-item" onclick="setTab('growth',this)">🌱 성장률 분석</button>
     <button class="nav-item" onclick="setTab('compare',this)">⚖️ 상품비교</button>
+    <button class="nav-item" onclick="setTab('deadstock',this)">💀 데드스톡</button>
     <!-- <button class="nav-item" onclick="setTab('restock',this)">🔄 재입고 우선순위</button> -->
     <button class="nav-item" onclick="setTab('inbound',this)">📦 입고 현황</button>
   </nav>
@@ -1448,6 +1449,7 @@ function apply(){
   else if(activeTab==='compare') renderCompare();
   else if(activeTab==='growth') renderGrowth(filtered,filteredP,f);
   else if(activeTab==='restock') renderRestock(f);
+  else if(activeTab==='deadstock') renderDeadStock(f);
   else if(activeTab==='channel') renderChannel(filtered,filteredP,f);
   else if(activeTab==='goal') renderGoalSales();
   else if(activeTab==='dashboard1') renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f);
@@ -4549,6 +4551,175 @@ function renderRestock(f){
         scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:9}}}}
       }
     });
+  },80);
+}
+
+// ── 데드스톡 분석 탭 ──
+let _dsAllData=[];
+function buildDeadStockData(){
+  if(!INV_DATA||!INV_DATA.length) return [];
+  const base=PROD_DATA.length?PROD_DATA:D_PROD;
+  if(!base.length) return [];
+  // 모든 주차 정렬 (오래된→최신)
+  const wkOf=r=>`${r[1]}-${String(r[2]).padStart(2,'0')}-${String(r[3]).padStart(2,'0')}`;
+  const wkKeys=[...new Set(base.map(wkOf))].sort();
+  const wkPos=Object.fromEntries(wkKeys.map((k,i)=>[k,i]));
+  const nowPos=wkKeys.length-1;
+  // 최근 8주 윈도우
+  const last8=new Set(wkKeys.slice(-8));
+  const numWks=Math.max(last8.size,1);
+  const lastSale={},recentQty={};
+  base.forEach(r=>{
+    if((r[5]||0)<=0)return;
+    const k=`${r[0]}|${r[4]}`;
+    const pos=wkPos[wkOf(r)];
+    if(lastSale[k]===undefined||pos>lastSale[k]) lastSale[k]=pos;
+    if(last8.has(wkOf(r))){
+      if(!recentQty[k]) recentQty[k]=0;
+      recentQty[k]+=r[5];
+    }
+  });
+  const map={};
+  INV_DATA.filter(r=>r.stock>0).forEach(r=>{
+    const k=`${r.bi}||${r.prod}`;
+    const lookup=`${r.bi}|${r.prod}`;
+    const lastPos=lastSale[lookup];
+    const wksSince=lastPos===undefined?999:Math.max(0,nowPos-lastPos);
+    const wkSales=Math.round((recentQty[lookup]||0)/numWks*10)/10;
+    if(!map[k]) map[k]={bi:r.bi,prod:r.prod,stock:0,wkSales,wksSince};
+    map[k].stock+=r.stock;
+  });
+  return Object.values(map)
+    .map(d=>{
+      const wksToClear=d.wkSales>0?Math.round(d.stock/d.wkSales*10)/10:999;
+      const risk=d.stock*Math.log10(d.wksSince+2)*Math.log10(wksToClear+2);
+      return {...d,wksToClear,risk};
+    })
+    .filter(d=>d.wksSince>=8||d.wkSales<0.3)
+    .sort((a,b)=>b.risk-a.risk);
+}
+function _dsRows(data){
+  if(!data.length) return `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--hint)">데드스톡 후보가 없습니다</td></tr>`;
+  return data.map((r,i)=>{
+    const grade=r.wksSince>=12?'🔴 위험':(r.wksSince>=8?'🟠 경고':r.wkSales<0.3?'🟡 저속':'🟢 관찰');
+    const gColor=r.wksSince>=12?'#dc2626':r.wksSince>=8?'#ea580c':r.wkSales<0.3?'#d97706':'#059669';
+    const gBg=r.wksSince>=12?'#fef2f2':r.wksSince>=8?'#fff7ed':r.wkSales<0.3?'#fffbeb':'#ecfdf5';
+    const wksSinceTxt=r.wksSince>=999?'기록 없음':r.wksSince+'주 전';
+    const wksClearTxt=r.wksToClear>=999?'∞':r.wksToClear.toFixed(1)+'주';
+    const recent=Math.round(r.wkSales*8);
+    return `<tr style="background:${r.wksSince>=12?'#fff8f8':r.wksSince>=8?'#fffaf5':r.wkSales<0.3?'#fffdf0':''}">
+      <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
+      <td><span style="font-size:10px;padding:2px 6px;border-radius:10px;background:${BBGS[r.bi]};color:${BTCS[r.bi]};font-weight:600">${BNAMES[r.bi]}</span></td>
+      <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(r.prod)}">${escHtml(r.prod)}</td>
+      <td class="nr" style="font-weight:600">${wonNo(r.stock)}개</td>
+      <td class="nr" style="color:var(--hint)">${wonNo(recent)}개</td>
+      <td class="nr">${r.wkSales.toFixed(1)}/주</td>
+      <td class="nr" style="color:${r.wksToClear>=52?'var(--red)':r.wksToClear>=26?'var(--amber)':'var(--text)'};font-weight:600">${wksClearTxt}</td>
+      <td class="nr" style="color:${r.wksSince>=12?'var(--red)':r.wksSince>=8?'#ea580c':'var(--text)'};font-weight:600">${wksSinceTxt}</td>
+      <td><span style="padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;background:${gBg};color:${gColor}">${grade}</span></td>
+    </tr>`;
+  }).join('');
+}
+function dsFilter(){
+  const q=(document.getElementById('ds-search')?.value||'').toLowerCase().trim();
+  const tbody=document.getElementById('ds-tbody');if(!tbody)return;
+  const rows=q?_dsAllData.filter(r=>r.prod.toLowerCase().includes(q)):_dsAllData;
+  tbody.innerHTML=_dsRows(rows);
+  // KPI 동기화
+  const setTxt=(id,t)=>{const el=document.getElementById(id);if(el)el.textContent=t;};
+  setTxt('ds-kpi-total',wonNo(rows.length)+'개');
+  setTxt('ds-kpi-stock',wonNo(rows.reduce((s,r)=>s+r.stock,0))+'개');
+  setTxt('ds-kpi-red',wonNo(rows.filter(r=>r.wksSince>=12).length)+'개');
+  setTxt('ds-kpi-amber',wonNo(rows.filter(r=>r.wksSince>=8&&r.wksSince<12).length)+'개');
+}
+function renderDeadStock(f){
+  const bIdx=f.b==='ALL'?-1:parseInt(f.b);
+  let data=buildDeadStockData().filter(r=>bIdx<0||r.bi===bIdx);
+  _dsAllData=data;
+  const totalProds=data.length;
+  const totalStock=data.reduce((s,r)=>s+r.stock,0);
+  const noSale=data.filter(r=>r.wksSince>=12).length;
+  const slow=data.filter(r=>r.wksSince>=8&&r.wksSince<12).length;
+  // 브랜드별 데드스톡 분포 차트용
+  const byBr={};data.forEach(r=>{if(!byBr[r.bi])byBr[r.bi]=0;byBr[r.bi]+=r.stock;});
+  destroyCharts();
+  document.getElementById('content').innerHTML=`
+<div class="kpi-grid">
+  <div class="kpi-card accent">
+    <div class="kpi-label">데드스톡 후보</div>
+    <div class="kpi-val" id="ds-kpi-total">${wonNo(totalProds)}개</div>
+    <div class="kpi-sub">8주 무판매 또는 주당 &lt;0.3개</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">잠긴 재고 수량</div>
+    <div class="kpi-val" id="ds-kpi-stock">${wonNo(totalStock)}개</div>
+    <div class="kpi-sub">합산 재고</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">🔴 12주+ 무판매</div>
+    <div class="kpi-val" id="ds-kpi-red" style="color:var(--red)">${wonNo(noSale)}개</div>
+    <div class="kpi-sub">즉시 마크다운 검토</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">🟠 8~11주 무판매</div>
+    <div class="kpi-val" id="ds-kpi-amber" style="color:#ea580c">${wonNo(slow)}개</div>
+    <div class="kpi-sub">사전 대응 필요</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">기준 윈도우</div>
+    <div class="kpi-val">최근 8주</div>
+    <div class="kpi-sub">판매 속도 산정</div>
+  </div>
+</div>
+<div class="charts-grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
+  <div class="chart-card">
+    <div class="chart-header"><div class="chart-title">등급별 분포</div></div>
+    <div style="position:relative;height:180px"><canvas id="c-ds-pie"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-header"><div class="chart-title">브랜드별 데드스톡 재고</div></div>
+    <div style="position:relative;height:180px"><canvas id="c-ds-bar"></canvas></div>
+  </div>
+</div>
+<div class="table-card">
+  <div class="chart-header">
+    <div>
+      <div class="chart-title">💀 데드스톡 우선순위</div>
+      <div class="chart-sub">위험도 = 재고량 × log(무판매 주차) × log(소진 예상 주차) — 큰 순</div>
+    </div>
+    <input type="text" id="ds-search" placeholder="상품명 검색..." oninput="dsFilter()" style="font-size:12px;padding:6px 12px;border:1px solid var(--border);border-radius:8px;width:180px;outline:none">
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr>
+      <th>순위</th><th>브랜드</th><th>상품명</th>
+      <th class="nr">재고</th>
+      <th class="nr">최근 8주 판매</th>
+      <th class="nr">주당 평균</th>
+      <th class="nr">소진 예상</th>
+      <th class="nr">마지막 판매</th>
+      <th>등급</th>
+    </tr></thead>
+    <tbody id="ds-tbody">${_dsRows(data)}</tbody>
+  </table></div>
+</div>`;
+  setTimeout(()=>{
+    if(document.getElementById('c-ds-pie')){
+      const safe=Math.max(0,totalProds-noSale-slow);
+      charts.dsPie=new Chart(document.getElementById('c-ds-pie'),{type:'doughnut',
+        data:{labels:['🔴 위험(12주+)','🟠 경고(8~11주)','🟡/🟢 기타'],
+          datasets:[{data:[noSale,slow,safe],backgroundColor:['#dc2626','#ea580c','#fbbf24'],borderWidth:0}]},
+        options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+          plugins:{legend:{position:'right',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>` ${c.label}: ${c.raw}개`}}}}});
+    }
+    if(document.getElementById('c-ds-bar')){
+      const brEntries=Object.entries(byBr).sort((a,b)=>b[1]-a[1]);
+      charts.dsBar=new Chart(document.getElementById('c-ds-bar'),{type:'bar',
+        data:{labels:brEntries.map(([b])=>BNAMES[b]),
+          datasets:[{data:brEntries.map(([,v])=>v),backgroundColor:brEntries.map(([b])=>BBGS[b]),borderColor:brEntries.map(([b])=>BTCS[b]),borderWidth:1.5,borderRadius:5}]},
+        options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${wonNo(c.raw)}개`}}},
+          scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:10}}}}}});
+    }
   },80);
 }
 
