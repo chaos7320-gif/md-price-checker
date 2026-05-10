@@ -5069,6 +5069,36 @@ function hideOlTip(){
   },150);
 }
 
+// ── 진단 헬퍼: 콘솔에서 debugCh('하루타',2026,'무신사 (트레통/하루타)','906-BLACK') 호출 ──
+window.debugCh=function(brandName,year,ch,prod){
+  const bi=typeof brandName==='number'?brandName:getBrandIdx(brandName);
+  if(bi<0){console.error('❌ 브랜드 인식 실패:',brandName);return;}
+  const exact=CHP_DATA.filter(r=>r[0]===bi&&r[1]===year&&r[4]===ch&&r[5]===prod);
+  console.log(`%c[CHP_DATA] ${brandName} / ${year} / ${ch} / ${prod}`,'font-weight:bold;color:#0284c7');
+  console.table(exact.map(r=>({월:r[2],주차:r[3],수량:r[6],실매출:r[7].toLocaleString(),정상가:r[8].toLocaleString()})));
+  const tQ=exact.reduce((s,r)=>s+r[6],0),tS=exact.reduce((s,r)=>s+r[7],0);
+  console.log(`총합: ${tQ.toLocaleString()}개 · ${tS.toLocaleString()}원 · ${exact.length}행`);
+  // (mo=1,wk=1)은 매출월일에서 연도경계 재할당된 행 가능성 (parseWB)
+  const yrBoundary=exact.filter(r=>r[2]===1&&r[3]===1);
+  if(yrBoundary.length)console.warn(`⚠️ 연도경계 의심행 ${yrBoundary.length}건 (mo=1,wk=1) — 원본이 ${year-1}-12말일 수 있음`);
+  // 음수 매출(반품) 행
+  const neg=exact.filter(r=>r[7]<0||r[6]<0);
+  if(neg.length)console.warn(`⚠️ 음수 매출/수량 ${neg.length}건:`,neg);
+  // 비슷한 prod/ch 변형 (공백·대소문자 차이)
+  const norm=s=>String(s).toLowerCase().replace(/\s+/g,'');
+  const prodN=norm(prod),chN=norm(ch);
+  const prodVar={},chVar={};
+  CHP_DATA.forEach(r=>{
+    if(r[0]===bi&&r[1]===year){
+      if(r[5]!==prod&&norm(r[5])===prodN){if(!prodVar[r[5]])prodVar[r[5]]={q:0,s:0};prodVar[r[5]].q+=r[6];prodVar[r[5]].s+=r[7];}
+      if(r[4]!==ch&&norm(r[4])===chN){if(!chVar[r[4]])chVar[r[4]]={q:0,s:0};chVar[r[4]].q+=r[6];chVar[r[4]].s+=r[7];}
+    }
+  });
+  if(Object.keys(prodVar).length)console.warn('⚠️ 비슷한 상품명 변형:',prodVar);
+  if(Object.keys(chVar).length)console.warn('⚠️ 비슷한 채널명 변형:',chVar);
+  return{qty:tQ,sales:tS,rows:exact.length};
+};
+
 // ── 서버 저장/복원 ──
 async function saveToServer(data){
   const json=JSON.stringify(data);
