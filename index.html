@@ -436,6 +436,19 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 /* ── 사이즈 상세 툴팁 ── */
 #sz-detail-tip{position:fixed;background:#0c1a2e;color:#fff;padding:12px 14px;border-radius:12px;font-size:12px;z-index:9999;min-width:160px;box-shadow:0 8px 28px rgba(0,0,0,.45);pointer-events:none;line-height:1.6;display:none}
 
+/* ── 마진 권한 인증 모달 ── */
+#cost-auth-modal{display:none;position:fixed;inset:0;background:rgba(8,15,28,.55);z-index:9100;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
+#cost-auth-modal.open{display:flex;animation:fadeIn .15s ease-out}
+.ca-box{background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:360px;box-shadow:0 24px 60px rgba(0,0,0,.45);overflow:hidden;animation:menuIn .18s ease-out}
+.ca-header{display:flex;align-items:center;gap:10px;padding:16px 20px;background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%);border-bottom:1px solid var(--border);color:#92400e}
+[data-theme="dark"] .ca-header{background:linear-gradient(135deg,#451a03 0%,#78350f 100%);color:#fbbf24}
+.ca-body{padding:18px 20px}
+.ca-field{margin-bottom:12px}
+.ca-field label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.ca-field input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;outline:none;background:#fff;color:var(--text);transition:all .2s}
+.ca-field input:focus{border-color:var(--sky2);box-shadow:0 0 0 3px rgba(14,165,233,.12)}
+[data-theme="dark"] .ca-field input{background:#1e293b;border-color:#334155}
+
 /* ── 통합 검색 모달 ── */
 #global-search{display:none;position:fixed;inset:0;background:rgba(8,15,28,.55);z-index:9000;align-items:flex-start;justify-content:center;padding:80px 16px 16px;backdrop-filter:blur(4px)}
 #global-search.open{display:flex;animation:fadeIn .15s ease-out}
@@ -487,6 +500,31 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 <div id="sz-detail-tip"></div>
 <div id="ol-tip"></div>
 
+<!-- 마진 권한 인증 모달 -->
+<div id="cost-auth-modal" onclick="if(event.target===this)closeCostAuth()">
+  <div class="ca-box" role="dialog" aria-label="마진 권한 인증">
+    <div class="ca-header">
+      <span style="font-size:18px">🔒</span>
+      <span style="font-size:14px;font-weight:700">마진 데이터 권한 인증</span>
+    </div>
+    <div class="ca-body">
+      <div class="ca-field">
+        <label>아이디</label>
+        <input type="text" id="ca-id" placeholder="아이디" autocomplete="off" onkeydown="if(event.key==='Enter')document.getElementById('ca-pw').focus()">
+      </div>
+      <div class="ca-field">
+        <label>비밀번호</label>
+        <input type="password" id="ca-pw" placeholder="비밀번호" autocomplete="off" onkeydown="if(event.key==='Enter')submitCostAuth()">
+      </div>
+      <div id="ca-err" style="color:var(--red);font-size:12px;min-height:16px;font-weight:500;margin-top:4px"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button type="button" onclick="closeCostAuth()" class="btn-outline-muted" style="flex:1;padding:10px;font-size:13px">취소</button>
+        <button type="button" onclick="submitCostAuth()" class="upload-btn" style="flex:1;padding:10px;font-size:13px;justify-content:center">인증</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 통합 검색 모달 -->
 <div id="global-search" onclick="if(event.target===this)closeGlobalSearch()">
   <div class="gs-box" role="dialog" aria-label="통합 검색">
@@ -511,7 +549,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{
     <button class="nav-item" onclick="setTab('discount',this)">🏷️ 할인율 분석</button>
     <button class="nav-item" onclick="setTab('growth',this)">🌱 성장률 분석</button>
     <button class="nav-item" onclick="setTab('compare',this)">⚖️ 상품비교</button>
-    <!-- <button class="nav-item" onclick="setTab('margin',this)">💰 마진 분석</button> 원가 입력 후 노출 -->
+    <button class="nav-item" id="nav-margin" onclick="setTab('margin',this)" style="display:none">💰 마진 분석</button>
     <button class="nav-item" onclick="setTab('deadstock',this)">💀 데드스톡</button>
     <!-- <button class="nav-item" onclick="setTab('churn',this)">🔄 신규/이탈</button> -->
     <!-- <button class="nav-item" onclick="setTab('restock',this)">🔄 재입고 우선순위</button> -->
@@ -545,6 +583,9 @@ button:focus-visible,select:focus-visible,input:focus-visible{
       </button>
       <button class="menu-action" onclick="exportAllVisible();closeSideMenu()">
         <span style="font-size:16px">📥</span> 현재 화면 CSV
+      </button>
+      <button class="menu-action" id="cost-lock-btn" onclick="onCostLockClick()">
+        <span style="font-size:16px">🔒</span> 마진 권한 인증
       </button>
       <button class="menu-action danger" onclick="closeSideMenu();resetAllData()">
         <span style="font-size:16px">🗑️</span> 데이터 초기화
@@ -698,6 +739,64 @@ function syncThemeLabel(){
   if(lb) lb.textContent=isDark?'라이트모드':'다크모드';
 }
 document.addEventListener('DOMContentLoaded',syncThemeLabel);
+
+// ── 마진 데이터 권한 인증 (tovis1/tovis1) ──
+function isCostUnlocked(){try{return localStorage.getItem('cost-auth')==='1';}catch(e){return false;}}
+function syncCostAuth(){
+  const ok=isCostUnlocked();
+  const navBtn=document.getElementById('nav-margin');
+  if(navBtn) navBtn.style.display=ok?'':'none';
+  const lockBtn=document.getElementById('cost-lock-btn');
+  if(lockBtn){
+    lockBtn.innerHTML=ok
+      ? '<span style="font-size:16px">🔓</span> 마진 권한 잠그기'
+      : '<span style="font-size:16px">🔒</span> 마진 권한 인증';
+  }
+}
+function onCostLockClick(){
+  closeSideMenu();
+  if(isCostUnlocked()){
+    try{localStorage.removeItem('cost-auth');}catch(e){}
+    syncCostAuth();
+    if(typeof activeTab!=='undefined'&&activeTab==='margin'){
+      document.querySelector('.nav-item[onclick*="dashboard1"]')?.click();
+    }
+    if(typeof showToast==='function') showToast('🔒 마진 탭이 다시 잠겼습니다');
+  } else {
+    openCostAuth();
+  }
+}
+function openCostAuth(){
+  const m=document.getElementById('cost-auth-modal');if(!m)return;
+  m.classList.add('open');
+  const err=document.getElementById('ca-err');if(err)err.textContent='';
+  const id=document.getElementById('ca-id');if(id)id.value='';
+  const pw=document.getElementById('ca-pw');if(pw)pw.value='';
+  setTimeout(()=>document.getElementById('ca-id')?.focus(),50);
+}
+function closeCostAuth(){
+  document.getElementById('cost-auth-modal')?.classList.remove('open');
+}
+function submitCostAuth(){
+  const id=document.getElementById('ca-id')?.value||'';
+  const pw=document.getElementById('ca-pw')?.value||'';
+  const err=document.getElementById('ca-err');
+  if(id==='tovis1'&&pw==='tovis1'){
+    try{localStorage.setItem('cost-auth','1');}catch(e){}
+    closeCostAuth();
+    syncCostAuth();
+    if(typeof showToast==='function') showToast('🔓 마진 탭이 잠금 해제되었습니다');
+  } else {
+    if(err) err.textContent='아이디 또는 비밀번호가 올바르지 않습니다';
+  }
+}
+document.addEventListener('DOMContentLoaded',syncCostAuth);
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){
+    const m=document.getElementById('cost-auth-modal');
+    if(m&&m.classList.contains('open')) closeCostAuth();
+  }
+});
 
 // ── 통합 검색 ──
 let _gsLast=[],_gsActive=0;
@@ -1043,6 +1142,12 @@ function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').
 function destroyCharts(){Object.values(charts).forEach(c=>{try{c.destroy()}catch(e){console.warn('Chart destroy error:',e);}});charts={};}
 
 function setTab(t,el){
+  // 마진 탭은 인증 필요
+  if(t==='margin'&&!isCostUnlocked()){
+    if(typeof showToast==='function') showToast('🔒 마진 데이터는 인증이 필요합니다');
+    openCostAuth();
+    return;
+  }
   activeTab=t;
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
