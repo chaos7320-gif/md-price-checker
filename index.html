@@ -5130,7 +5130,15 @@ function _dsRows(data){
       <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
       <td><span style="font-size:10px;padding:2px 6px;border-radius:10px;background:${BBGS[r.bi]};color:${BTCS[r.bi]};font-weight:600">${BNAMES[r.bi]}</span></td>
       <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(r.prod)}">${escHtml(r.prod)}</td>
-      <td class="nr" style="font-weight:600">${wonNo(r.stock)}개</td>
+      <td class="nr" style="font-weight:600">
+        <span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)">
+          ${wonNo(r.stock)}개
+          <div class="sz-tooltip-box">
+            <div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${r.prod.length>24?r.prod.slice(0,24)+'…':escHtml(r.prod)} 사이즈별 잔여재고</div>
+            ${invSizeGridHTML(r.prod)}
+          </div>
+        </span>
+      </td>
       <td class="nr" style="color:var(--hint)">${wonNo(recent)}개</td>
       <td class="nr">${r.wkSales.toFixed(1)}/주</td>
       <td class="nr" style="color:${r.wksToClear>=52?'var(--red)':r.wksToClear>=26?'var(--amber)':'var(--text)'};font-weight:600">${wksClearTxt}</td>
