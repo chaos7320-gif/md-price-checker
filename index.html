@@ -4780,14 +4780,24 @@ function renderDeadStock(f){
     <div class="kpi-sub">판매 속도 산정</div>
   </div>
 </div>
-<div class="charts-grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
+<div class="charts-grid" style="grid-template-columns:1fr 1fr;margin-bottom:16px">
   <div class="chart-card">
-    <div class="chart-header"><div class="chart-title">등급별 분포</div></div>
-    <div style="position:relative;height:180px"><canvas id="c-ds-pie"></canvas></div>
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">📊 등급별 분포</div>
+        <div class="chart-sub">위험·경고·기타 후보 수 비중</div>
+      </div>
+    </div>
+    <div style="position:relative;height:220px"><canvas id="c-ds-pie"></canvas></div>
   </div>
   <div class="chart-card">
-    <div class="chart-header"><div class="chart-title">브랜드별 데드스톡 재고</div></div>
-    <div style="position:relative;height:180px"><canvas id="c-ds-bar"></canvas></div>
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">🏷️ 브랜드별 잠긴 재고</div>
+        <div class="chart-sub">데드스톡 후보의 브랜드별 합산 재고</div>
+      </div>
+    </div>
+    <div style="position:relative;height:220px"><canvas id="c-ds-bar"></canvas></div>
   </div>
 </div>
 <div class="table-card">
@@ -4796,7 +4806,7 @@ function renderDeadStock(f){
       <div class="chart-title">💀 데드스톡 우선순위</div>
       <div class="chart-sub">위험도 = 재고량 × log(무판매 주차) × log(소진 예상 주차) — 큰 순</div>
     </div>
-    <input type="text" id="ds-search" placeholder="상품명 검색..." oninput="dsFilter()" style="font-size:12px;padding:6px 12px;border:1px solid var(--border);border-radius:8px;width:180px;outline:none">
+    <input type="text" id="ds-search" placeholder="상품명 검색..." oninput="dsFilter()" style="font-size:12px;padding:6px 12px;border:1.5px solid var(--border);border-radius:10px;width:180px;outline:none">
   </div>
   <div class="table-wrap"><table>
     <thead><tr>
