@@ -1328,27 +1328,27 @@ function renderSales(filtered,filteredP,filteredKpi,filteredPKpi,f){
   document.getElementById('content').innerHTML=`
 <div class="kpi-grid">
   <div class="kpi-card accent">
-    <div class="ml">총 실매출액</div>
+    <div class="kpi-label">총 실매출액</div>
     <div class="kpi-val">${won(tS)}</div>
     <div class="kpi-sub">조회 조건 합산</div>
   </div>
   <div class="kpi-card">
-    <div class="ml">정상가 합계</div>
+    <div class="kpi-label">정상가 합계</div>
     <div class="kpi-val">${won(tR)}</div>
     <div class="kpi-sub">할인 전 금액</div>
   </div>
   <div class="kpi-card">
-    <div class="ml">할인 금액</div>
+    <div class="kpi-label">할인 금액</div>
     <div class="kpi-val">${won(tR-tS)}</div>
     <div class="kpi-badge ${dr<5?'':'red'}">${pct(dr)} 할인</div>
   </div>
   <div class="kpi-card">
-    <div class="ml">판매 수량</div>
+    <div class="kpi-label">판매 수량</div>
     <div class="kpi-val">${wonNo(tQ)}건</div>
     <div class="kpi-sub">총 판매 건수</div>
   </div>
   <div class="kpi-card">
-    <div class="ml">평균 단가</div>
+    <div class="kpi-label">평균 단가</div>
     <div class="kpi-val">${won(avg)}</div>
     <div class="kpi-sub">건당 평균</div>
   </div>
@@ -1970,27 +1970,27 @@ function renderTop20(filtP,filtered,filteredP,f){
   document.getElementById('content').innerHTML=`
 <div class="kpi-grid">
   <div class="kpi-card accent">
-    <div class="ml">총 실매출액</div>
+    <div class="kpi-label">총 실매출액</div>
     <div class="kpi-val">${won(tS)}</div>
     <div class="kpi-sub">필터 조건 합산</div>
   </div>
   <div class="kpi-card">
-    <div class="ml">정상가 합계</div>
+    <div class="kpi-label">정상가 합계</div>
     <div class="kpi-val">${won(tR)}</div>
     <div class="kpi-sub">할인 전</div>
   </div>
   <div class="kpi-card">
-    <div class="ml">총 판매 수량</div>
+    <div class="kpi-label">총 판매 수량</div>
     <div class="kpi-val">${wonNo(tQ)}건</div>
     <div class="kpi-sub">상품 기준</div>
   </div>
   <div class="kpi-card">
-    <div class="ml">1위 상품</div>
+    <div class="kpi-label">1위 상품</div>
     <div class="kpi-val" style="font-size:11px">${top20[0]?.[0]||'-'}</div>
     <div class="kpi-badge">${top20[0]?won(top20[0][1].s):'-'}</div>
   </div>
   <div class="kpi-card">
-    <div class="ml">TOP3 비중</div>
+    <div class="kpi-label">TOP3 비중</div>
     <div class="kpi-val">${tS>0?pct(top20.slice(0,3).reduce((s,[,d])=>s+d.s,0)/tS*100):'-'}</div>
     <div class="kpi-sub">전체 대비</div>
   </div>
@@ -2007,11 +2007,11 @@ function renderTop20(filtP,filtered,filteredP,f){
 <div style="border-top:2px solid var(--sky-light);margin:8px 0 16px;padding-top:16px">
   <div style="font-size:13px;font-weight:700;color:var(--sky);margin-bottom:12px">📊 매출 분석</div>
   <div class="kpi-grid" style="margin-bottom:12px">
-    <div class="kpi-card accent"><div class="ml">실매출액</div><div class="kpi-val">${won(saS)}</div><div class="kpi-sub">조회 조건 합산</div></div>
-    <div class="kpi-card"><div class="ml">정상가 합계</div><div class="kpi-val">${won(saR)}</div><div class="kpi-sub">할인 전</div></div>
-    <div class="kpi-card"><div class="ml">할인 금액</div><div class="kpi-val">${won(saR-saS)}</div><div class="kpi-badge ${saDr<5?'':'red'}">${pct(saDr)} 할인</div></div>
-    <div class="kpi-card"><div class="ml">판매 수량</div><div class="kpi-val">${wonNo(saQ)}건</div><div class="kpi-sub">총 판매 건수</div></div>
-    <div class="kpi-card"><div class="ml">평균 단가</div><div class="kpi-val">${won(saAvg)}</div><div class="kpi-sub">건당 평균</div></div>
+    <div class="kpi-card accent"><div class="kpi-label">실매출액</div><div class="kpi-val">${won(saS)}</div><div class="kpi-sub">조회 조건 합산</div></div>
+    <div class="kpi-card"><div class="kpi-label">정상가 합계</div><div class="kpi-val">${won(saR)}</div><div class="kpi-sub">할인 전</div></div>
+    <div class="kpi-card"><div class="kpi-label">할인 금액</div><div class="kpi-val">${won(saR-saS)}</div><div class="kpi-badge ${saDr<5?'':'red'}">${pct(saDr)} 할인</div></div>
+    <div class="kpi-card"><div class="kpi-label">판매 수량</div><div class="kpi-val">${wonNo(saQ)}건</div><div class="kpi-sub">총 판매 건수</div></div>
+    <div class="kpi-card"><div class="kpi-label">평균 단가</div><div class="kpi-val">${won(saAvg)}</div><div class="kpi-sub">건당 평균</div></div>
   </div>
 </div>
 <div class="chart-card" style="margin-bottom:16px">
@@ -2077,9 +2077,9 @@ ${(()=>{
   return `<div style="border-top:2px solid #fde68a;margin:8px 0 16px;padding-top:16px">
   <div style="font-size:13px;font-weight:700;color:#b45309;margin-bottom:12px">📦 입고 현황</div>
   <div class="kpi-grid" style="margin-bottom:12px">
-    <div class="kpi-card"><div class="ml">총 입고수량</div><div class="kpi-val">${wonNo(totQty)}개</div><div class="kpi-sub">필터 조건 합산</div></div>
-    <div class="kpi-card accent"><div class="ml">총 입고금액</div><div class="kpi-val">${won(totCost)}</div><div class="kpi-sub">공급금액 합계</div></div>
-    <div class="kpi-card"><div class="ml">입고 상품수</div><div class="kpi-val">${wonNo(Object.keys(byProdI).length)}종</div><div class="kpi-sub">고유 상품 기준</div></div>
+    <div class="kpi-card"><div class="kpi-label">총 입고수량</div><div class="kpi-val">${wonNo(totQty)}개</div><div class="kpi-sub">필터 조건 합산</div></div>
+    <div class="kpi-card accent"><div class="kpi-label">총 입고금액</div><div class="kpi-val">${won(totCost)}</div><div class="kpi-sub">공급금액 합계</div></div>
+    <div class="kpi-card"><div class="kpi-label">입고 상품수</div><div class="kpi-val">${wonNo(Object.keys(byProdI).length)}종</div><div class="kpi-sub">고유 상품 기준</div></div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
     <div class="table-card">
@@ -4907,11 +4907,11 @@ function renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f){
   destroyCharts();
   document.getElementById('content').innerHTML=`
 <div class="kpi-grid" style="margin-bottom:16px">
-  <div class="kpi-card accent"><div class="ml">총 실매출액</div><div class="kpi-val">${won(tS)}</div><div class="kpi-sub">조회 조건 합산</div></div>
-  <div class="kpi-card"><div class="ml">정상가 합계</div><div class="kpi-val">${won(tR)}</div><div class="kpi-sub">할인 전</div></div>
-  <div class="kpi-card"><div class="ml">평균 할인율</div><div class="kpi-val">${pct(dr)}</div><div class="kpi-badge ${dr<5?'':'red'}">${pct(dr)} 할인</div></div>
-  <div class="kpi-card"><div class="ml">판매 수량</div><div class="kpi-val">${wonNo(tQ)}건</div><div class="kpi-sub">총 판매 건수</div></div>
-  <div class="kpi-card"><div class="ml">평균 단가</div><div class="kpi-val">${won(avg)}</div><div class="kpi-sub">건당 평균</div></div>
+  <div class="kpi-card accent"><div class="kpi-label">총 실매출액</div><div class="kpi-val">${won(tS)}</div><div class="kpi-sub">조회 조건 합산</div></div>
+  <div class="kpi-card"><div class="kpi-label">정상가 합계</div><div class="kpi-val">${won(tR)}</div><div class="kpi-sub">할인 전</div></div>
+  <div class="kpi-card"><div class="kpi-label">평균 할인율</div><div class="kpi-val">${pct(dr)}</div><div class="kpi-badge ${dr<5?'':'red'}">${pct(dr)} 할인</div></div>
+  <div class="kpi-card"><div class="kpi-label">판매 수량</div><div class="kpi-val">${wonNo(tQ)}건</div><div class="kpi-sub">총 판매 건수</div></div>
+  <div class="kpi-card"><div class="kpi-label">평균 단가</div><div class="kpi-val">${won(avg)}</div><div class="kpi-sub">건당 평균</div></div>
 </div>
 <div style="display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:14px">
   <div class="chart-card">
