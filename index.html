@@ -24,7 +24,28 @@
 // Service Worker 등록 (PWA — 홈 화면 추가 가능)
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
-    navigator.serviceWorker.register('/sw.js').catch(function(){});
+    navigator.serviceWorker.register('/sw.js').then(function(reg){
+      // 매번 업데이트 체크 (구 캐시 강제 갱신)
+      reg.update().catch(function(){});
+      // 새 SW가 waiting 상태면 즉시 활성화 요청
+      if(reg.waiting) reg.waiting.postMessage({type:'SKIP_WAITING'});
+      reg.addEventListener('updatefound',function(){
+        const nw=reg.installing;
+        if(!nw)return;
+        nw.addEventListener('statechange',function(){
+          if(nw.state==='installed'&&navigator.serviceWorker.controller){
+            // 새 SW 설치 완료 → skipWaiting 트리거
+            nw.postMessage({type:'SKIP_WAITING'});
+          }
+        });
+      });
+    }).catch(function(){});
+    // SW가 교체되면 현재 페이지 자동 리로드 (한 번만)
+    let _swReloaded=false;
+    navigator.serviceWorker.addEventListener('controllerchange',function(){
+      if(_swReloaded)return;_swReloaded=true;
+      window.location.reload();
+    });
   });
 }
 // Promo 배너: 닫음 상태 기억 (버전별 키)

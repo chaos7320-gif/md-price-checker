@@ -1,5 +1,5 @@
 // 간단한 Service Worker — 정적 자산 캐시 + API/HTML는 네트워크 우선
-const CACHE='md-dash-v2';
+const CACHE='md-dash-v3';
 const APP_SHELL=['/','/index.html','/manifest.webmanifest','/icon-192.svg','/icon-512.svg'];
 
 self.addEventListener('install',e=>{
@@ -11,6 +11,11 @@ self.addEventListener('activate',e=>{
     caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))
       .then(()=>self.clients.claim())
   );
+});
+
+// 페이지에서 SKIP_WAITING 메시지 받으면 즉시 활성화
+self.addEventListener('message',e=>{
+  if(e.data&&e.data.type==='SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('fetch',e=>{
