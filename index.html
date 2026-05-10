@@ -222,6 +222,102 @@ tr:hover td{background:#f0f9ff;transition:background .15s}
   .logo-dot{display:none}
 }
 
+/* ── PC 와이드(≥1681px) ── */
+@media(min-width:1681px){
+  .main{max-width:1680px}
+}
+
+/* ── 태블릿(769–1024px) ── */
+@media(min-width:769px) and (max-width:1024px){
+  .main{padding:16px 18px}
+  .topbar{padding:0 16px}
+  .filterbar{padding:10px 16px}
+  .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .kpi-card{padding:14px 16px}
+  .charts-grid{grid-template-columns:1fr;gap:14px}
+  .comp-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  table{font-size:12.5px}
+  th,td{padding:8px 9px}
+  /* 인라인 1.6fr 1fr / 3fr 2fr / 1fr 1.6fr → 1fr (스택) */
+  div[style*="grid-template-columns:3fr 2fr"],
+  div[style*="grid-template-columns: 3fr 2fr"],
+  div[style*="grid-template-columns:1.6fr 1fr"],
+  div[style*="grid-template-columns: 1.6fr 1fr"],
+  div[style*="grid-template-columns:1fr 1.6fr"],
+  div[style*="grid-template-columns: 1fr 1.6fr"]{
+    grid-template-columns:1fr !important;
+  }
+}
+
+/* ── 모바일 보강(≤768px): 새 듀얼 도넛·인라인 그리드 스택 + 툴팁 폭 ── */
+@media(max-width:768px){
+  .chart-card [style*="grid-template-columns:1fr 1fr"],
+  .chart-card [style*="grid-template-columns: 1fr 1fr"],
+  div[style*="grid-template-columns:3fr 2fr"],
+  div[style*="grid-template-columns: 3fr 2fr"],
+  div[style*="grid-template-columns:1.6fr 1fr"],
+  div[style*="grid-template-columns: 1.6fr 1fr"],
+  div[style*="grid-template-columns:1fr 1.6fr"],
+  div[style*="grid-template-columns: 1fr 1.6fr"]{
+    grid-template-columns:1fr !important;
+  }
+  /* 5칸 인라인 KPI 그리드도 2칸으로 */
+  div[style*="grid-template-columns:repeat(5"],
+  div[style*="grid-template-columns: repeat(5"]{
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+  /* 툴팁: 화면 폭에 맞춤 */
+  .sz-tooltip-box{width:calc(100vw - 24px);max-width:440px;font-size:11px;padding:14px 16px}
+  #ol-tip{min-width:0;width:calc(100vw - 24px);max-width:320px;font-size:11px}
+  /* 터치 타겟 */
+  .upload-btn,.btn-search,.menu-btn{min-height:40px}
+  .login-btn{min-height:48px}
+  /* KPI 큰 숫자 줄바꿈 */
+  .kpi-val{overflow-wrap:anywhere;word-break:break-word}
+  /* 차트 카드 헤더 정리 */
+  .chart-header{flex-wrap:wrap;gap:8px}
+  .chart-title{font-size:13px}
+  .chart-sub{font-size:11px}
+}
+
+/* ── 작은 폰(≤480px) 추가 ── */
+@media(max-width:480px){
+  .chart-card{padding:12px}
+  .table-card{padding:12px}
+  .ftag{font-size:11px;padding:4px 10px}
+  table{font-size:11.5px;min-width:340px}
+  th,td{padding:6px 5px}
+  th[colspan]{font-size:11px}
+  #toast{padding:10px 16px;font-size:12px}
+  /* 듀얼 도넛 카드 내부 여백 축소 */
+  .chart-card [style*="grid"]{gap:12px !important}
+}
+
+/* ── 필터바: PC/태블릿에서 sticky ── */
+@media(min-width:769px){
+  .filterbar{
+    position:sticky;top:58px;z-index:99;
+    backdrop-filter:blur(10px);
+    background:linear-gradient(180deg,rgba(255,255,255,.94) 0%,rgba(240,249,255,.94) 100%);
+  }
+}
+
+/* ── 접근성: 키보드 포커스 강화 ── */
+button:focus-visible,select:focus-visible,input:focus-visible{
+  outline:2px solid var(--sky2);
+  outline-offset:2px;
+}
+
+/* ── 접근성: 모션 감소 환경 ── */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+  }
+  .kpi-card:hover,.upload-btn:hover,.btn-search:hover,.login-btn:hover{transform:none}
+}
+
 /* ── 검색형 드롭다운 (매출처·상품) ── */
 .srch-wrap{position:relative;display:inline-block}
 .srch-drop{display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:190px;max-height:240px;overflow-y:auto;background:#fff;border:1.5px solid var(--border);border-radius:12px;box-shadow:var(--shadow-lg);z-index:500;padding:4px;animation:menuIn .15s ease-out}
