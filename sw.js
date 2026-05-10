@@ -1,5 +1,5 @@
 // 간단한 Service Worker — 정적 자산 캐시 + API/HTML는 네트워크 우선
-const CACHE='md-dash-v1';
+const CACHE='md-dash-v2';
 const APP_SHELL=['/','/index.html','/manifest.webmanifest','/icon-192.svg','/icon-512.svg'];
 
 self.addEventListener('install',e=>{
