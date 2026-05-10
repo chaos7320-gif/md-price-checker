@@ -4658,6 +4658,44 @@ function renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f){
   const bIdx2=f.b==='ALL'?-1:parseInt(f.b);
   const moF2=f.mos&&f.mos.length?f.mos:null,wkF2=f.wks&&f.wks.length?f.wks:null;
   const cmpYrs=f.yrs&&f.yrs.length>=2?[f.yrs[0],f.yrs[1]]:f.yrs&&f.yrs.length===1?[f.yrs[0]]:[];
+  // 연도별 상품 집계 (2개년 비교 시) — 매출처별 상세와 동일 레이아웃 지원
+  const YR_PAL_D1={
+    2024:{bg:'#f8fafc',hdr:'#e2e8f0',border:'#94a3b8',text:'#475569',badge:'#64748b',light:'#f1f5f9'},
+    2025:{bg:'#eff6ff',hdr:'#dbeafe',border:'#93c5fd',text:'#1d4ed8',badge:'#3b82f6',light:'#bfdbfe'},
+    2026:{bg:'#f0fdf4',hdr:'#dcfce7',border:'#86efac',text:'#15803d',badge:'#22c55e',light:'#bbf7d0'},
+    2027:{bg:'#fff7ed',hdr:'#fed7aa',border:'#fb923c',text:'#c2410c',badge:'#f97316',light:'#fdba74'},
+  };
+  const yrPalD1=yr=>YR_PAL_D1[yr]||{bg:'#fafafa',hdr:'#f1f5f9',border:'#e2e8f0',text:'#475569',badge:'#94a3b8',light:'#e2e8f0'};
+  const byProdYr={};
+  if(cmpYrs.length>=2){
+    if(!chFilter){
+      filtPC.forEach(r=>{
+        const p=r[4],yr=r[1];
+        if(!cmpYrs.includes(yr))return;
+        if(!byProdYr[yr])byProdYr[yr]={};
+        if(!byProdYr[yr][p])byProdYr[yr][p]={s:0,q:0,rt:0};
+        byProdYr[yr][p].s+=r[6];byProdYr[yr][p].q+=r[5];byProdYr[yr][p].rt+=r[7];
+      });
+    } else {
+      const moF=f.mos&&f.mos.length?f.mos:null,wkF=f.wks&&f.wks.length?f.wks:null;
+      cmpYrs.forEach(yr=>{
+        const tAll_y=TOP_DATA.filter(r=>(bIdx2<0||r[0]===bIdx2)&&r[1]===yr&&(!moF||moF.includes(r[2]))&&(!wkF||wkF.includes(r[3])));
+        const tChS_y=tAll_y.filter(r=>chOk(r,f)).reduce((s,r)=>s+r[6],0);
+        const tAllS_y=tAll_y.reduce((s,r)=>s+r[6],0);
+        const ratio_y=tAllS_y>0?tChS_y/tAllS_y:0;
+        filtPC.filter(r=>r[1]===yr).forEach(r=>{
+          const p=r[4];
+          if(!byProdYr[yr])byProdYr[yr]={};
+          if(!byProdYr[yr][p])byProdYr[yr][p]={s:0,q:0,rt:0};
+          byProdYr[yr][p].s+=Math.round(r[6]*ratio_y);
+          byProdYr[yr][p].q+=Math.round(r[5]*ratio_y);
+          byProdYr[yr][p].rt+=Math.round(r[7]*ratio_y);
+        });
+      });
+    }
+  }
+  const yrTotalsD1={};
+  cmpYrs.forEach(yr=>{yrTotalsD1[yr]=Object.values(byProdYr[yr]||{}).reduce((s,d)=>s+d.s,0);});
   function aggMo(yr){
     const src=hasProd?filteredP:TOP_DATA;
     const m={};
@@ -4736,18 +4774,109 @@ function renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f){
   <div style="position:relative;height:200px"><canvas id="d1-dr"></canvas></div>
 </div>
 <div class="table-card">
-  <div class="chart-header"><div class="chart-title">👟 상품 TOP 20 상세</div><div class="chart-sub">실매출액 기준 정렬</div></div>
-  <div class="table-wrap"><table>
-    <thead><tr><th>순위</th><th>상품명</th><th class="nr">실매출액</th><th class="nr">정상가</th><th class="nr">할인율</th><th class="nr">수량</th></tr></thead>
-    <tbody>${top20P.map(([p,d],i)=>{const dr2=d.rt>0?(d.rt-d.s)/d.rt*100:0;return`<tr>
-      <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
-      <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p}">${p}</td>
-      <td class="nr" style="font-weight:700;color:var(--green)">${won(d.s)}</td>
-      <td class="nr" style="color:var(--hint)">${won(d.rt)}</td>
-      <td class="nr"><span class="disc-pill ${discClass(dr2)}">${pct(dr2)}</span></td>
-      <td class="nr">${wonNo(d.q)}건</td>
-    </tr>`;}).join('')}</tbody>
-  </table></div>
+  ${(()=>{
+    if(cmpYrs.length>=2){
+      const y1=cmpYrs[0],y2=cmpYrs[1];
+      const c1=yrPalD1(y1),c2=yrPalD1(y2);
+      const t1=yrTotalsD1[y1]||0,t2=yrTotalsD1[y2]||0;
+      const totalDiff=t2-t1;
+      const totalGr=t1>0?(totalDiff/t1*100):0;
+      const rows=top20P.map(([prod,_d],i)=>{
+        const d1=(byProdYr[y1]&&byProdYr[y1][prod])||{s:0,q:0};
+        const d2=(byProdYr[y2]&&byProdYr[y2][prod])||{s:0,q:0};
+        const sh1=t1>0?(d1.s/t1*100):0;
+        const sh2=t2>0?(d2.s/t2*100):0;
+        const diff=d2.s-d1.s;
+        const gr=d1.s>0?((diff/d1.s)*100):d2.s>0?999:0;
+        const maxS2=Math.max(d1.s,d2.s)||1;
+        const grBg=gr>0?'#dcfce7':gr<0?'#fef2f2':'#f1f5f9';
+        const grCol=gr>0?'#15803d':gr<0?'#dc2626':'#64748b';
+        const grTxt=gr===999?'NEW':d1.s===0&&d2.s===0?'-':(gr>0?'+':'')+gr.toFixed(1)+'%';
+        return`<tr>
+          <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
+          <td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}">${escHtml(prod)}</td>
+          <td class="nr" style="background:${c1.bg};color:${d1.s?c1.text:'var(--hint)'};font-weight:${d1.s?700:400}">${d1.s?won(d1.s):'-'}</td>
+          <td class="nr" style="background:${c1.bg};color:${c1.text};font-size:11px">${d1.s?sh1.toFixed(1)+'%':'-'}</td>
+          <td class="nr" style="background:${c1.bg};color:${c1.text};font-size:11px">${d1.q?wonNo(d1.q)+'건':'-'}</td>
+          <td class="nr" style="background:${c2.bg};color:${d2.s?c2.text:'var(--hint)'};font-weight:${d2.s?700:400}">${d2.s?won(d2.s):'-'}</td>
+          <td class="nr" style="background:${c2.bg};color:${c2.text};font-size:11px">${d2.s?sh2.toFixed(1)+'%':'-'}</td>
+          <td class="nr" style="background:${c2.bg};color:${c2.text};font-size:11px">${d2.q?wonNo(d2.q)+'건':'-'}</td>
+          <td class="nr" style="font-weight:600;color:${diff>0?'#059669':diff<0?'#dc2626':'var(--muted)'}">${diff!==0?(diff>0?'+':'')+won(Math.abs(diff)):'-'}</td>
+          <td class="nr"><span style="padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;background:${grBg};color:${grCol}">${grTxt}</span></td>
+          <td>
+            <div style="display:flex;flex-direction:column;gap:3px;min-width:80px">
+              <div style="display:flex;align-items:center;gap:4px">
+                <span style="font-size:9px;width:30px;text-align:right;color:${c1.text};font-weight:700;white-space:nowrap">${y1}</span>
+                <div style="flex:1;height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="width:${Math.round(d1.s/maxS2*100)}%;height:100%;background:${c1.badge};border-radius:3px"></div></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px">
+                <span style="font-size:9px;width:30px;text-align:right;color:${c2.text};font-weight:700;white-space:nowrap">${y2}</span>
+                <div style="flex:1;height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="width:${Math.round(d2.s/maxS2*100)}%;height:100%;background:${c2.badge};border-radius:3px"></div></div>
+              </div>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+      return`<div class="chart-header">
+        <div>
+          <div class="chart-title">👟 상품 TOP 20 상세</div>
+          <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
+            <span style="padding:4px 12px;border-radius:12px;font-size:12px;font-weight:700;background:${c1.hdr};color:${c1.text};border:1.5px solid ${c1.border}">${y1}년</span>
+            <span style="font-size:13px;color:var(--muted);font-weight:600">vs</span>
+            <span style="padding:4px 12px;border-radius:12px;font-size:12px;font-weight:700;background:${c2.hdr};color:${c2.text};border:1.5px solid ${c2.border}">${y2}년</span>
+            <span style="font-size:11px;color:var(--hint);margin-left:4px">연도별 실매출액 기준 비교</span>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead>
+          <tr>
+            <th rowspan="2" style="vertical-align:middle">순위</th>
+            <th rowspan="2" style="vertical-align:middle">상품명</th>
+            <th colspan="3" style="text-align:center;background:${c1.hdr};color:${c1.text};border-bottom:2px solid ${c1.border}">${y1}년</th>
+            <th colspan="3" style="text-align:center;background:${c2.hdr};color:${c2.text};border-bottom:2px solid ${c2.border}">${y2}년</th>
+            <th rowspan="2" class="nr" style="vertical-align:middle">증감액</th>
+            <th rowspan="2" class="nr" style="vertical-align:middle">성장률</th>
+            <th rowspan="2" style="min-width:90px;vertical-align:middle">비교 바</th>
+          </tr>
+          <tr>
+            <th class="nr" style="background:${c1.light};color:${c1.text}">실매출액</th>
+            <th class="nr" style="background:${c1.light};color:${c1.text}">비중</th>
+            <th class="nr" style="background:${c1.light};color:${c1.text}">수량</th>
+            <th class="nr" style="background:${c2.light};color:${c2.text}">실매출액</th>
+            <th class="nr" style="background:${c2.light};color:${c2.text}">비중</th>
+            <th class="nr" style="background:${c2.light};color:${c2.text}">수량</th>
+          </tr>
+        </thead>
+        <tbody>${rows}
+          <tr style="font-weight:700;border-top:2px solid var(--border);background:var(--sky-light)">
+            <td colspan="2" style="color:var(--sky)">합계</td>
+            <td class="nr" style="background:${c1.hdr};color:${c1.text}">${won(t1)}</td>
+            <td class="nr" style="background:${c1.hdr};color:${c1.text}">100%</td>
+            <td class="nr" style="background:${c1.hdr};color:${c1.text}">-</td>
+            <td class="nr" style="background:${c2.hdr};color:${c2.text}">${won(t2)}</td>
+            <td class="nr" style="background:${c2.hdr};color:${c2.text}">100%</td>
+            <td class="nr" style="background:${c2.hdr};color:${c2.text}">-</td>
+            <td class="nr" style="color:${totalDiff>=0?'#059669':'#dc2626'}">${totalDiff>=0?'+':''}${won(totalDiff)}</td>
+            <td class="nr"><span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${totalGr>=0?'#dcfce7':'#fef2f2'};color:${totalGr>=0?'#15803d':'#dc2626'}">${t1>0?(totalGr>=0?'+':'')+totalGr.toFixed(1)+'%':'-'}</span></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table></div>`;
+    }
+    return`<div class="chart-header"><div class="chart-title">👟 상품 TOP 20 상세</div><div class="chart-sub">실매출액 기준 정렬</div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>순위</th><th>상품명</th><th class="nr">실매출액</th><th class="nr">정상가</th><th class="nr">할인율</th><th class="nr">수량</th></tr></thead>
+      <tbody>${top20P.map(([p,d],i)=>{const dr2=d.rt>0?(d.rt-d.s)/d.rt*100:0;return`<tr>
+        <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
+        <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p}">${p}</td>
+        <td class="nr" style="font-weight:700;color:var(--green)">${won(d.s)}</td>
+        <td class="nr" style="color:var(--hint)">${won(d.rt)}</td>
+        <td class="nr"><span class="disc-pill ${discClass(dr2)}">${pct(dr2)}</span></td>
+        <td class="nr">${wonNo(d.q)}건</td>
+      </tr>`;}).join('')}</tbody>
+    </table></div>`;
+  })()}
 </div>`;
 
   setTimeout(()=>{
