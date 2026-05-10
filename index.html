@@ -32,6 +32,13 @@ function dismissPromo(){
   try{localStorage.setItem('promo-dismissed-v1','1');}catch(e){}
   const b=document.getElementById('promo-banner');if(b)b.classList.add('hidden');
 }
+// Mac 사용자에게 ⌘ 표시
+document.addEventListener('DOMContentLoaded',function(){
+  const isMac=/Mac|iPhone|iPad|iPod/.test(navigator.platform||'')||/Mac/.test(navigator.userAgent);
+  if(isMac){
+    document.querySelectorAll('kbd').forEach(k=>{if(k.textContent==='Ctrl')k.textContent='⌘';});
+  }
+});
 // KPI 카드 클릭 시 같은 컨텐츠 영역의 첫 차트/표로 부드럽게 스크롤
 document.addEventListener('click',function(e){
   const card=e.target.closest('.kpi-card');
@@ -279,6 +286,16 @@ tbody tr:hover td:first-child{box-shadow:inset 3px 0 0 var(--ink)}
 .empty-icon{font-size:32px;margin-bottom:16px;opacity:.6;display:block;font-weight:400}
 .empty-sub{font-size:13px;color:var(--stone);margin-top:8px;font-weight:400}
 
+/* ── 로딩 스켈레톤 ── */
+.skel{background:linear-gradient(90deg,#ededed 0%,#f5f5f5 50%,#ededed 100%);background-size:200% 100%;animation:skelShine 1.4s linear infinite;border-radius:6px;display:block}
+[data-theme="dark"] .skel{background:linear-gradient(90deg,#1f1f1f 0%,#262626 50%,#1f1f1f 100%);background-size:200% 100%}
+@keyframes skelShine{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skel-card{background:var(--canvas);border:1px solid var(--hairline);border-radius:16px;padding:20px}
+
+/* ── 키보드 칩 ── */
+kbd,.kbd{display:inline-flex;align-items:center;justify-content:center;font-family:'DM Sans','SF Mono',Menlo,Consolas,monospace;font-size:10.5px;font-weight:600;padding:2px 6px;min-width:18px;height:20px;border:1px solid var(--hairline);border-bottom-width:2px;border-radius:5px;background:var(--surface);color:var(--steel);letter-spacing:0;line-height:1}
+[data-theme="dark"] kbd,[data-theme="dark"] .kbd{background:var(--surface);color:var(--ink);border-color:var(--hairline-strong)}
+
 /* ── Hero 변형 차트/표 카드 (32px radius + 더 큰 헤딩) ── */
 .chart-card.hero,.table-card.hero{border-radius:32px;padding:36px;background:var(--surface)}
 .chart-card.hero .chart-title,.table-card.hero .chart-title{font-size:22px;letter-spacing:-0.025em;font-weight:600}
@@ -514,6 +531,18 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 
 /* ── 우상단 사이드 메뉴 ── */
 .menu-btn{width:40px;height:40px;border-radius:9999px;border:1px solid var(--hairline);background:var(--canvas);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--ink);transition:border-color .15s;flex-shrink:0}
+/* ── 통합 검색 트리거 (필 형태) ── */
+.search-trigger{display:flex;align-items:center;gap:8px;height:40px;padding:0 6px 0 14px;border:1px solid var(--hairline);background:var(--surface);color:var(--steel);border-radius:9999px;font-size:13px;font-weight:500;cursor:pointer;transition:border-color .15s,background .15s;letter-spacing:-0.005em;font-family:inherit;flex-shrink:0;min-width:200px;justify-content:flex-start}
+.search-trigger:hover{border-color:var(--ink);color:var(--ink);background:var(--canvas)}
+.search-trigger-label{flex:1;text-align:left}
+.search-trigger-kbd{display:flex;gap:3px}
+.search-trigger-kbd kbd{font-size:10px;height:18px;padding:1px 5px;min-width:16px}
+[data-theme="dark"] .search-trigger{background:var(--surface);border-color:var(--hairline)}
+[data-theme="dark"] .search-trigger:hover{background:var(--surface-soft)}
+@media(max-width:768px){
+  .search-trigger{min-width:0;padding:0;width:40px;height:40px;justify-content:center;border-radius:9999px}
+  .search-trigger-label,.search-trigger-kbd{display:none}
+}
 .menu-btn:hover,.menu-btn.open{border-color:var(--ink)}
 .side-menu{display:none;position:absolute;top:calc(100% + 10px);right:0;width:260px;background:var(--canvas);border:1px solid var(--hairline);border-radius:16px;box-shadow:var(--shadow-lg);padding:8px;z-index:200;animation:menuIn .18s ease-out}
 .side-menu.open{display:block}
@@ -689,11 +718,13 @@ button:focus-visible,select:focus-visible,input:focus-visible{
     <button class="nav-item" onclick="setTab('inbound',this)">📦 입고 현황</button>
   </nav>
   <div class="topbar-right">
-    <!-- 통합 검색 버튼 -->
-    <button class="menu-btn" id="gs-btn" onclick="openGlobalSearch()" title="통합 검색 (Ctrl+K)" aria-label="통합 검색">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+    <!-- 통합 검색 트리거 (검색 인풋 형태로 노출, 클릭/단축키로 모달 열기) -->
+    <button class="search-trigger" id="gs-btn" onclick="openGlobalSearch()" title="통합 검색 (Ctrl+K)" aria-label="통합 검색">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
         <circle cx="7" cy="7" r="5"/><line x1="11" y1="11" x2="14.5" y2="14.5"/>
       </svg>
+      <span class="search-trigger-label">검색</span>
+      <span class="search-trigger-kbd"><kbd>Ctrl</kbd><kbd>K</kbd></span>
     </button>
     <!-- 메뉴 버튼 -->
     <button class="menu-btn" id="menu-btn" onclick="toggleSideMenu()" title="메뉴">
@@ -842,7 +873,18 @@ button:focus-visible,select:focus-visible,input:focus-visible{
   </div>
   <div id="online-off-bar" style="display:none;align-items:center;gap:12px;padding:7px 14px;margin-bottom:10px;background:linear-gradient(90deg,#f0fdf4,#f0f9ff);border-radius:10px;border:1px solid #bae6fd;font-size:12px;flex-wrap:wrap"></div>
   <div id="content">
-    <div class="empty"><div class="empty-icon">📊</div>슬라이서를 설정하고 조회 버튼을 눌러주세요<br><span style="font-size:11px;color:var(--hint)">예시: HARUTA → 2026 → 1월 → 2주차 → 무신사(트레통/하루타)</span></div>
+    <div class="kpi-grid" aria-hidden="true">
+      <div class="skel-card"><span class="skel" style="height:11px;width:60%"></span><span class="skel" style="height:22px;margin-top:14px;width:80%"></span><span class="skel" style="height:9px;margin-top:10px;width:40%"></span></div>
+      <div class="skel-card"><span class="skel" style="height:11px;width:55%"></span><span class="skel" style="height:22px;margin-top:14px;width:75%"></span><span class="skel" style="height:9px;margin-top:10px;width:45%"></span></div>
+      <div class="skel-card"><span class="skel" style="height:11px;width:50%"></span><span class="skel" style="height:22px;margin-top:14px;width:70%"></span><span class="skel" style="height:9px;margin-top:10px;width:38%"></span></div>
+      <div class="skel-card"><span class="skel" style="height:11px;width:65%"></span><span class="skel" style="height:22px;margin-top:14px;width:60%"></span><span class="skel" style="height:9px;margin-top:10px;width:42%"></span></div>
+      <div class="skel-card"><span class="skel" style="height:11px;width:58%"></span><span class="skel" style="height:22px;margin-top:14px;width:78%"></span><span class="skel" style="height:9px;margin-top:10px;width:36%"></span></div>
+    </div>
+    <div class="empty">
+      <div class="empty-icon">📊</div>
+      슬라이서를 설정하고 조회 버튼을 눌러주세요
+      <div class="empty-sub">예시: HARUTA → 2026년 → 1월 → 2주차 → 무신사 (트레통/하루타) · 또는 <kbd>Ctrl</kbd> <kbd>K</kbd> 통합 검색</div>
+    </div>
   </div>
 </div>
 
