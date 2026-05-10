@@ -141,6 +141,10 @@ document.addEventListener('DOMContentLoaded',function(){
 [data-theme="dark"] .kpi-badge{background:var(--surface);color:var(--ink);border-color:var(--hairline)}
 [data-theme="dark"] .kpi-badge.red{background:#450a0a;color:#fca5a5;border-color:#7f1d1d}
 [data-theme="dark"] .kpi-badge.amber{background:#451a03;color:#fbbf24;border-color:#78350f}
+[data-theme="dark"] .empty{background:var(--surface);border-color:var(--hairline);color:var(--slate)}
+[data-theme="dark"] tbody tr:hover td:first-child{box-shadow:inset 3px 0 0 #fff}
+[data-theme="dark"] th.sortable.sort-asc::after,[data-theme="dark"] th.sortable.sort-desc::after{color:#fff}
+[data-theme="dark"] .chart-card.hero,[data-theme="dark"] .table-card.hero{background:var(--surface)}
 *{box-sizing:border-box;margin:0;padding:0;font-family:'DM Sans','Pretendard',-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,sans-serif;font-feature-settings:'cv11','ss01','ss03'}
 body{background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;letter-spacing:-0.005em}
 h1,h2,h3,.chart-title,.kpi-val{letter-spacing:-0.02em}
@@ -225,9 +229,16 @@ select:focus,input:focus{border-color:var(--brand-blue-deep);box-shadow:0 0 0 3p
 .table-wrap::-webkit-scrollbar-thumb:hover{background:var(--stone)}
 table{width:100%;border-collapse:collapse;font-size:13px;min-width:480px;font-variant-numeric:tabular-nums}
 th{font-size:12px;font-weight:600;color:var(--steel);padding:10px;border-bottom:1px solid var(--hairline);text-align:left;position:sticky;top:0;background:var(--canvas);z-index:1;white-space:nowrap;text-transform:none;letter-spacing:-0.005em}
+th.sortable{cursor:pointer;user-select:none;transition:color .15s}
+th.sortable:hover{color:var(--ink)}
+th.sortable::after{content:'⇅';margin-left:6px;color:var(--stone);font-size:10px;font-weight:400}
+th.sortable.sort-asc::after{content:'↑';color:var(--ink);font-weight:600}
+th.sortable.sort-desc::after{content:'↓';color:var(--ink);font-weight:600}
 td{padding:12px 10px;border-bottom:1px solid var(--hairline-soft);color:var(--ink);vertical-align:middle;letter-spacing:-0.005em}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:var(--surface-soft);transition:background .15s}
+tr{transition:background .12s}
+tbody tr:hover td{background:var(--surface-soft)}
+tbody tr:hover td:first-child{box-shadow:inset 3px 0 0 var(--ink)}
 .nr{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .rank{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:9999px;font-size:11px;font-weight:600;background:var(--surface);color:var(--ink);border:1px solid var(--hairline)}
 .rank.gold{background:#fef3c7;color:#92400e;border-color:#fde68a}
@@ -240,8 +251,16 @@ tr:hover td{background:var(--surface-soft);transition:background .15s}
 .bar-wrap{display:flex;align-items:center;gap:8px}
 .bar-bg{flex:1;height:6px;background:var(--sky-mid);border-radius:3px;overflow:hidden;min-width:60px}
 .bar-in{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--sky) 0%,var(--sky3) 100%)}
-.empty{text-align:center;padding:60px 24px;color:var(--hint);font-size:14px;line-height:2}
-.empty-icon{font-size:48px;margin-bottom:16px}
+.empty{text-align:center;padding:80px 24px;color:var(--steel);font-size:15px;line-height:1.6;font-weight:500;letter-spacing:-0.005em;background:var(--canvas);border:1px solid var(--hairline);border-radius:16px}
+.empty-icon{font-size:32px;margin-bottom:16px;opacity:.6;display:block;font-weight:400}
+.empty-sub{font-size:13px;color:var(--stone);margin-top:8px;font-weight:400}
+
+/* ── Hero 변형 차트/표 카드 (32px radius + 더 큰 헤딩) ── */
+.chart-card.hero,.table-card.hero{border-radius:32px;padding:36px;background:var(--surface)}
+.chart-card.hero .chart-title,.table-card.hero .chart-title{font-size:22px;letter-spacing:-0.025em;font-weight:600}
+.chart-card.hero .chart-sub,.table-card.hero .chart-sub{font-size:13px;color:var(--slate);margin-top:6px}
+.chart-card.hero .chart-header,.table-card.hero .chart-header{margin-bottom:24px}
+@media(max-width:768px){.chart-card.hero,.table-card.hero{padding:20px;border-radius:20px}.chart-card.hero .chart-title,.table-card.hero .chart-title{font-size:18px}}
 .ftags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
 .ftag{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:var(--surface);border:1px solid var(--hairline);border-radius:9999px;font-size:12px;color:var(--ink);font-weight:500}
 .ftag span:last-child:hover{opacity:1!important;background:rgba(0,0,0,.12);border-radius:50%}
@@ -795,6 +814,32 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
+// ── Chart.js 전역 디폴트: MiniMax 톤 통일 ──
+if(typeof Chart!=='undefined'){
+  const CFAM="'DM Sans','Pretendard',-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,sans-serif";
+  Chart.defaults.font.family=CFAM;
+  Chart.defaults.font.size=12;
+  Chart.defaults.color='#525252';
+  Chart.defaults.borderColor='#e5e5e5';
+  // 툴팁
+  const tt=Chart.defaults.plugins.tooltip;
+  tt.backgroundColor='#0a0a0a';
+  tt.titleColor='#ffffff';
+  tt.bodyColor='#fafafa';
+  tt.titleFont={family:CFAM,weight:600,size:13};
+  tt.bodyFont={family:CFAM,weight:500,size:12};
+  tt.padding=12;
+  tt.cornerRadius=12;
+  tt.boxPadding=6;
+  tt.borderColor='rgba(255,255,255,.08)';
+  tt.borderWidth=1;
+  tt.displayColors=true;
+  tt.usePointStyle=true;
+  // 범례
+  Chart.defaults.plugins.legend.labels.font={family:CFAM,size:11,weight:500};
+  Chart.defaults.plugins.legend.labels.color='#262626';
+}
+
 const BNAMES=['HARUTA','Jerusalem Sandals','TRETORN','Victoria Shoes'];
 const BCOLORS=['#ff5b3a','#2563eb','#7c3aed','#d946ef'];
 
