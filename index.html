@@ -496,7 +496,10 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 @keyframes menuIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
 .menu-status{padding:10px 12px;background:var(--sky-light);border-radius:10px;margin-bottom:4px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sky);font-weight:500;line-height:1.4;word-break:break-all}
 .menu-divider{height:1px;background:var(--border);margin:6px 0}
-.menu-action{width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border:none;background:none;border-radius:10px;font-size:13px;font-weight:500;color:var(--text);cursor:pointer;text-align:left;transition:all .15s}
+.menu-action{width:100%;display:flex;align-items:center;gap:12px;padding:11px 14px;border:none;background:none;border-radius:10px;font-size:13px;font-weight:500;color:var(--ink);cursor:pointer;text-align:left;transition:background .15s,color .15s;letter-spacing:-0.005em}
+.menu-action .ma-ico{width:18px;height:18px;flex-shrink:0;color:var(--steel);display:inline-flex;align-items:center;justify-content:center;font-size:15px;line-height:1}
+.menu-action:hover .ma-ico{color:var(--ink)}
+.menu-action.danger .ma-ico,.menu-action.danger:hover .ma-ico{color:var(--red)}
 .menu-action:hover{background:var(--sky-light);color:var(--sky)}
 .menu-action.danger{color:var(--red)}
 .menu-action.danger:hover{background:#fef2f2;color:var(--red)}
@@ -537,7 +540,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 /* ── 마진 권한 인증 모달 ── */
 #cost-auth-modal{display:none;position:fixed;inset:0;background:rgba(8,15,28,.55);z-index:9100;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
 #cost-auth-modal.open{display:flex;animation:fadeIn .15s ease-out}
-.ca-box{background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:360px;box-shadow:0 24px 60px rgba(0,0,0,.45);overflow:hidden;animation:menuIn .18s ease-out}
+.ca-box{background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:360px;box-shadow:0 24px 60px rgba(0,0,0,.45);overflow:hidden;animation:modalIn .22s cubic-bezier(.16,1,.3,1)}
 .ca-header{display:flex;align-items:center;gap:10px;padding:16px 20px;background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%);border-bottom:1px solid var(--border);color:#92400e}
 [data-theme="dark"] .ca-header{background:linear-gradient(135deg,#451a03 0%,#78350f 100%);color:#fbbf24}
 .ca-body{padding:18px 20px}
@@ -551,7 +554,8 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 #global-search{display:none;position:fixed;inset:0;background:rgba(8,15,28,.55);z-index:9000;align-items:flex-start;justify-content:center;padding:80px 16px 16px;backdrop-filter:blur(4px)}
 #global-search.open{display:flex;animation:fadeIn .15s ease-out}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-.gs-box{background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:540px;box-shadow:0 24px 60px rgba(0,0,0,.45);overflow:hidden;animation:menuIn .18s ease-out}
+.gs-box{background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:540px;box-shadow:0 24px 60px rgba(0,0,0,.45);overflow:hidden;animation:modalIn .22s cubic-bezier(.16,1,.3,1)}
+@keyframes modalIn{from{opacity:0;transform:translateY(-12px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
 .gs-input-wrap{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)}
 .gs-input-wrap svg{flex-shrink:0;color:var(--muted)}
 #gs-input{flex:1;border:none;outline:none;font-size:15px;font-weight:500;color:var(--text);background:transparent;padding:0}
@@ -681,27 +685,34 @@ button:focus-visible,select:focus-visible,input:focus-visible{
       </div>
       <div class="menu-divider"></div>
       <button class="menu-action" onclick="document.getElementById('file-input').click();closeSideMenu()">
-        <span style="font-size:16px">📂</span> 엑셀 업로드
+        <svg class="ma-ico" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14V5a2 2 0 0 1 2-2h3l2 2h5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 12V8m-2 2 2-2 2 2"/></svg>
+        엑셀 업로드
       </button>
       <button class="menu-action" onclick="backupData();closeSideMenu()">
-        <span style="font-size:16px">💾</span> 데이터 백업
+        <svg class="ma-ico" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-2"/><path d="M9 3v9m-3-3 3 3 3-3"/></svg>
+        데이터 백업
       </button>
       <button class="menu-action" onclick="exportAllVisible();closeSideMenu()">
-        <span style="font-size:16px">📥</span> 현재 화면 CSV
+        <svg class="ma-ico" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="12" height="12" rx="2"/><path d="M9 6v6m-2-2 2 2 2-2"/></svg>
+        현재 화면 CSV
       </button>
       <button class="menu-action" id="cost-lock-btn" onclick="onCostLockClick()">
-        <span style="font-size:16px">🔒</span> 마진 권한 인증
+        <svg class="ma-ico" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="8" width="11" height="7" rx="1.5"/><path d="M5.5 8V5.5a3.5 3.5 0 0 1 7 0V8"/></svg>
+        마진 권한 인증
       </button>
       <button class="menu-action danger" onclick="closeSideMenu();resetAllData()">
-        <span style="font-size:16px">🗑️</span> 데이터 초기화
+        <svg class="ma-ico" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h12M7 5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2m-7 0v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V5"/><path d="M8 9v4M10 9v4"/></svg>
+        데이터 초기화
       </button>
       <div class="menu-divider"></div>
       <button class="menu-action" id="theme-toggle" onclick="toggleTheme()">
-        <span id="theme-icon" style="font-size:16px">🌙</span> <span id="theme-label">다크모드</span>
+        <span class="ma-ico" id="theme-icon">🌙</span>
+        <span id="theme-label">다크모드</span>
       </button>
       <div class="menu-divider"></div>
       <button class="menu-action muted" onclick="doLogout()">
-        <span style="font-size:16px">🚪</span> 로그아웃
+        <svg class="ma-ico" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6"/><path d="M9 9h7m0 0-2.5-2.5M16 9l-2.5 2.5"/></svg>
+        로그아웃
       </button>
     </div>
     <input type="file" id="file-input" accept=".xlsx,.xls,.json" onchange="handleFile(this.files[0])">
@@ -838,6 +849,16 @@ if(typeof Chart!=='undefined'){
   // 범례
   Chart.defaults.plugins.legend.labels.font={family:CFAM,size:11,weight:500};
   Chart.defaults.plugins.legend.labels.color='#262626';
+  // 스케일 그리드/축
+  Chart.defaults.scale.grid.color='rgba(15,23,42,.06)';
+  Chart.defaults.scale.grid.tickColor='rgba(15,23,42,.06)';
+  Chart.defaults.scale.ticks.color='#737373';
+  Chart.defaults.scale.border.color='#e5e5e5';
+  Chart.defaults.scale.border.width=1;
+  // 도넛 cutout 표준화
+  if(Chart.overrides&&Chart.overrides.doughnut){
+    Chart.overrides.doughnut.cutout='62%';
+  }
 }
 
 const BNAMES=['HARUTA','Jerusalem Sandals','TRETORN','Victoria Shoes'];
@@ -4777,7 +4798,7 @@ function renderRestock(f){
       type:'doughnut',
       data:{labels:['긴급(≤4주)','주의(4~8주)','관찰(8~12주)'],
         datasets:[{data:[urgentCount,soonCount,cautionCount],backgroundColor:['#e05252','#f59e0b','#059669'],borderWidth:0}]},
-      options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+      options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
         plugins:{legend:{position:'right',labels:{font:{size:10},boxWidth:10}},
           tooltip:{callbacks:{label:c=>` ${c.label}: ${c.raw}개`}}}}
     });
@@ -4958,7 +4979,7 @@ function renderDeadStock(f){
       charts.dsPie=new Chart(document.getElementById('c-ds-pie'),{type:'doughnut',
         data:{labels:['🔴 위험(12주+)','🟠 경고(8~11주)','🟡/🟢 기타'],
           datasets:[{data:[noSale,slow,safe],backgroundColor:['#dc2626','#ea580c','#fbbf24'],borderWidth:0}]},
-        options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+        options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
           plugins:{legend:{position:'right',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>` ${c.label}: ${c.raw}개`}}}}});
     }
     if(document.getElementById('c-ds-bar')){
@@ -5738,7 +5759,7 @@ ${multiYr?`<div class="kpi-grid" style="margin-bottom:4px">
       charts.insPie=new Chart(document.getElementById('c-ins-pie'),{
         type:'doughnut',
         data:{labels:brList.map(([bi])=>BNAMES[bi]||'기타'),datasets:[{data:brList.map(([,d])=>d.qty),backgroundColor:BR_COLORS,borderWidth:2,borderColor:'#fff'}]},
-        options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
+        options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
           plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10,padding:6}},
             tooltip:{callbacks:{label:c=>`${c.label}: ${wonNo(c.raw)}개 (${(c.raw/totQty*100).toFixed(1)}%)`}}}
         }
@@ -6054,7 +6075,7 @@ function renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f){
       const top10ch=chArr.slice(0,10);
       charts.d1ch=new Chart(document.getElementById('d1-ch'),{type:'doughnut',
         data:{labels:top10ch.map(([c])=>c),datasets:[{data:top10ch.map(([,d])=>d.s),backgroundColor:CH_COLORS,borderWidth:0}]},
-        options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+        options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
           plugins:{legend:{display:true,position:'right',labels:{font:{size:9},boxWidth:8,padding:5}},
           tooltip:{callbacks:{label:c=>` ${won(c.raw)} (${(totalS_ch>0?c.raw/totalS_ch*100:0).toFixed(1)}%)`}}}}});
     }
