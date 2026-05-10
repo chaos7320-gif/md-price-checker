@@ -511,6 +511,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{
     <button class="nav-item" onclick="setTab('discount',this)">🏷️ 할인율 분석</button>
     <button class="nav-item" onclick="setTab('growth',this)">🌱 성장률 분석</button>
     <button class="nav-item" onclick="setTab('compare',this)">⚖️ 상품비교</button>
+    <button class="nav-item" onclick="setTab('margin',this)">💰 마진 분석</button>
     <button class="nav-item" onclick="setTab('deadstock',this)">💀 데드스톡</button>
     <!-- <button class="nav-item" onclick="setTab('restock',this)">🔄 재입고 우선순위</button> -->
     <button class="nav-item" onclick="setTab('inbound',this)">📦 입고 현황</button>
@@ -1450,6 +1451,7 @@ function apply(){
   else if(activeTab==='growth') renderGrowth(filtered,filteredP,f);
   else if(activeTab==='restock') renderRestock(f);
   else if(activeTab==='deadstock') renderDeadStock(f);
+  else if(activeTab==='margin') renderMargin(f);
   else if(activeTab==='channel') renderChannel(filtered,filteredP,f);
   else if(activeTab==='goal') renderGoalSales();
   else if(activeTab==='dashboard1') renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f);
@@ -4719,6 +4721,179 @@ function renderDeadStock(f){
         options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
           plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${wonNo(c.raw)}개`}}},
           scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:10}}}}}});
+    }
+  },80);
+}
+
+// ── 마진/수익성 분석 탭 ──
+let _mgAllData=[],_mgSort='marginAmt';
+function buildMarginData(){
+  if(!INS_DATA||!INS_DATA.length||!PROD_DATA.length) return [];
+  const inMap={};
+  INS_DATA.forEach(r=>{
+    const k=`${r[0]}|${r[4]}`;
+    if(!inMap[k]) inMap[k]={qty:0,cost:0};
+    inMap[k].qty+=r[6]||0;
+    inMap[k].cost+=r[7]||0;
+  });
+  const saleMap={};
+  PROD_DATA.forEach(r=>{
+    const k=`${r[0]}|${r[4]}`;
+    if(!saleMap[k]) saleMap[k]={qty:0,sales:0,retail:0};
+    saleMap[k].qty+=r[5]||0;
+    saleMap[k].sales+=r[6]||0;
+    saleMap[k].retail+=r[7]||0;
+  });
+  const out=[];
+  Object.keys(saleMap).forEach(k=>{
+    const s=saleMap[k];
+    const i=inMap[k];
+    if(!i||i.qty<=0||s.qty<=0||s.sales<=0) return;
+    const [bi,...prodParts]=k.split('|');
+    const prod=prodParts.join('|');
+    const unitCost=i.cost/i.qty;
+    const unitSale=s.sales/s.qty;
+    const cogsEst=unitCost*s.qty;
+    const marginAmt=s.sales-cogsEst;
+    const marginPct=s.sales>0?marginAmt/s.sales*100:0;
+    out.push({bi:parseInt(bi),prod,unitCost:Math.round(unitCost),unitSale:Math.round(unitSale),sales:Math.round(s.sales),qty:s.qty,cogs:Math.round(cogsEst),marginAmt:Math.round(marginAmt),marginPct});
+  });
+  return out;
+}
+function _mgGradeColor(p){
+  if(p<0) return {bg:'#7f1d1d',color:'#fff',label:'적자'};
+  if(p<20) return {bg:'#fef2f2',color:'#dc2626',label:'낮음'};
+  if(p<40) return {bg:'#fffbeb',color:'#d97706',label:'보통'};
+  if(p<60) return {bg:'#ecfdf5',color:'#059669',label:'양호'};
+  return {bg:'#dcfce7',color:'#15803d',label:'우수'};
+}
+function _mgRows(data){
+  if(!data.length) return `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--hint)">매출+입고원가 데이터가 모두 있는 상품이 없습니다 (입고 시트에 공급가 컬럼 필요)</td></tr>`;
+  return data.map((r,i)=>{
+    const g=_mgGradeColor(r.marginPct);
+    return `<tr style="background:${r.marginPct<0?'#fff5f5':''}">
+      <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
+      <td><span style="font-size:10px;padding:2px 6px;border-radius:10px;background:${BBGS[r.bi]};color:${BTCS[r.bi]};font-weight:600">${BNAMES[r.bi]}</span></td>
+      <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(r.prod)}">${escHtml(r.prod)}</td>
+      <td class="nr" style="color:var(--hint)">${won(r.unitCost)}</td>
+      <td class="nr" style="font-weight:600">${won(r.unitSale)}</td>
+      <td class="nr">${wonNo(r.qty)}건</td>
+      <td class="nr" style="font-weight:700;color:var(--green)">${won(r.sales)}</td>
+      <td class="nr" style="color:var(--hint)">${won(r.cogs)}</td>
+      <td class="nr" style="font-weight:700;color:${r.marginAmt<0?'#dc2626':'#15803d'}">${r.marginAmt>=0?'+':''}${won(r.marginAmt)}</td>
+      <td class="nr"><span style="padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700;background:${g.bg};color:${g.color}">${r.marginPct.toFixed(1)}% · ${g.label}</span></td>
+    </tr>`;
+  }).join('');
+}
+function mgFilter(){
+  const q=(document.getElementById('mg-search')?.value||'').toLowerCase().trim();
+  const tbody=document.getElementById('mg-tbody');if(!tbody)return;
+  let rows=q?_mgAllData.filter(r=>r.prod.toLowerCase().includes(q)):_mgAllData;
+  rows=[...rows].sort((a,b)=>(_mgSort==='marginPct'?b.marginPct-a.marginPct:_mgSort==='sales'?b.sales-a.sales:b.marginAmt-a.marginAmt));
+  tbody.innerHTML=_mgRows(rows);
+}
+function mgSetSort(s){_mgSort=s;document.querySelectorAll('.mg-sort-btn').forEach(b=>b.classList.toggle('active',b.dataset.sort===s));mgFilter();}
+function renderMargin(f){
+  const bIdx=f.b==='ALL'?-1:parseInt(f.b);
+  const data=buildMarginData().filter(r=>bIdx<0||r.bi===bIdx).sort((a,b)=>b.marginAmt-a.marginAmt);
+  _mgAllData=data;_mgSort='marginAmt';
+  const totalSales=data.reduce((s,r)=>s+r.sales,0);
+  const totalCogs=data.reduce((s,r)=>s+r.cogs,0);
+  const totalMargin=totalSales-totalCogs;
+  const avgPct=totalSales>0?totalMargin/totalSales*100:0;
+  const lossCnt=data.filter(r=>r.marginPct<0).length;
+  const topMg=data[0];
+  const topSale=[...data].sort((a,b)=>b.sales-a.sales)[0];
+  destroyCharts();
+  document.getElementById('content').innerHTML=`
+<div class="kpi-grid">
+  <div class="kpi-card accent">
+    <div class="kpi-label">평균 마진율</div>
+    <div class="kpi-val">${avgPct.toFixed(1)}%</div>
+    <div class="kpi-sub">매출가중 평균</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">총 추정 마진</div>
+    <div class="kpi-val" style="color:${totalMargin>=0?'var(--green)':'var(--red)'}">${won(totalMargin)}</div>
+    <div class="kpi-sub">매출 ${won(totalSales)} − 원가 ${won(totalCogs)}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">🏆 마진 1위</div>
+    <div class="kpi-val" style="font-size:12px;word-break:break-word">${topMg?escHtml(topMg.prod):'-'}</div>
+    <div class="kpi-badge">${topMg?won(topMg.marginAmt)+' · '+topMg.marginPct.toFixed(1)+'%':'-'}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">💵 매출 1위</div>
+    <div class="kpi-val" style="font-size:12px;word-break:break-word">${topSale?escHtml(topSale.prod):'-'}</div>
+    <div class="kpi-badge">${topSale?won(topSale.sales)+' · 마진 '+topSale.marginPct.toFixed(1)+'%':'-'}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">⚠️ 적자 의심 상품</div>
+    <div class="kpi-val" style="color:${lossCnt>0?'var(--red)':'var(--text)'}">${wonNo(lossCnt)}개</div>
+    <div class="kpi-sub">매출단가 < 입고원가</div>
+  </div>
+</div>
+<div class="charts-grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
+  <div class="chart-card">
+    <div class="chart-header"><div class="chart-title">마진 금액 TOP 10</div></div>
+    <div style="position:relative;height:240px"><canvas id="c-mg-bar"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-header"><div class="chart-title">마진율 분포</div></div>
+    <div style="position:relative;height:240px"><canvas id="c-mg-dist"></canvas></div>
+  </div>
+</div>
+<div class="table-card">
+  <div class="chart-header" style="flex-wrap:wrap;gap:10px">
+    <div>
+      <div class="chart-title">💰 상품별 마진 상세</div>
+      <div class="chart-sub">입고 평균단가 × 판매수량으로 추정 매출원가 산출 · 매출 ÷ (매출−원가) 마진율</div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--muted);font-weight:600">정렬:</span>
+      <button class="mg-sort-btn btn-outline-muted active" data-sort="marginAmt" onclick="mgSetSort('marginAmt')" style="padding:5px 10px;font-size:11px">마진액</button>
+      <button class="mg-sort-btn btn-outline-muted" data-sort="marginPct" onclick="mgSetSort('marginPct')" style="padding:5px 10px;font-size:11px">마진율</button>
+      <button class="mg-sort-btn btn-outline-muted" data-sort="sales" onclick="mgSetSort('sales')" style="padding:5px 10px;font-size:11px">매출액</button>
+      <input type="text" id="mg-search" placeholder="상품명 검색..." oninput="mgFilter()" style="font-size:12px;padding:6px 12px;border:1px solid var(--border);border-radius:8px;width:160px;outline:none;margin-left:8px">
+    </div>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr>
+      <th>순위</th><th>브랜드</th><th>상품명</th>
+      <th class="nr">입고원가</th><th class="nr">매출단가</th>
+      <th class="nr">판매수량</th><th class="nr">매출액</th>
+      <th class="nr">추정원가</th><th class="nr">마진액</th>
+      <th>마진율</th>
+    </tr></thead>
+    <tbody id="mg-tbody">${_mgRows(data)}</tbody>
+  </table></div>
+</div>
+<style>.mg-sort-btn{cursor:pointer;background:#fff}.mg-sort-btn.active{background:var(--sky);color:#fff;border-color:var(--sky)}[data-theme="dark"] .mg-sort-btn{background:#1e293b;border-color:#334155;color:var(--text)}[data-theme="dark"] .mg-sort-btn.active{background:var(--sky);color:#fff;border-color:var(--sky)}</style>`;
+  setTimeout(()=>{
+    if(document.getElementById('c-mg-bar')){
+      const top10=data.slice(0,10);
+      charts.mgBar=new Chart(document.getElementById('c-mg-bar'),{type:'bar',
+        data:{labels:top10.map(r=>r.prod.length>16?r.prod.slice(0,16)+'…':r.prod),
+          datasets:[{label:'마진액',data:top10.map(r=>r.marginAmt),backgroundColor:top10.map(r=>r.marginAmt>=0?'#15803d':'#dc2626'),borderRadius:4}]},
+        options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${won(c.raw)}`}}},
+          scales:{x:{ticks:{font:{size:9},callback:v=>short(v)}},y:{ticks:{font:{size:9}}}}}});
+    }
+    if(document.getElementById('c-mg-dist')){
+      // 마진율 구간별 상품수
+      const buckets=[
+        {label:'적자',min:-Infinity,max:0,color:'#dc2626'},
+        {label:'0~20%',min:0,max:20,color:'#f59e0b'},
+        {label:'20~40%',min:20,max:40,color:'#eab308'},
+        {label:'40~60%',min:40,max:60,color:'#22c55e'},
+        {label:'60%+',min:60,max:Infinity,color:'#15803d'},
+      ];
+      const counts=buckets.map(b=>data.filter(r=>r.marginPct>=b.min&&r.marginPct<b.max).length);
+      charts.mgDist=new Chart(document.getElementById('c-mg-dist'),{type:'bar',
+        data:{labels:buckets.map(b=>b.label),datasets:[{data:counts,backgroundColor:buckets.map(b=>b.color),borderRadius:5}]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw}개`}}},
+          scales:{x:{ticks:{font:{size:10}}},y:{beginAtZero:true,ticks:{font:{size:9},precision:0}}}}});
     }
   },80);
 }
