@@ -787,7 +787,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const BNAMES=['HARUTA','Jerusalem Sandals','TRETORN','Victoria Shoes'];
-const BCOLORS=['#0ea5e9','#f59e0b','#8b5cf6','#f43f5e'];
+const BCOLORS=['#ff5b3a','#2563eb','#7c3aed','#d946ef'];
 
 // ── 사이드 메뉴 토글 ──
 function toggleSideMenu(){
@@ -1002,8 +1002,8 @@ let _uploadHistory=[];
 let _savedUploaded={top:[],prod:[],sz:[],chp:[]};  // 서버/IDB에 저장되는 순수 업로드 데이터 (D_TOP 미포함)
 let SELECTED_YRS=[];    // 다중 선택 연도 배열
 const WK_RANGE_MAP={"2024-W01":"1/1~1/7","2024-W02":"1/8~1/14","2024-W03":"1/15~1/21","2024-W04":"1/22~1/28","2024-W05":"1/29~2/4","2024-W06":"2/5~2/11","2024-W07":"2/12~2/18","2024-W08":"2/19~2/25","2024-W09":"2/26~3/3","2024-W10":"3/4~3/10","2024-W11":"3/11~3/17","2024-W12":"3/18~3/24","2024-W13":"3/25~3/31","2024-W14":"4/1~4/7","2024-W15":"4/8~4/14","2024-W16":"4/15~4/21","2024-W17":"4/22~4/28","2024-W18":"4/29~5/5","2024-W19":"5/6~5/12","2024-W20":"5/13~5/19","2024-W21":"5/20~5/26","2024-W22":"5/27~6/2","2024-W23":"6/3~6/9","2024-W24":"6/10~6/16","2024-W25":"6/17~6/23","2024-W26":"6/24~6/30","2024-W27":"7/1~7/7","2024-W28":"7/8~7/14","2024-W29":"7/15~7/21","2024-W30":"7/22~7/28","2024-W31":"7/29~8/4","2024-W32":"8/5~8/11","2024-W33":"8/12~8/18","2024-W34":"8/19~8/25","2024-W35":"8/26~9/1","2024-W36":"9/2~9/8","2024-W37":"9/9~9/15","2024-W38":"9/16~9/22","2024-W39":"9/23~9/29","2024-W40":"9/30~10/6","2024-W41":"10/7~10/13","2024-W42":"10/14~10/20","2024-W43":"10/21~10/27","2024-W44":"10/28~11/3","2024-W45":"11/4~11/10","2024-W46":"11/11~11/17","2024-W47":"11/18~11/24","2024-W48":"11/25~12/1","2024-W49":"12/2~12/8","2024-W50":"12/9~12/15","2024-W51":"12/16~12/22","2024-W52":"12/23~12/29","2025-W01":"12/30~1/5","2025-W02":"1/6~1/12","2025-W03":"1/13~1/19","2025-W04":"1/20~1/26","2025-W05":"1/27~2/2","2025-W06":"2/3~2/9","2025-W07":"2/10~2/16","2025-W08":"2/17~2/23","2025-W09":"2/24~3/2","2025-W10":"3/3~3/9","2025-W11":"3/10~3/16","2025-W12":"3/17~3/23","2025-W13":"3/24~3/30","2025-W14":"3/31~4/6","2025-W15":"4/7~4/13","2025-W16":"4/14~4/20","2025-W17":"4/21~4/27","2025-W18":"4/28~5/4","2025-W19":"5/5~5/11","2025-W20":"5/12~5/18","2025-W21":"5/19~5/25","2025-W22":"5/26~6/1","2025-W23":"6/2~6/8","2025-W24":"6/9~6/15","2025-W25":"6/16~6/22","2025-W26":"6/23~6/29","2025-W27":"6/30~7/6","2025-W28":"7/7~7/13","2025-W29":"7/14~7/20","2025-W30":"7/21~7/27","2025-W31":"7/28~8/3","2025-W32":"8/4~8/10","2025-W33":"8/11~8/17","2025-W34":"8/18~8/24","2025-W35":"8/25~8/31","2025-W36":"9/1~9/7","2025-W37":"9/8~9/14","2025-W38":"9/15~9/21","2025-W39":"9/22~9/28","2025-W40":"9/29~10/5","2025-W41":"10/6~10/12","2025-W42":"10/13~10/19","2025-W43":"10/20~10/26","2025-W44":"10/27~11/2","2025-W45":"11/3~11/9","2025-W46":"11/10~11/16","2025-W47":"11/17~11/23","2025-W48":"11/24~11/30","2025-W49":"12/1~12/7","2025-W50":"12/8~12/14","2025-W51":"12/15~12/21","2025-W52":"12/22~12/28","2026-W01":"12/29~1/4","2026-W02":"1/5~1/11","2026-W03":"1/12~1/18","2026-W04":"1/19~1/25","2026-W05":"1/26~2/1","2026-W06":"2/2~2/8","2026-W07":"2/9~2/15","2026-W08":"2/16~2/22","2026-W09":"2/23~3/1","2026-W10":"3/2~3/8","2026-W11":"3/9~3/15","2026-W12":"3/16~3/22","2026-W13":"3/23~3/29","2026-W14":"3/30~4/5","2026-W15":"4/6~4/12","2026-W16":"4/13~4/19","2026-W17":"4/20~4/26","2026-W18":"4/27~5/3","2026-W19":"5/4~5/10","2026-W20":"5/11~5/17","2026-W21":"5/18~5/24","2026-W22":"5/25~5/31","2026-W23":"6/1~6/7","2026-W24":"6/8~6/14","2026-W25":"6/15~6/21","2026-W26":"6/22~6/28","2026-W27":"6/29~7/5","2026-W28":"7/6~7/12","2026-W29":"7/13~7/19","2026-W30":"7/20~7/26","2026-W31":"7/27~8/2","2026-W32":"8/3~8/9","2026-W33":"8/10~8/16","2026-W34":"8/17~8/23","2026-W35":"8/24~8/30","2026-W36":"8/31~9/6","2026-W37":"9/7~9/13","2026-W38":"9/14~9/20","2026-W39":"9/21~9/27","2026-W40":"9/28~10/4","2026-W41":"10/5~10/11","2026-W42":"10/12~10/18","2026-W43":"10/19~10/25","2026-W44":"10/26~11/1","2026-W45":"11/2~11/8","2026-W46":"11/9~11/15","2026-W47":"11/16~11/22","2026-W48":"11/23~11/29","2026-W49":"11/30~12/6","2026-W50":"12/7~12/13","2026-W51":"12/14~12/20","2026-W52":"12/21~12/27","2026-W53":"12/28~1/3"};
-const BBGS=['#e8f5ee','#fdf8e4','#e8f0fa','#faeaea'];
-const BTCS=['#2d6b47','#7d6210','#1e4d80','#7a2e2c'];
+const BBGS=['#fff1ed','#eff6ff','#f5f3ff','#fdf4ff'];
+const BTCS=['#c2410c','#1d4ed8','#6d28d9','#a21caf'];
 const BMAP={'HARUTA':0,'Jerusalem Sandals':1,'TRETORN':2,'Victoria Shoes':3};
 // 한글·대소문자 구분 없는 브랜드명 매핑 (엑셀 브랜드 컬럼 형식 다양하게 지원)
 const BRAND_ALIAS={'haruta':0,'하루타':0,'jerusalem sandals':1,'예루살렘 샌들':1,'예루살렘샌들':1,'jerusalem':1,'예루살렘':1,'tretorn':2,'트레통':2,'victoria shoes':3,'빅토리아 슈즈':3,'빅토리아슈즈':3,'victoria':3,'빅토리아':3};
@@ -2048,8 +2048,8 @@ ${f.b==='ALL'?`
     const totalPrev=chPrev.reduce((s,[,v])=>s+v,0);
     const totalCurr=chCurr.reduce((s,[,v])=>s+v,0);
 
-    const CH_COLORS=['#0284c7','#0ea5e9','#38bdf8','#7dd3fc','#bae6fd','#f97316','#fb923c','#fbbf24','#8b5cf6','#a78bfa'];
-    const CH_COLORS_G=['#a0adb8','#b4b2a9','#c8c6bd','#d3d1c7','#dddbd2','#c4c2b9','#abaaa2','#929088','#79786f','#636157'];
+    const CH_COLORS=['#ff5b3a','#2563eb','#7c3aed','#06b6d4','#d946ef','#0ea5e9','#16a34a','#f59e0b','#0a0a0a','#737373'];
+    const CH_COLORS_G=['#9ca3af','#b0b0b0','#c4c4c4','#d4d4d4','#dedede','#a8a8a8','#959595','#828282','#6e6e6e','#5e5e5e'];
 
     function buildLegend(el, items, colors, total, cmpMap){
       if(!el) return;
@@ -2116,7 +2116,7 @@ ${f.b==='ALL'?`
       const be=Object.entries(byBr).sort((a,b)=>b[1].s-a[1].s);
       charts.b=new Chart(document.getElementById('c-br'),{type:'bar',
         data:{labels:be.map(([i])=>BNAMES[i]),
-          datasets:[{data:be.map(([,d])=>d.s),backgroundColor:['#0ea5e9','#f59e0b','#8b5cf6','#f43f5e'],borderRadius:6}]},
+          datasets:[{data:be.map(([,d])=>d.s),backgroundColor:['#ff5b3a','#2563eb','#7c3aed','#d946ef'],borderRadius:6}]},
         options:{responsive:true,maintainAspectRatio:false,
           plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${won(c.raw)}`}}},
           scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}}});
@@ -2678,8 +2678,8 @@ ${(()=>{
     }
 
     // ── 채널별 도넛 차트 ──
-    const CH_COLORS=['#0284c7','#0ea5e9','#38bdf8','#7dd3fc','#bae6fd','#f97316','#fb923c','#fbbf24','#8b5cf6','#a78bfa'];
-    const CH_COLORS_G=['#a0adb8','#b4b2a9','#c8c6bd','#d3d1c7','#dddbd2','#c4c2b9','#abaaa2','#929088','#79786f','#636157'];
+    const CH_COLORS=['#ff5b3a','#2563eb','#7c3aed','#06b6d4','#d946ef','#0ea5e9','#16a34a','#f59e0b','#0a0a0a','#737373'];
+    const CH_COLORS_G=['#9ca3af','#b0b0b0','#c4c4c4','#d4d4d4','#dedede','#a8a8a8','#959595','#828282','#6e6e6e','#5e5e5e'];
     const chPrev=cmpYrs.length>=1?getChByYr(cmpYrs[0]):[];
     const chCurr=cmpYrs.length>=2?getChByYr(cmpYrs[1]):(cmpYrs.length===0?getChByYr(null):[]);
     const totalPrev=chPrev.reduce((s,[,v])=>s+v,0);
@@ -2722,7 +2722,7 @@ ${(()=>{
     if(f.b==='ALL'&&document.getElementById('c-br')){
       const be=Object.entries(byBr).sort((a,b)=>b[1].s-a[1].s);
       charts.b=new Chart(document.getElementById('c-br'),{type:'bar',
-        data:{labels:be.map(([i])=>BNAMES[i]),datasets:[{data:be.map(([,d])=>d.s),backgroundColor:['#0ea5e9','#f59e0b','#8b5cf6','#f43f5e'],borderRadius:6}]},
+        data:{labels:be.map(([i])=>BNAMES[i]),datasets:[{data:be.map(([,d])=>d.s),backgroundColor:['#ff5b3a','#2563eb','#7c3aed','#d946ef'],borderRadius:6}]},
         options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${won(c.raw)}`}}},
           scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}}});
     }
@@ -3532,7 +3532,7 @@ function renderCompare(){
 
   // 그리드 컬럼: 채워진것 + (추가슬롯있으면 +1), 최소 2
   const colCount=Math.max(2, filledCount+(showAddSlot?1:0));
-  const colors=['#0ea5e9','#f59e0b','#8b5cf6','#f43f5e'];
+  const colors=['#ff5b3a','#2563eb','#7c3aed','#d946ef'];
 
   document.getElementById('content').innerHTML=`
 <div style="display:grid;grid-template-columns:repeat(${colCount},minmax(0,1fr));gap:12px;margin-bottom:16px;align-items:start">
@@ -3665,7 +3665,7 @@ function updateCompChFilter(){
 function renderCompResult(){
   const filled=SLOTS.map((s,i)=>s?i:-1).filter(i=>i>=0);
   if(filled.length<2) return;
-  const colors=['#0ea5e9','#f59e0b','#8b5cf6','#f43f5e'];
+  const colors=['#ff5b3a','#2563eb','#7c3aed','#d946ef'];
   const cf=getCompFilters();
 
   // ── 슬롯별 집계 ──
@@ -3967,7 +3967,7 @@ function renderGrowth(filtered,filteredP,f){
     return{m:parseInt(m),v24,v25,v26,yoy,mom26,yoy_ref};
   }).filter(r=>r.v24>0||r.v25>0||r.v26>0);
 
-  const totalColors=['#0ea5e9','#f59e0b','#8b5cf6','#f43f5e'];
+  const totalColors=['#ff5b3a','#2563eb','#7c3aed','#d946ef'];
 
   function badge(v,suffix='%'){
     if(v===null) return `<span style="padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;background:#f3f3f0;color:#a0adb8">-</span>`;
@@ -4460,8 +4460,8 @@ function renderChannel(filtered,filteredP,f){
   // 차트 렌더
   setTimeout(()=>{
     // ── 채널별 매출 비중 듀얼 도넛 ──
-    const CH_COLORS=['#0284c7','#0ea5e9','#38bdf8','#7dd3fc','#bae6fd','#f97316','#fb923c','#fbbf24','#8b5cf6','#a78bfa'];
-    const CH_COLORS_G=['#a0adb8','#b4b2a9','#c8c6bd','#d3d1c7','#dddbd2','#c4c2b9','#abaaa2','#929088','#79786f','#636157'];
+    const CH_COLORS=['#ff5b3a','#2563eb','#7c3aed','#06b6d4','#d946ef','#0ea5e9','#16a34a','#f59e0b','#0a0a0a','#737373'];
+    const CH_COLORS_G=['#9ca3af','#b0b0b0','#c4c4c4','#d4d4d4','#dedede','#a8a8a8','#959595','#828282','#6e6e6e','#5e5e5e'];
     const prevMapCh=Object.fromEntries(chPrev),currMapCh=Object.fromEntries(chCurr);
     function buildChLegend(el,items,colors,total,cmpMap){
       if(!el)return;
@@ -4532,7 +4532,7 @@ function renderChannel(filtered,filteredP,f){
         }
       });
     }else{
-      const trendColors=['#0284c7','#f59e0b','#8b5cf6','#f43f5e','#0ea5e9'];
+      const trendColors=['#ff5b3a','#2563eb','#7c3aed','#d946ef','#06b6d4'];
       const top5=chList.slice(0,5);
       charts.chTrend=new Chart(document.getElementById('c-ch-trend'),{
         type:'line',
@@ -5678,7 +5678,7 @@ ${multiYr?`<div class="kpi-grid" style="margin-bottom:4px">
 `;
 
   setTimeout(()=>{
-    const BR_COLORS=['#0ea5e9','#f59e0b','#8b5cf6','#f43f5e','#34d399'];
+    const BR_COLORS=['#ff5b3a','#2563eb','#7c3aed','#d946ef','#06b6d4'];
 
     if(document.getElementById('c-ins-pie')&&brList.length){
       charts.insPie=new Chart(document.getElementById('c-ins-pie'),{
@@ -5982,7 +5982,7 @@ function renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f){
 </div>`;
 
   setTimeout(()=>{
-    const CH_COLORS=['#0284c7','#0ea5e9','#38bdf8','#7dd3fc','#bae6fd','#f97316','#fb923c','#fbbf24','#8b5cf6','#a78bfa'];
+    const CH_COLORS=['#ff5b3a','#2563eb','#7c3aed','#06b6d4','#d946ef','#0ea5e9','#16a34a','#f59e0b','#0a0a0a','#737373'];
     if(document.getElementById('d1-mo')){
       const ds=cmpYrs.length===0?[{label:'전체',data:allMos.map(m=>moAll[m]||0),backgroundColor:'#0284c7CC',borderRadius:4,barPercentage:.75}]:
         cmpYrs.length===1?[{label:`${cmpYrs[0]}년`,data:allMos.map(m=>mo0[m]||0),backgroundColor:'#0284c7CC',borderRadius:4,barPercentage:.75}]:[
