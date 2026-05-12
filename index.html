@@ -822,8 +822,6 @@ button:focus-visible,select:focus-visible,input:focus-visible{
   <nav class="nav">
     <button class="nav-item active" onclick="setTab('goal',this)">🎯 목표매출</button>
     <button class="nav-item" onclick="setTab('dashboard1',this)" style="font-weight:700">📊 매출 종합</button>
-    <button class="nav-item" onclick="setTab('channel',this)">🏪 매출처별 분석</button>
-    <button class="nav-item" onclick="setTab('top20',this)">👟 상품별 매출분석</button>
     <button class="nav-item" onclick="setTab('discount',this)">🏷️ 할인율 분석</button>
     <button class="nav-item" onclick="setTab('growth',this)">🌱 성장률 분석</button>
     <button class="nav-item" onclick="setTab('compare',this)">⚖️ 상품비교</button>
@@ -943,6 +941,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{
     <div class="multi-sel-wrap" id="wk-wrap">
       <button class="multi-sel-btn" id="f-wk-btn" type="button" onclick="toggleWkDrop(event)">전체 ▾</button>
       <div class="multi-sel-drop" id="f-wk-drop">
+        <label class="msd-item"><input type="checkbox" id="wk-cb-all" onchange="onWkAllChange()">전체</label>
         <label class="msd-item"><input type="checkbox" value="1" class="wk-cb" onchange="onWkCbChange()">1주차</label>
         <label class="msd-item"><input type="checkbox" value="2" class="wk-cb" onchange="onWkCbChange()">2주차</label>
         <label class="msd-item"><input type="checkbox" value="3" class="wk-cb" onchange="onWkCbChange()">3주차</label>
@@ -1268,11 +1267,11 @@ function pickGlobalSearch(i){
   } else if(x.type==='channel'){
     SELECTED_CHS=[x.label];
     if(typeof renderChCheckboxes==='function')renderChCheckboxes('');
-    document.querySelector('.nav-item[onclick*="channel"]')?.click();
+    document.querySelector('.nav-item[onclick*="dashboard1"]')?.click();
   } else if(x.type==='product'){
     SELECTED_PRODS=[x.label];
     if(typeof renderProdDrop==='function')renderProdDrop('');
-    document.querySelector('.nav-item[onclick*="top20"]')?.click();
+    document.querySelector('.nav-item[onclick*="dashboard1"]')?.click();
   }
   if(typeof apply==='function')try{apply();}catch(e){}
 }
@@ -1570,7 +1569,9 @@ function discClass(r){return r<5?'disc-low':r<15?'disc-mid':'disc-high';}
 function rankCls(i){return i===0?'gold':i===1?'silver':i===2?'bronze':'';}
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
-function destroyCharts(){Object.values(charts).forEach(c=>{try{c.destroy()}catch(e){console.warn('Chart destroy error:',e);}});charts={};}
+let _RENDER_TGT='content';
+let _NO_DESTROY=false;
+function destroyCharts(){if(_NO_DESTROY)return;Object.values(charts).forEach(c=>{try{c.destroy()}catch(e){console.warn('Chart destroy error:',e);}});charts={};}
 
 function setTab(t,el){
   // 마진 탭은 인증 필요
@@ -1655,7 +1656,7 @@ function updateMoBtn(){
   if(!btn) return;
   if(SELECTED_MOS.length===0){btn.textContent='전체 ▾';btn.classList.remove('has-sel');}
   else if(SELECTED_MOS.length===1){btn.textContent=SELECTED_MOS[0]+'월 ▾';btn.classList.add('has-sel');}
-  else{btn.textContent=SELECTED_MOS.length+'개월 ▾';btn.classList.add('has-sel');}
+  else{btn.textContent=SELECTED_MOS.length+'월 ▾';btn.classList.add('has-sel');}
 }
 function onMoCbChange(){
   SELECTED_MOS=[...document.querySelectorAll('.mo-cb:checked')].map(c=>parseInt(c.value)).sort((a,b)=>a-b);
@@ -1678,6 +1679,15 @@ function updateWkBtn(){
 }
 function onWkCbChange(){
   SELECTED_WKS=[...document.querySelectorAll('.wk-cb:checked')].map(c=>parseInt(c.value)).sort((a,b)=>a-b);
+  const all=document.getElementById('wk-cb-all');
+  if(all){const tot=document.querySelectorAll('.wk-cb').length;all.checked=SELECTED_WKS.length===tot;}
+  updateWkBtn();renderFilterTags();
+}
+function onWkAllChange(){
+  const all=document.getElementById('wk-cb-all');
+  const cbs=document.querySelectorAll('.wk-cb');
+  cbs.forEach(c=>{c.checked=all.checked;});
+  SELECTED_WKS=all.checked?[...cbs].map(c=>parseInt(c.value)).sort((a,b)=>a-b):[];
   updateWkBtn();renderFilterTags();
 }
 // 드롭다운 외부 클릭 시 닫기
@@ -1805,7 +1815,7 @@ function removeFilterTag(type){
   if(type==='b'){document.getElementById('f-brand').value='ALL';onBrandChange();}
   else if(type==='yr'){setYrCheckboxes([]);}
   else if(type==='mo'){SELECTED_MOS=[];document.querySelectorAll('.mo-cb').forEach(c=>c.checked=false);updateMoBtn();}
-  else if(type==='wk'){SELECTED_WKS=[];document.querySelectorAll('.wk-cb').forEach(c=>c.checked=false);updateWkBtn();}
+  else if(type==='wk'){SELECTED_WKS=[];document.querySelectorAll('.wk-cb').forEach(c=>c.checked=false);const _a=document.getElementById('wk-cb-all');if(_a)_a.checked=false;updateWkBtn();}
   else if(type==='ch'){SELECTED_CHS=[];document.getElementById('f-ch').value='ALL';updateChBtn();}
   else if(type==='size'){document.getElementById('f-size').value='ALL';}
   renderFilterTags();
@@ -1982,17 +1992,15 @@ function apply(){
     document.getElementById('content').innerHTML='<div class="empty"><div class="empty-icon">🔍</div>조건에 맞는 데이터가 없습니다</div>';
     return;
   }
-  if(activeTab==='top20') renderTop20(filteredPKpi,filtered,filteredP,f);
-  else if(activeTab==='discount') renderDiscount(filteredKpi,filteredPKpi,f);
+  if(activeTab==='discount') renderDiscount(filteredKpi,filteredPKpi,f);
   else if(activeTab==='compare') renderCompare();
   else if(activeTab==='growth') renderGrowth(filtered,filteredP,f);
   else if(activeTab==='restock') renderRestock(f);
   else if(activeTab==='deadstock') renderDeadStock(f);
   else if(activeTab==='margin') renderMargin(f);
   else if(activeTab==='churn') renderChurn(f);
-  else if(activeTab==='channel') renderChannel(filtered,filteredP,f);
   else if(activeTab==='goal') renderGoalSales();
-  else if(activeTab==='dashboard1') renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f);
+  else if(activeTab==='dashboard1'||activeTab==='channel'||activeTab==='top20') renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f);
 }
 
 // renderSales 제거 — 기능이 renderTop20으로 통합됨
@@ -2748,7 +2756,7 @@ function renderTop20(filtP,filtered,filteredP,f){
   })();
 
   destroyCharts();
-  document.getElementById('content').innerHTML=`
+  document.getElementById(_RENDER_TGT).innerHTML=`
 <div class="kpi-grid">
   <div class="kpi-card accent">
     <div class="kpi-label">총 실매출액</div>
@@ -3278,6 +3286,7 @@ function reset(){
   SELECTED_PRODS=[];
   SELECTED_MOS=[];SELECTED_WKS=[];SELECTED_CHS=[];
   document.querySelectorAll('.mo-cb,.wk-cb').forEach(c=>c.checked=false);
+  const _wa=document.getElementById('wk-cb-all');if(_wa)_wa.checked=false;
   updateMoBtn();updateWkBtn();updateChBtn();
   setYrCheckboxes([]);
   renderFilterTags();
@@ -4421,7 +4430,7 @@ function renderChannel(filtered,filteredP,f){
   filtered=filterBadData(filtered);
   filteredP=filterBadData(filteredP);
   if(!filtered.length){
-    document.getElementById('content').innerHTML='<div class="empty"><div class="empty-icon">🔍</div>조건에 맞는 데이터가 없습니다</div>';
+    document.getElementById(_RENDER_TGT).innerHTML='<div class="empty"><div class="empty-icon">🔍</div>조건에 맞는 데이터가 없습니다</div>';
     return;
   }
   const multiYr=f&&f.yrs&&f.yrs.length>=2;
@@ -4681,7 +4690,7 @@ function renderChannel(filtered,filteredP,f){
   const totalCurrCh=chCurr.reduce((s,[,v])=>s+v,0);
 
   destroyCharts();
-  document.getElementById('content').innerHTML=`
+  document.getElementById(_RENDER_TGT).innerHTML=`
 <div class="kpi-grid">
   <div class="kpi-card accent">
     <div class="kpi-label">전체 실매출액</div>
@@ -4909,7 +4918,13 @@ function renderChannel(filtered,filteredP,f){
   },80);
 
   const sel=document.getElementById('ch-drill-sel');
-  if(sel)sel.onchange=function(){_chDrillCh=this.value;renderChannel(filtered,filteredP,f);};
+  const _myTgt=_RENDER_TGT;
+  if(sel)sel.onchange=function(){
+    _chDrillCh=this.value;
+    const _pTgt=_RENDER_TGT,_pSkip=_NO_DESTROY;
+    _RENDER_TGT=_myTgt;_NO_DESTROY=true;
+    try{renderChannel(filtered,filteredP,f);}finally{_RENDER_TGT=_pTgt;_NO_DESTROY=_pSkip;}
+  };
 }
 
 // ── 매출처 CSV 내보내기 ──
@@ -6096,7 +6111,30 @@ ${multiYr?`<div class="kpi-grid" style="margin-bottom:4px">
 }
 
 // ── 📊 매출 종합 대시보드 ──
+// 매출종합 통합 뷰: 종합 + 매출처별 + 상품별 매출분석 한 화면에 렌더
 function renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f){
+  destroyCharts();
+  document.getElementById('content').innerHTML=`
+    <div id="db1-sum"></div>
+    <section id="db1-ch" style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border)"></section>
+    <section id="db1-t20" style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border)"></section>
+  `;
+  const _pSkip=_NO_DESTROY;
+  try{
+    _RENDER_TGT='db1-sum';
+    _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f);
+    _NO_DESTROY=true;
+    _RENDER_TGT='db1-ch';
+    renderChannel(filtered,filteredP,f);
+    _RENDER_TGT='db1-t20';
+    renderTop20(filteredPKpi,filtered,filteredP,f);
+  }finally{
+    _RENDER_TGT='content';
+    _NO_DESTROY=_pSkip;
+  }
+}
+
+function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f){
   const filterBad=arr=>arr.filter(r=>!(r[2]===12&&r[3]===1));
   const filtK=filterBad(filteredKpi),filtPK=filterBad(filteredPKpi);
   const filtC=filterBad(filtered),filtPC=filterBad(filteredP);
@@ -6205,7 +6243,7 @@ function renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f){
   const allWksYD=cmpYrsD?[...new Set(cmpYrsD.flatMap(yr=>Object.keys(byWkYD[yr]||{})))].sort():[];
 
   destroyCharts();
-  document.getElementById('content').innerHTML=`
+  document.getElementById(_RENDER_TGT).innerHTML=`
 <div class="kpi-grid" style="margin-bottom:16px">
   <div class="kpi-card accent"><div class="kpi-label">총 실매출액</div><div class="kpi-val">${won(tS)}</div><div class="kpi-sub">조회 조건 합산</div></div>
   <div class="kpi-card"><div class="kpi-label">정상가 합계</div><div class="kpi-val">${won(tR)}</div><div class="kpi-sub">할인 전</div></div>
