@@ -822,7 +822,6 @@ button:focus-visible,select:focus-visible,input:focus-visible{
   <nav class="nav">
     <button class="nav-item active" onclick="setTab('goal',this)">🎯 목표매출</button>
     <button class="nav-item" onclick="setTab('dashboard1',this)" style="font-weight:700">📊 매출 종합</button>
-    <button class="nav-item" onclick="setTab('discount',this)">🏷️ 할인율 분석</button>
     <button class="nav-item" onclick="setTab('growth',this)">🌱 성장률 분석</button>
     <button class="nav-item" onclick="setTab('compare',this)">⚖️ 상품비교</button>
     <button class="nav-item" id="nav-margin" onclick="setTab('margin',this)" style="display:none">💰 마진 분석</button>
@@ -1992,8 +1991,7 @@ function apply(){
     document.getElementById('content').innerHTML='<div class="empty"><div class="empty-icon">🔍</div>조건에 맞는 데이터가 없습니다</div>';
     return;
   }
-  if(activeTab==='discount') renderDiscount(filteredKpi,filteredPKpi,f);
-  else if(activeTab==='compare') renderCompare();
+  if(activeTab==='compare') renderCompare();
   else if(activeTab==='growth') renderGrowth(filtered,filteredP,f);
   else if(activeTab==='restock') renderRestock(f);
   else if(activeTab==='deadstock') renderDeadStock(f);
@@ -2839,80 +2837,6 @@ function renderTop20(filtP,filtered,filteredP,f){
   </div>
 </div>
 ${f.b==='ALL'?`<div class="chart-card" style="margin-bottom:16px"><div class="chart-header"><div class="chart-title">🏷️ 브랜드별 실매출액</div></div><div style="position:relative;height:140px"><canvas id="c-br"></canvas></div></div>`:''}
-${(()=>{
-  if(!INS_DATA.length) return '';
-  const bIdx_i=f.b==='ALL'?-1:parseInt(f.b);
-  const yrsF=f.yrs&&f.yrs.length?f.yrs:null;
-  const mosF=f.mos&&f.mos.length?f.mos:null;
-  const wksF=f.wks&&f.wks.length?f.wks:null;
-  const prodsF=f.prods&&f.prods.length?f.prods:null;
-  const insF=INS_DATA.filter(r=>{
-    if(bIdx_i>=0&&r[0]>=0&&r[0]!==bIdx_i)return false;
-    if(yrsF&&!yrsF.includes(r[1]))return false;
-    if(mosF&&!mosF.includes(r[2]))return false;
-    if(wksF&&!wksF.includes(r[3]))return false;
-    if(prodsF&&!prodsF.includes(r[4]))return false;
-    return true;
-  });
-  if(!insF.length) return '';
-  // 월별 집계
-  const byMo={};
-  insF.forEach(r=>{const k=String(r[2]).padStart(2,'0');if(!byMo[k])byMo[k]={qty:0,cost:0};byMo[k].qty+=r[6];byMo[k].cost+=r[7];});
-  const moKeys=Object.keys(byMo).sort();
-  const totQty=insF.reduce((s,r)=>s+r[6],0);
-  const totCost=insF.reduce((s,r)=>s+r[7],0);
-  // 주별 집계
-  const byWk={};
-  insF.forEach(r=>{const k=String(r[3]).padStart(2,'0');if(!byWk[k])byWk[k]={qty:0,cost:0};byWk[k].qty+=r[6];byWk[k].cost+=r[7];});
-  const wkKeys=Object.keys(byWk).sort();
-  // 상품별 집계 (TOP10)
-  const byProdI={};
-  insF.forEach(r=>{if(!byProdI[r[4]])byProdI[r[4]]={qty:0,cost:0};byProdI[r[4]].qty+=r[6];byProdI[r[4]].cost+=r[7];});
-  const topProdsI=Object.entries(byProdI).sort((a,b)=>b[1].qty-a[1].qty).slice(0,10);
-  return `<div style="border-top:2px solid #fde68a;margin:8px 0 16px;padding-top:16px">
-  <div style="font-size:13px;font-weight:700;color:#b45309;margin-bottom:12px">📦 입고 현황</div>
-  <div class="kpi-grid" style="margin-bottom:12px">
-    <div class="kpi-card"><div class="kpi-label">총 입고수량</div><div class="kpi-val">${wonNo(totQty)}개</div><div class="kpi-sub">필터 조건 합산</div></div>
-    <div class="kpi-card accent"><div class="kpi-label">총 입고금액</div><div class="kpi-val">${won(totCost)}</div><div class="kpi-sub">공급금액 합계</div></div>
-    <div class="kpi-card"><div class="kpi-label">입고 상품수</div><div class="kpi-val">${wonNo(Object.keys(byProdI).length)}종</div><div class="kpi-sub">고유 상품 기준</div></div>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-    <div class="table-card">
-      <div class="chart-header"><div class="chart-title">월별 입고</div></div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>월</th><th class="nr">수량</th><th class="nr">금액</th></tr></thead>
-        <tbody>${moKeys.map(m=>`<tr>
-          <td>${m}월</td>
-          <td class="nr">${wonNo(byMo[m].qty)}개</td>
-          <td class="nr" style="color:#b45309;font-weight:600">${won(byMo[m].cost)}</td>
-        </tr>`).join('')}</tbody>
-      </table></div>
-    </div>
-    <div class="table-card">
-      <div class="chart-header"><div class="chart-title">주별 입고</div></div>
-      <div class="table-wrap" style="max-height:240px;overflow-y:auto"><table>
-        <thead><tr><th>주차</th><th class="nr">수량</th><th class="nr">금액</th></tr></thead>
-        <tbody>${wkKeys.map(w=>`<tr>
-          <td>W${w}</td>
-          <td class="nr">${wonNo(byWk[w].qty)}개</td>
-          <td class="nr" style="color:#b45309;font-weight:600">${won(byWk[w].cost)}</td>
-        </tr>`).join('')}</tbody>
-      </table></div>
-    </div>
-  </div>
-  <div class="table-card">
-    <div class="chart-header"><div class="chart-title">상품별 입고 TOP 10</div><div class="chart-sub">수량 기준</div></div>
-    <div class="table-wrap"><table>
-      <thead><tr><th>상품명</th><th class="nr">수량</th><th class="nr">금액</th></tr></thead>
-      <tbody>${topProdsI.map(([p,d])=>`<tr>
-        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${escHtml(p)}">${escHtml(p)}</td>
-        <td class="nr">${wonNo(d.qty)}개</td>
-        <td class="nr" style="color:#b45309;font-weight:600">${won(d.cost)}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>
-  </div>
-</div>`;
-})()}
 `;
 
   setTimeout(()=>{
@@ -6292,15 +6216,9 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   <div class="kpi-card"><div class="kpi-label">판매 수량</div><div class="kpi-val">${wonNo(tQ)}건</div><div class="kpi-sub">총 판매 건수</div></div>
   <div class="kpi-card"><div class="kpi-label">평균 단가</div><div class="kpi-val">${won(avg)}</div><div class="kpi-sub">건당 평균</div></div>
 </div>
-<div style="display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:14px">
-  <div class="chart-card">
-    <div class="chart-header"><div><div class="chart-title">📅 월별 실매출 추이</div><div class="chart-sub">${cmpYrs.length>=2?cmpYrs.map(y=>y+'년').join(' vs '):cmpYrs.length===1?cmpYrs[0]+'년 월별 추이':'전체 기간 합산'}</div></div></div>
-    <div style="position:relative;height:200px"><canvas id="d1-mo"></canvas></div>
-  </div>
-  <div class="chart-card">
-    <div class="chart-header"><div class="chart-title">🏪 채널별 비중 TOP 10</div></div>
-    <div style="position:relative;height:200px"><canvas id="d1-ch"></canvas></div>
-  </div>
+<div class="chart-card" style="margin-bottom:14px">
+  <div class="chart-header"><div><div class="chart-title">📅 월별 실매출 추이</div><div class="chart-sub">${cmpYrs.length>=2?cmpYrs.map(y=>y+'년').join(' vs '):cmpYrs.length===1?cmpYrs[0]+'년 월별 추이':'전체 기간 합산'}</div></div></div>
+  <div style="position:relative;height:220px"><canvas id="d1-mo"></canvas></div>
 </div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
   <div class="chart-card">
@@ -6449,14 +6367,6 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
       charts.d1mo=new Chart(document.getElementById('d1-mo'),{type:'bar',data:{labels:moLabels,datasets:ds},
         options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${won(c.raw)}`}}},
         scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}}});
-    }
-    if(document.getElementById('d1-ch')&&chArr.length){
-      const top10ch=chArr.slice(0,10);
-      charts.d1ch=new Chart(document.getElementById('d1-ch'),{type:'doughnut',
-        data:{labels:top10ch.map(([c])=>c),datasets:[{data:top10ch.map(([,d])=>d.s),backgroundColor:CH_COLORS,borderWidth:0}]},
-        options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
-          plugins:{legend:{display:true,position:'right',labels:{font:{size:9},boxWidth:8,padding:5}},
-          tooltip:{callbacks:{label:c=>` ${won(c.raw)} (${(totalS_ch>0?c.raw/totalS_ch*100:0).toFixed(1)}%)`}}}}});
     }
     if(document.getElementById('d1-prod')&&top10P.length){
       charts.d1prod=new Chart(document.getElementById('d1-prod'),{type:'bar',
