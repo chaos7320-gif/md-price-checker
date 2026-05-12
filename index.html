@@ -821,7 +821,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{
   <div class="logo"><div class="logo-dot">MD</div>브랜드 매출 대시보드</div>
   <nav class="nav">
     <button class="nav-item active" onclick="setTab('goal',this)">🎯 목표매출</button>
-    <button class="nav-item" onclick="setTab('dashboard1',this)" style="font-weight:700">📊 매출 종합</button>
+    <button class="nav-item" onclick="setTab('dashboard1',this)" style="font-weight:700">📊 매출 분석</button>
     <button class="nav-item" onclick="setTab('growth',this)">🌱 성장률 분석</button>
     <button class="nav-item" onclick="setTab('compare',this)">⚖️ 상품비교</button>
     <button class="nav-item" id="nav-margin" onclick="setTab('margin',this)" style="display:none">💰 마진 분석</button>
@@ -4495,14 +4495,6 @@ function renderChannel(filtered,filteredP,f){
     }).join('')}
   </div>
 </div>
-<div class="chart-card" style="margin-bottom:16px">
-  <div class="chart-header">
-    <div class="chart-title" id="ch-trend-title">${(f.yrs&&f.yrs.length>=2)?'연도별 동월 비교':'기간별 매출처 트렌드 (TOP 5)'}</div>
-    <div class="chart-sub" id="ch-trend-sub">${(f.yrs&&f.yrs.length>=2)?'월별 합산 기준':(useWk?'주차별':'월별')+' 추이'}</div>
-  </div>
-  <div style="position:relative;height:220px"><canvas id="c-ch-trend"></canvas></div>
-</div>
-
 <div class="table-card" style="margin-bottom:16px">
   <div class="chart-header">
     <div>
@@ -4512,21 +4504,6 @@ function renderChannel(filtered,filteredP,f){
     <button onclick="exportChCSV()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">📥 CSV</button>
   </div>
   ${chDetailHtml}
-</div>
-
-<div class="table-card" style="margin-bottom:16px">
-  <div class="chart-header">
-    <div class="chart-title">기간별 \xd7 매출처 피벗</div>
-    <div class="chart-sub">상위 8개 매출처 \xb7 ${useWk?'주차별':'월별'}${multiYr?' \xb7 연도별 색상 구분':''}</div>
-  </div>
-  <div class="table-wrap"><table>
-    <thead><tr>
-      <th style="min-width:90px">기간</th>
-      ${top8Ch.map(ch=>`<th class="nr" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(ch)}">${ch.length>10?ch.slice(0,10)+'…':escHtml(ch)}</th>`).join('')}
-      <th class="nr" style="color:var(--green)">합계</th>
-    </tr></thead>
-    <tbody>${pivotHtml}</tbody>
-  </table></div>
 </div>
 
 <div class="table-card">
@@ -4619,50 +4596,6 @@ function renderChannel(filtered,filteredP,f){
           }}}}}});
       buildChLegend(document.getElementById('ch-legend-D-'+i),arr,palette,total,cmpMap,cmpLabel);
     });
-    if(!document.getElementById('c-ch-trend'))return;
-    const multiYear=f&&f.yrs&&f.yrs.length>=2;
-    if(multiYear){
-      const monthLabels=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-      const yrDatasets=f.yrs.map((yr)=>{
-        const c=yrPal(yr);
-        const monthData=Array.from({length:12},(_,mi)=>{
-          const mo=mi+1;
-          return filtered.filter(r=>r[1]===yr&&r[2]===mo).reduce((s,r)=>s+r[6],0);
-        });
-        return{label:`${yr}년`,data:monthData,borderColor:c.badge,backgroundColor:c.badge+'25',borderWidth:2,pointRadius:3,tension:0.3,fill:false};
-      });
-      // 2026 월별 목표 오버레이
-      yrDatasets.push({label:'2026 목표',data:get26MonthlyTarget(f.b),borderColor:'#f97316',backgroundColor:'#f9731620',borderWidth:2,borderDash:[5,4],pointRadius:3,pointBackgroundColor:'#f97316',tension:.3,fill:false});
-      charts.chTrend=new Chart(document.getElementById('c-ch-trend'),{
-        type:'line',
-        data:{labels:monthLabels,datasets:yrDatasets},
-        options:{responsive:true,maintainAspectRatio:false,
-          plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10,padding:8}},
-            tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${won(c.raw)}`}}},
-          scales:{x:{ticks:{font:{size:9},maxRotation:0}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}
-        }
-      });
-    }else{
-      const trendColors=['#ff5b3a','#2563eb','#7c3aed','#d946ef','#06b6d4'];
-      const top5=chList.slice(0,5);
-      charts.chTrend=new Chart(document.getElementById('c-ch-trend'),{
-        type:'line',
-        data:{
-          labels:periodKeys.map(periodLabel),
-          datasets:top5.map((d,i)=>({
-            label:d.ch.length>12?d.ch.slice(0,12)+'…':d.ch,
-            data:periodKeys.map(pk=>periodMap[pk][d.ch]||0),
-            borderColor:trendColors[i],backgroundColor:trendColors[i]+'20',
-            borderWidth:2,pointRadius:3,tension:0.3,fill:false
-          }))
-        },
-        options:{responsive:true,maintainAspectRatio:false,
-          plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10,padding:8}},
-            tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${won(c.raw)}`}}},
-          scales:{x:{ticks:{font:{size:9},maxRotation:45}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}
-        }
-      });
-    }
   },80);
 
   const sel=document.getElementById('ch-drill-sel');
@@ -6034,24 +5967,6 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   <div class="chart-header"><div><div class="chart-title">${cmpYrs.length>=2?`📅 ${cmpYrs.map(y=>y+'년').join(' vs ')} 주간 매출 비교`:cmpYrs.length===1?`📅 ${cmpYrs[0]}년 주간 매출 추이`:'📅 전체 기간 주간 매출'}</div><div class="chart-sub">주차별 실매출액 · 막대 위에 마우스를 올리면 매출+수량 확인</div></div></div>
   <div style="position:relative;height:220px"><canvas id="d1-wk"></canvas></div>
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-  <div class="chart-card">
-    <div class="chart-header"><div class="chart-title">👟 상품 TOP 10 매출</div></div>
-    <div style="position:relative;height:250px"><canvas id="d1-prod"></canvas></div>
-  </div>
-  <div class="table-card">
-    <div class="chart-header"><div class="chart-title">🏪 매출처 순위</div><div class="chart-sub">실매출액 기준</div></div>
-    <div class="table-wrap"><table>
-      <thead><tr><th>순위</th><th>매출처</th><th class="nr">매출액</th><th class="nr">비중</th></tr></thead>
-      <tbody>${chArr.slice(0,15).map(([ch,d],i)=>`<tr>
-        <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
-        <td style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(ch)}">${escHtml(ch)}</td>
-        <td class="nr" style="font-weight:700">${won(d.s)}</td>
-        <td class="nr" style="color:var(--muted);font-size:11px">${totalS_ch>0?pct(d.s/totalS_ch*100):'-'}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>
-  </div>
-</div>
 <div class="chart-card" style="margin-bottom:14px">
   <div class="chart-header"><div><div class="chart-title">📉 할인율 추이</div><div class="chart-sub">${cmpYrs.length>=2?cmpYrs.map(y=>y+'년').join(' vs ')+' · 주차별':cmpYrs.length===1?cmpYrs[0]+'년 주차별 평균':'최근 주차별 평균'}</div></div></div>
   <div style="position:relative;height:200px"><canvas id="d1-dr"></canvas></div>
@@ -6208,13 +6123,6 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
           scales:{x:{ticks:{font:{size:10,weight:'600'}}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}
         }
       });
-    }
-    if(document.getElementById('d1-prod')&&top10P.length){
-      charts.d1prod=new Chart(document.getElementById('d1-prod'),{type:'bar',
-        data:{labels:top10P.map(([p])=>p.length>18?p.slice(0,18)+'…':p),datasets:[{data:top10P.map(([,d])=>d.s),backgroundColor:CH_COLORS,borderRadius:4}]},
-        options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
-          plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${won(c.raw)}`}}},
-          scales:{x:{ticks:{font:{size:9},callback:v=>short(v)}},y:{ticks:{font:{size:9}}}}}});
     }
     if(document.getElementById('d1-dr')){
       if(cmpYrsD){
