@@ -2796,46 +2796,6 @@ function renderTop20(filtP,filtered,filteredP,f){
   ${top20DetailHtml}
 </div>
 
-<!-- ─── 매출 분석 섹션 ─── -->
-<div style="border-top:2px solid var(--sky-light);margin:8px 0 16px;padding-top:16px">
-  <div style="font-size:13px;font-weight:700;color:var(--sky);margin-bottom:12px">📊 매출 분석</div>
-  <div class="kpi-grid" style="margin-bottom:12px">
-    <div class="kpi-card accent"><div class="kpi-label">실매출액</div><div class="kpi-val">${won(saS)}</div><div class="kpi-sub">조회 조건 합산</div></div>
-    <div class="kpi-card"><div class="kpi-label">정상가 합계</div><div class="kpi-val">${won(saR)}</div><div class="kpi-sub">할인 전</div></div>
-    <div class="kpi-card"><div class="kpi-label">할인 금액</div><div class="kpi-val">${won(saR-saS)}</div><div class="kpi-badge ${saDr<5?'':'red'}">${pct(saDr)} 할인</div></div>
-    <div class="kpi-card"><div class="kpi-label">판매 수량</div><div class="kpi-val">${wonNo(saQ)}건</div><div class="kpi-sub">총 판매 건수</div></div>
-    <div class="kpi-card"><div class="kpi-label">평균 단가</div><div class="kpi-val">${won(saAvg)}</div><div class="kpi-sub">건당 평균</div></div>
-  </div>
-</div>
-<div class="chart-card" style="margin-bottom:16px">
-  <div class="chart-header"><div><div class="chart-title">${cmpYrs.length>=2?`📊 ${cmpYrs.map(y=>y+'년').join(' vs ')} 월별 매출 비교`:cmpYrs.length===1?`📊 ${cmpYrs[0]}년 월별 추이`:'📊 전체 기간 월별 매출'}</div><div class="chart-sub">월별 실매출액 · 막대 위에 마우스를 올리면 매출+수량 확인</div></div></div>
-  <div style="position:relative;height:220px"><canvas id="c-cmp-bar"></canvas></div>
-</div>
-<div class="chart-card" style="margin-bottom:16px">
-  <div class="chart-header"><div><div class="chart-title">${cmpYrs.length>=2?`📅 ${cmpYrs.map(y=>y+'년').join(' vs ')} 주간 매출 비교`:cmpYrs.length===1?`📅 ${cmpYrs[0]}년 주간 매출 추이`:'📅 전체 기간 주간 매출'}</div><div class="chart-sub">주차별 실매출액 · 막대 위에 마우스를 올리면 매출+수량 확인</div></div></div>
-  <div style="position:relative;height:220px"><canvas id="c-cmp-week"></canvas></div>
-</div>
-<div class="chart-card" style="margin-bottom:16px">
-  <div class="chart-header"><div><div class="chart-title">${cmpYrs.length>=2?`🏪 채널별 매출 비중 — ${cmpYrs.map(y=>y+'년').join(' vs ')}`:cmpYrs.length===1?`🏪 채널별 매출 비중 — ${cmpYrs[0]}년`:'🏪 채널별 매출 비중 — 전체'}</div><div class="chart-sub">TOP 10 채널 기준</div></div></div>
-  <div style="display:grid;grid-template-columns:repeat(${Math.max(1,cmpYrs.length)},1fr);gap:20px">
-    ${(cmpYrs.length===0?['ALL']:cmpYrs).map((yr,i)=>{
-      const isLast=i===Math.max(0,cmpYrs.length-1);
-      const isAll=yr==='ALL';
-      const lbl=isAll?'전체':(yr+'년');
-      const yrShort=isAll?'':String(yr).slice(2);
-      const bgStyle=isLast&&!isAll?'background:linear-gradient(135deg,var(--green) 0%,var(--green2) 100%)':(i===0?'background:#94a3b8':'background:#3b82f6');
-      const txtColor=isLast&&!isAll?'color:var(--green)':'color:var(--muted)';
-      return `<div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px">
-          <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;${bgStyle};color:#fff;font-size:11px;font-weight:700">${yrShort}</span>
-          <span style="font-size:13px;font-weight:${isLast?700:600};${txtColor}">${lbl}</span>
-        </div>
-        <div style="position:relative;height:200px"><canvas id="c-ch-${i}"></canvas></div>
-        <div id="ch-legend-${i}" style="margin-top:12px;font-size:12px"></div>
-      </div>`;
-    }).join('')}
-  </div>
-</div>
 ${f.b==='ALL'?`<div class="chart-card" style="margin-bottom:16px"><div class="chart-header"><div class="chart-title">🏷️ 브랜드별 실매출액</div></div><div style="position:relative;height:140px"><canvas id="c-br"></canvas></div></div>`:''}
 `;
 
@@ -2853,181 +2813,6 @@ ${f.b==='ALL'?`<div class="chart-card" style="margin-bottom:16px"><div class="ch
         return[` 매출: ${won(c.raw)}`,` 수량: ${wonNo(d.q)}건`];
       }}}},
       scales:{x:{ticks:{font:{size:9},callback:v=>short(v)}},y:{ticks:{font:{size:9}}}}}});
-
-    // ── 월별 비교 바차트 ──
-    if(document.getElementById('c-cmp-bar')){
-      const cmpDS=cmpYrs.length===0?[
-        {label:'전체',data:allMos.map(m=>0),backgroundColor:currColor+'CC',borderRadius:6,barPercentage:.7,categoryPercentage:.8}
-      ]:cmpYrs.map((yr,i)=>({
-        label:`${yr}년`,
-        data:allMos.map(m=>moByYr[yr]?.[m]?.s||0),
-        backgroundColor:yrPal(yr).badge+(i===cmpYrs.length-1?'CC':'99'),
-        borderRadius:6,barPercentage:.7,categoryPercentage:.8
-      }));
-      // 2026 월별 목표 오버레이
-      const tgt26Top20=get26MonthlyTarget(f.b);
-      cmpDS.push({type:'line',label:'2026 목표',data:allMos.map(m=>tgt26Top20[parseInt(m)-1]||0),borderColor:'#f97316',backgroundColor:'#f9731620',borderWidth:2,borderDash:[5,4],pointRadius:3,pointBackgroundColor:'#f97316',fill:false,tension:.3,order:0});
-      charts.cmpBar=new Chart(document.getElementById('c-cmp-bar'),{
-        type:'bar',
-        data:{
-          labels:moLabels,
-          datasets:cmpDS
-        },
-        options:{responsive:true,maintainAspectRatio:false,
-          plugins:{legend:{display:true,position:'top',labels:{font:{size:11,weight:'600'},boxWidth:12,padding:16}},
-            tooltip:{enabled:false,
-              external:function(context){
-                const {chart,tooltip}=context;
-                let el=chart.canvas.parentNode.querySelector('.cmpbar-tip');
-                if(!el){el=document.createElement('div');el.className='cmpbar-tip';el.style.cssText='position:absolute;background:#0f172a;border-radius:12px;padding:14px 18px;pointer-events:none;z-index:99;font-size:13px;color:#fff;min-width:240px;box-shadow:0 8px 24px rgba(0,0,0,.4);transition:opacity .15s';chart.canvas.parentNode.style.position='relative';chart.canvas.parentNode.appendChild(el);}
-                if(tooltip.opacity===0){el.style.opacity='0';return;}
-                el.style.opacity='1';
-                const moLabel=tooltip.title?.[0]||'';
-                const moKey=moLabel.replace('월','').padStart(2,'0');
-                const moIdx=allMos.indexOf(moKey);
-                let html2=`<div style="font-weight:700;margin-bottom:8px;color:#0ea5e9;font-size:14px">${moLabel}</div>`;
-                tooltip.dataPoints?.forEach(dp=>{
-                  const yr=cmpYrs[dp.datasetIndex];
-                  if(yr===undefined)return;
-                  const v=dp.raw;
-                  const qv=moByYr[yr]?.[moKey]?.q||0;
-                  const arr=allMos.map(m=>moByYr[yr]?.[m]?.s||0);
-                  const dotColor=yrPal(yr).badge;
-                  const prevMoVal=moIdx>0?arr[moIdx-1]:0;
-                  const mom=prevMoVal>0?((v-prevMoVal)/prevMoVal*100):null;
-                  html2+=`<div style="margin-bottom:6px">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${dotColor};margin-right:5px;vertical-align:middle"></span>
-                    <span style="color:#ddd">${yr}년:</span>
-                    <span style="font-weight:700;margin-left:4px">${won(v)}</span>
-                    <span style="color:#7dd3fc;font-size:11px;margin-left:6px">📦 ${wonNo(qv)}건</span>`;
-                  if(mom!==null){const mc=mom>=0?'#ff7b7b':'#7bb8ff';const ms=mom>=0?'▲':'▼';html2+=` <span style="color:${mc};font-size:11px;font-weight:600">${ms}${Math.abs(mom).toFixed(1)}%</span>`;}
-                  html2+='</div>';
-                });
-                if(cmpYrs.length>=2){
-                  const yF=cmpYrs[0],yL=cmpYrs[cmpYrs.length-1];
-                  const pv=moByYr[yF]?.[moKey]?.s||0;const cv=moByYr[yL]?.[moKey]?.s||0;
-                  if(pv>0&&cv>0){const yoy=((cv-pv)/pv*100);const yc=yoy>=0?'#ff7b7b':'#7bb8ff';const ys=yoy>=0?'▲':'▼';html2+=`<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.15);font-size:11px"><span style="color:#a0adb8">${yF}→${yL}</span><span style="color:${yc};font-weight:700;margin-left:6px">${ys}${Math.abs(yoy).toFixed(1)}%</span></div>`;}
-                }
-                el.innerHTML=html2;
-                const tw=el.offsetWidth||200;let lx=tooltip.caretX+12;if(tooltip.caretX+tw+20>chart.width)lx=tooltip.caretX-tw-12;
-                el.style.left=lx+'px';el.style.top=(tooltip.caretY-20)+'px';
-              }
-            }
-          },
-          scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}}
-      });
-    }
-
-    // ── 주간 비교 바차트 ──
-    if(document.getElementById('c-cmp-week')&&allWkNums.length>0){
-      const wkDS=cmpYrs.length===0?[
-        {label:'전체',data:allWkNums.map(_=>0),backgroundColor:'#0284c7CC',borderRadius:5,barPercentage:.7,categoryPercentage:.8}
-      ]:cmpYrs.map((yr,i)=>({
-        label:`${yr}년`,
-        data:wkDataByYr[yr],
-        backgroundColor:yrPal(yr).badge+(i===cmpYrs.length-1?'CC':'99'),
-        borderRadius:5,barPercentage:.7,categoryPercentage:.8
-      }));
-      charts.cmpWeek=new Chart(document.getElementById('c-cmp-week'),{
-        type:'bar',
-        data:{
-          labels:wkLabels,
-          datasets:wkDS
-        },
-        options:{responsive:true,maintainAspectRatio:false,
-          plugins:{
-            legend:{display:true,position:'top',labels:{font:{size:11,weight:'600'},boxWidth:12,padding:16}},
-            tooltip:{enabled:false,
-              external:function(context){
-                const {chart,tooltip}=context;
-                let el=chart.canvas.parentNode.querySelector('.wkbar-tip');
-                if(!el){el=document.createElement('div');el.className='wkbar-tip';el.style.cssText='position:absolute;background:#0f172a;border-radius:12px;padding:14px 18px;pointer-events:none;z-index:99;font-size:13px;color:#fff;min-width:240px;box-shadow:0 8px 24px rgba(0,0,0,.4);transition:opacity .15s';chart.canvas.parentNode.style.position='relative';chart.canvas.parentNode.appendChild(el);}
-                if(tooltip.opacity===0){el.style.opacity='0';return;}
-                el.style.opacity='1';
-                const wkLabel=tooltip.title?.[0]||'';
-                const wkIdx=tooltip.dataPoints?.[0]?.dataIndex??-1;
-                const wkNum=wkIdx>=0?allWkNums[wkIdx]:'';
-                let range='';
-                for(const yr of cmpYrs){const k=`${yr}-W${wkNum}`;if(WK_RANGE_MAP[k]){range=WK_RANGE_MAP[k];break;}}
-                let html2=`<div style="font-weight:700;margin-bottom:8px;color:#0ea5e9;font-size:14px">${wkLabel}${range?` <span style="font-size:11px;color:#94a3b8;font-weight:400">(${range})</span>`:''}</div>`;
-                tooltip.dataPoints?.forEach(dp=>{
-                  const yr=cmpYrs[dp.datasetIndex];
-                  if(yr===undefined)return;
-                  const v=dp.raw;
-                  const qv=wkDataByYrQ[yr]?.[wkIdx]||0;
-                  const dotColor=yrPal(yr).badge;
-                  html2+=`<div style="margin-bottom:6px">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${dotColor};margin-right:5px;vertical-align:middle"></span>
-                    <span style="color:#ddd">${yr}년:</span>
-                    <span style="font-weight:700;margin-left:4px">${won(v)}</span>
-                    <span style="color:#7dd3fc;font-size:11px;margin-left:6px">📦 ${wonNo(qv)}건</span></div>`;
-                });
-                if(cmpYrs.length>=2&&wkIdx>=0){
-                  const yF=cmpYrs[0],yL=cmpYrs[cmpYrs.length-1];
-                  const prevVal=wkDataByYr[yF]?.[wkIdx]||0;const currVal=wkDataByYr[yL]?.[wkIdx]||0;
-                  if(prevVal>0&&currVal>0){const yoy=((currVal-prevVal)/prevVal*100);const yc=yoy>=0?'#ff7b7b':'#7bb8ff';const ys=yoy>=0?'▲':'▼';html2+=`<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.15);font-size:11px"><span style="color:#a0adb8">${yF}→${yL}</span><span style="color:${yc};font-weight:700;margin-left:6px">${ys}${Math.abs(yoy).toFixed(1)}%</span></div>`;}
-                }
-                el.innerHTML=html2;
-                const tw=el.offsetWidth||200;let lx=tooltip.caretX+12;if(tooltip.caretX+tw+20>chart.width)lx=tooltip.caretX-tw-12;
-                el.style.left=lx+'px';el.style.top=(tooltip.caretY-20)+'px';
-              }
-            }
-          },
-          scales:{x:{ticks:{font:{size:10,weight:'600'}}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}}
-      });
-    }
-
-    // ── 채널별 도넛 차트 (N개년 지원) ──
-    const CH_COLORS_LIST=[
-      ['#9ca3af','#b0b0b0','#c4c4c4','#d4d4d4','#dedede','#a8a8a8','#959595','#828282','#6e6e6e','#5e5e5e'],
-      ['#60a5fa','#3b82f6','#2563eb','#1d4ed8','#1e40af','#93c5fd','#bfdbfe','#dbeafe','#1e3a8a','#172554'],
-      ['#ff5b3a','#2563eb','#7c3aed','#06b6d4','#d946ef','#0ea5e9','#16a34a','#f59e0b','#0a0a0a','#737373']
-    ];
-    const chArrByYr={};
-    const totalByYr={};
-    const mapByYr={};
-    (cmpYrs.length===0?['ALL']:cmpYrs).forEach(yr=>{
-      const arr=getChByYr(yr==='ALL'?null:yr);
-      chArrByYr[yr]=arr;
-      totalByYr[yr]=arr.reduce((s,[,v])=>s+v,0);
-      mapByYr[yr]=Object.fromEntries(arr);
-    });
-    function buildLegend(el,items,colors,total,cmpMap,cmpYrLabel){
-      if(!el)return;
-      el.innerHTML=items.map(([ch,v],i)=>{
-        const p=(total>0?v/total*100:0).toFixed(1);
-        const name=ch.length>14?ch.slice(0,14)+'…':ch;
-        const cmpV=cmpMap?cmpMap[ch]||0:0;
-        const yoy=cmpMap&&cmpV>0?((v-cmpV)/cmpV*100):null;
-        const yoyStr=yoy!==null?` ${yoy>=0?'▲':'▼'}${Math.abs(yoy).toFixed(0)}%`:'';
-        const yoyColor=yoy===null?'#a0adb8':yoy>=0?'#e05252':'#378ADD';
-        return`<div style="display:flex;align-items:center;justify-content:space-between;gap:4px;padding:3px 0;border-bottom:1px solid #f5f7fa">
-          <div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex:1;min-width:0">
-            <span style="width:8px;height:8px;border-radius:2px;background:${colors[i%colors.length]};flex-shrink:0"></span>
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:10px">${name}</span>
-          </div>
-          <span style="font-weight:600;white-space:nowrap;color:var(--text);font-size:11px">${p}%</span>
-          ${yoyStr?`<span style="font-size:10px;font-weight:700;color:${yoyColor};white-space:nowrap" title="${cmpYrLabel||''}">${yoyStr}</span>`:''}
-        </div>`;
-      }).join('');
-    }
-    (cmpYrs.length===0?['ALL']:cmpYrs).forEach((yr,i)=>{
-      const cv=document.getElementById('c-ch-'+i);
-      if(!cv)return;
-      const arr=chArrByYr[yr]||[];
-      const total=totalByYr[yr]||0;
-      const palette=CH_COLORS_LIST[Math.min(i,CH_COLORS_LIST.length-1)];
-      // 비교 대상: 다음 연도(있다면) 또는 이전 연도
-      const cmpYr=i>0?cmpYrs[i-1]:(cmpYrs.length>i+1?cmpYrs[i+1]:null);
-      const cmpMap=cmpYr!=null?mapByYr[cmpYr]:null;
-      const cmpLabel=cmpYr!=null?`vs ${cmpYr}년`:'';
-      charts['chD'+i]=new Chart(cv,{type:'doughnut',
-        data:{labels:arr.map(([c])=>c),datasets:[{data:arr.map(([,v])=>v),backgroundColor:palette,borderWidth:0}]},
-        options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
-          plugins:{legend:{display:false},
-            tooltip:{callbacks:{label:c=>{const v=c.raw;const p=(total>0?v/total*100:0).toFixed(1);const cV=cmpMap?cmpMap[c.label]||0:0;const yoy=cmpMap&&cV>0?((v-cV)/cV*100):null;const ys=yoy!==null?` | ${cmpLabel} ${yoy>=0?'▲':'▼'}${Math.abs(yoy).toFixed(1)}%`:'';return[` ${won(v)} (${p}%)`,ys];}}}}}});
-      buildLegend(document.getElementById('ch-legend-'+i),arr,palette,total,cmpMap,cmpLabel);
-    });
 
     // ── 브랜드 바차트 ──
     if(f.b==='ALL'&&document.getElementById('c-br')){
@@ -6188,6 +5973,31 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   const moAll=cmpYrs.length===0?aggMo(null):{};
   const allMos=[...new Set([...cmpYrs.flatMap(yr=>Object.keys(moByYr[yr]||{})),...Object.keys(moAll)])].sort();
   const moLabels=allMos.map(m=>parseInt(m)+'월');
+  // 주간 집계 (N년 비교용, 매출+수량)
+  function aggWk(yr){
+    const src=hasProd?filteredP:TOP_DATA;
+    const ms={},mq={};
+    src.filter(r=>{
+      if(bIdx2>=0&&r[0]!==bIdx2)return false;
+      if(yr!==null&&r[1]!==yr)return false;
+      if(moF2&&!moF2.includes(r[2]))return false;
+      if(wkF2&&!wkF2.includes(r[3]))return false;
+      if(!hasProd&&!chOk(r,f))return false;
+      if(r[2]===12&&r[3]===1)return false;
+      return true;
+    }).forEach(r=>{
+      const k=String(r[3]).padStart(2,'0');
+      ms[k]=(ms[k]||0)+r[6];
+      mq[k]=(mq[k]||0)+r[5];
+    });
+    return {s:ms,q:mq};
+  }
+  const wkByYrD={},wkByYrDQ={};
+  cmpYrs.forEach(yr=>{const _r=aggWk(yr);wkByYrD[yr]=_r.s;wkByYrDQ[yr]=_r.q;});
+  const _wkAllRes=cmpYrs.length===0?aggWk(null):{s:{},q:{}};
+  const wkAllD=_wkAllRes.s, wkAllDQ=_wkAllRes.q;
+  const allWkNumsD=[...new Set([...cmpYrs.flatMap(yr=>Object.keys(wkByYrD[yr]||{})),...Object.keys(wkAllD)])].sort();
+  const wkLabelsD=allWkNumsD.map(w=>'W'+w);
   // 할인율 추이 (N개 연도 선택 시 연도별 분리)
   const cmpYrsD=cmpYrs.length>=2?[...cmpYrs].sort((a,b)=>a-b):null;
   const byWkD={},byWkYD={};
@@ -6219,6 +6029,10 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
 <div class="chart-card" style="margin-bottom:14px">
   <div class="chart-header"><div><div class="chart-title">📅 월별 실매출 추이</div><div class="chart-sub">${cmpYrs.length>=2?cmpYrs.map(y=>y+'년').join(' vs '):cmpYrs.length===1?cmpYrs[0]+'년 월별 추이':'전체 기간 합산'}</div></div></div>
   <div style="position:relative;height:220px"><canvas id="d1-mo"></canvas></div>
+</div>
+<div class="chart-card" style="margin-bottom:14px">
+  <div class="chart-header"><div><div class="chart-title">${cmpYrs.length>=2?`📅 ${cmpYrs.map(y=>y+'년').join(' vs ')} 주간 매출 비교`:cmpYrs.length===1?`📅 ${cmpYrs[0]}년 주간 매출 추이`:'📅 전체 기간 주간 매출'}</div><div class="chart-sub">주차별 실매출액 · 막대 위에 마우스를 올리면 매출+수량 확인</div></div></div>
+  <div style="position:relative;height:220px"><canvas id="d1-wk"></canvas></div>
 </div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
   <div class="chart-card">
@@ -6367,6 +6181,33 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
       charts.d1mo=new Chart(document.getElementById('d1-mo'),{type:'bar',data:{labels:moLabels,datasets:ds},
         options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${won(c.raw)}`}}},
         scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}}});
+    }
+    if(document.getElementById('d1-wk')&&allWkNumsD.length){
+      const wkDS=cmpYrs.length===0?[
+        {label:'전체',data:allWkNumsD.map(w=>wkAllD[w]||0),backgroundColor:'#0284c7CC',borderRadius:5,barPercentage:.7,categoryPercentage:.8}
+      ]:cmpYrs.map((yr,i)=>({
+        label:`${yr}년`,
+        data:allWkNumsD.map(w=>wkByYrD[yr][w]||0),
+        backgroundColor:yrPalD1(yr).badge+(i===cmpYrs.length-1?'CC':'99'),
+        borderRadius:5,barPercentage:.7,categoryPercentage:.8
+      }));
+      charts.d1wk=new Chart(document.getElementById('d1-wk'),{
+        type:'bar',
+        data:{labels:wkLabelsD,datasets:wkDS},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{
+            legend:{display:cmpYrs.length>=1,position:'top',labels:{font:{size:11,weight:'600'},boxWidth:12,padding:12}},
+            tooltip:{callbacks:{label:c=>{
+              const yrLbl=cmpYrs.length===0?'전체':cmpYrs[c.datasetIndex]+'년';
+              const qMap=cmpYrs.length===0?wkAllDQ:wkByYrDQ[cmpYrs[c.datasetIndex]];
+              const wkNum=allWkNumsD[c.dataIndex];
+              const qv=qMap?.[wkNum]||0;
+              return ` ${yrLbl}: ${won(c.raw)} (${wonNo(qv)}건)`;
+            }}}
+          },
+          scales:{x:{ticks:{font:{size:10,weight:'600'}}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}
+        }
+      });
     }
     if(document.getElementById('d1-prod')&&top10P.length){
       charts.d1prod=new Chart(document.getElementById('d1-prod'),{type:'bar',
