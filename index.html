@@ -5796,9 +5796,30 @@ ${multiYr?`<div class="kpi-grid" style="margin-bottom:4px">
 function renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f){
   destroyCharts();
   document.getElementById('content').innerHTML=`
-    <div id="db1-sum"></div>
-    <section id="db1-ch" style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border)"></section>
-    <section id="db1-t20" style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border)"></section>
+    <section class="db1-sec db1-sec-date" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:18px 18px 6px;margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px dashed #93c5fd">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:#3b82f6;color:#fff;font-size:14px">📅</span>
+        <span style="font-size:15px;font-weight:700;color:#1d4ed8">일자별 매출</span>
+        <span style="font-size:11px;color:#3b82f6;background:#dbeafe;padding:3px 10px;border-radius:12px;font-weight:600">KPI · 월별 · 주간 · 할인율</span>
+      </div>
+      <div id="db1-sum"></div>
+    </section>
+    <section class="db1-sec db1-sec-channel" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:16px;padding:18px 18px 6px;margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px dashed #86efac">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:#22c55e;color:#fff;font-size:14px">🏪</span>
+        <span style="font-size:15px;font-weight:700;color:#15803d">채널별 매출 (매출처)</span>
+        <span style="font-size:11px;color:#15803d;background:#dcfce7;padding:3px 10px;border-radius:12px;font-weight:600">매출처 비중 · 매출처별 상세 · 채널 드릴다운</span>
+      </div>
+      <div id="db1-ch"></div>
+    </section>
+    <section class="db1-sec db1-sec-product" style="background:#fff7ed;border:1px solid #fed7aa;border-radius:16px;padding:18px 18px 6px;margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px dashed #fdba74">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:#f97316;color:#fff;font-size:14px">👟</span>
+        <span style="font-size:15px;font-weight:700;color:#c2410c">상품별 매출</span>
+        <span style="font-size:11px;color:#c2410c;background:#ffedd5;padding:3px 10px;border-radius:12px;font-weight:600">TOP 10 · TOP 20 상세 · 브랜드별</span>
+      </div>
+      <div id="db1-t20"></div>
+    </section>
   `;
   const _pSkip=_NO_DESTROY;
   try{
