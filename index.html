@@ -4177,7 +4177,6 @@ function renderGrowth(filtered,filteredP,f){
 // ────────────────────────────────────────────
 // 탭: 매출처별 분석
 // ────────────────────────────────────────────
-let _chDrillCh='ALL'; // 드릴다운 선택 매출처
 function renderChannel(filtered,filteredP,f){
   const filterBadData=arr=>arr.filter(r=>!(r[2]===12&&r[3]===1));
   filtered=filterBadData(filtered);
@@ -4240,47 +4239,6 @@ function renderChannel(filtered,filteredP,f){
     periodMap[pk].__total+=r[6];
   });
   const periodKeys=Object.keys(periodMap).sort();
-
-  // 드릴다운: CHP_DATA(채널×상품 실매출) 우선, 없으면 브랜드 비율 근사 폴백
-  function getChProdData(ch){
-    const bIdx=f.b==='ALL'?-1:parseInt(f.b);
-    const hasProd=(f.prods&&f.prods.length>0)||f.prod!=='ALL';
-    const prodSet=hasProd?((f.prods&&f.prods.length)?new Set(f.prods):new Set([f.prod])):null;
-    if(CHP_DATA&&CHP_DATA.length){
-      const rows=CHP_DATA.filter(r=>r[4]===ch
-        &&(bIdx<0||r[0]===bIdx)
-        &&(f.yrs&&f.yrs.length?f.yrs.includes(r[1]):true)
-        &&(f.mo==='ALL'||r[2]===parseInt(f.mo))
-        &&(f.wk==='ALL'||r[3]===parseInt(f.wk))
-        &&(!prodSet||prodSet.has(r[5]))
-        &&!(r[2]===12&&r[3]===1));
-      const prodAgg={};
-      rows.forEach(r=>{
-        const p=r[5];
-        if(!prodAgg[p])prodAgg[p]={p,bi:r[0],s:0,q:0,rt:0};
-        prodAgg[p].s+=r[7];prodAgg[p].q+=r[6];prodAgg[p].rt+=r[8];
-      });
-      return Object.values(prodAgg).filter(r=>r.s>0).sort((a,b)=>b.s-a.s).slice(0,20);
-    }
-    // 폴백: 구 백업(채널×상품 데이터 없음) — 브랜드 비율로 근사
-    const baseTop=TOP_DATA.filter(r=>(bIdx<0||r[0]===bIdx)
-      &&(f.yrs&&f.yrs.length?f.yrs.includes(r[1]):true)
-      &&(f.mo==='ALL'||r[2]===parseInt(f.mo))
-      &&(f.wk==='ALL'||r[3]===parseInt(f.wk)));
-    const totalBrand=baseTop.reduce((s,r)=>s+r[6],0);
-    const totalCh=baseTop.filter(r=>r[4]===ch).reduce((s,r)=>s+r[6],0);
-    const ratio=totalBrand>0?totalCh/totalBrand:0;
-    const prodAgg={};
-    filteredP.forEach(r=>{
-      const p=r[4];
-      if(!prodAgg[p])prodAgg[p]={p,bi:r[0],s:0,q:0,rt:0};
-      prodAgg[p].s+=Math.round(r[6]*ratio);
-      prodAgg[p].q+=Math.round(r[5]*ratio);
-      prodAgg[p].rt+=Math.round(r[7]*ratio);
-    });
-    return Object.values(prodAgg).filter(r=>r.s>0).sort((a,b)=>b.s-a.s).slice(0,20);
-  }
-  const drillData=_chDrillCh!=='ALL'?getChProdData(_chDrillCh):[];
 
   // 매출처별 상세 HTML (N개년 비교 vs 단일)
   const chDetailHtml=(()=>{
@@ -4520,47 +4478,6 @@ function renderChannel(filtered,filteredP,f){
     <button onclick="exportChCSV()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">📥 CSV</button>
   </div>
   ${chDetailHtml}
-</div>
-
-<div class="table-card">
-  <div class="chart-header">
-    <div><div class="chart-title">매출처별 상품 분석</div><div class="chart-sub">매출처 선택 시 해당 채널 상품 TOP 20 표시 (실매출 기준)</div></div>
-    <select id="ch-drill-sel" onchange="_chDrillCh=this.value;renderChannel(${JSON.stringify([])},${JSON.stringify([])},null)" style="font-size:12px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;max-width:200px">
-      <option value="ALL">매출처 선택...</option>
-      ${chList.map(d=>`<option value="${escHtml(d.ch)}" ${_chDrillCh===d.ch?'selected':''}>${d.ch.length>22?d.ch.slice(0,22)+'…':escHtml(d.ch)}</option>`).join('')}
-    </select>
-  </div>
-  ${_chDrillCh==='ALL'||!drillData.length?`
-  <div style="padding:40px;text-align:center;color:var(--hint);font-size:13px">위에서 매출처를 선택하면 해당 채널의 상품별 매출을 볼 수 있어요</div>
-  `:`
-  <div style="padding:8px 0 12px;font-size:12px;color:var(--muted)">📍 <strong style="color:var(--green)">${escHtml(_chDrillCh)}</strong> 채널 상품 TOP ${drillData.length}개</div>
-  <div class="table-wrap"><table>
-    <thead><tr>
-      <th>순위</th><th>상품명</th><th>브랜드</th>
-      <th class="nr">실매출액</th><th class="nr">정상가</th>
-      <th class="nr">할인율</th><th class="nr">수량</th>
-      <th style="min-width:80px">비중</th>
-    </tr></thead>
-    <tbody>${(()=>{
-      const dTotal=drillData.reduce((s,r)=>s+r.s,0);
-      return drillData.map((d,i)=>{
-        const dr=d.rt>0?((d.rt-d.s)/d.rt*100):0;
-        const share=dTotal>0?(d.s/dTotal*100):0;
-        return`<tr>
-          <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
-          <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(d.p)}">${escHtml(d.p)}</td>
-          <td><span style="font-size:10px;padding:2px 6px;border-radius:10px;background:${BBGS[d.bi]};color:${BTCS[d.bi]};font-weight:600">${BNAMES[d.bi]}</span></td>
-          <td class="nr" style="color:var(--green);font-weight:700">${won(d.s)}</td>
-          <td class="nr" style="color:var(--hint)">${won(d.rt)}</td>
-          <td class="nr"><span class="disc-pill ${discClass(dr)}">${pct(dr)}</span></td>
-          <td class="nr">${wonNo(d.q)}</td>
-          <td><div class="bar-wrap"><div class="bar-bg"><div class="bar-in" style="width:${Math.round(d.s/drillData[0].s*100)}%"></div></div><span style="font-size:10px;color:var(--hint);min-width:32px">${share.toFixed(1)}%</span></div></td>
-        </tr>`;
-      }).join('');
-    })()}
-    </tbody>
-  </table></div>
-  `}
 </div>`;
 
   // 차트 렌더
@@ -4613,15 +4530,6 @@ function renderChannel(filtered,filteredP,f){
       buildChLegend(document.getElementById('ch-legend-D-'+i),arr,palette,total,cmpMap,cmpLabel);
     });
   },80);
-
-  const sel=document.getElementById('ch-drill-sel');
-  const _myTgt=_RENDER_TGT;
-  if(sel)sel.onchange=function(){
-    _chDrillCh=this.value;
-    const _pTgt=_RENDER_TGT,_pSkip=_NO_DESTROY;
-    _RENDER_TGT=_myTgt;_NO_DESTROY=true;
-    try{renderChannel(filtered,filteredP,f);}finally{_RENDER_TGT=_pTgt;_NO_DESTROY=_pSkip;}
-  };
 }
 
 // ── 매출처 CSV 내보내기 ──
