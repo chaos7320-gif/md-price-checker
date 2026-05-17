@@ -557,7 +557,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 .srch-drop{display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:190px;max-height:240px;overflow-y:auto;background:var(--canvas);border:1px solid var(--hairline);border-radius:12px;box-shadow:var(--shadow-lg);z-index:500;padding:4px;animation:menuIn .15s ease-out}
 .srch-drop.open{display:block}
 .srch-opt{padding:8px 12px;border-radius:8px;font-size:13px;cursor:pointer;color:var(--ink);transition:background .12s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px}
-.srch-opt:hover{background:var(--surface);color:var(--ink)}
+.srch-opt:hover{background:var(--surface);color:var(--ink);white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word}
 .srch-opt.sel{background:var(--surface);color:var(--ink);font-weight:600}
 .srch-empty{padding:10px 12px;font-size:12px;color:var(--hint);text-align:center}
 @media(max-width:768px){.srch-drop{min-width:150px;max-height:200px}}
@@ -1776,7 +1776,7 @@ function renderProdDrop(q){
   if(list.length===0){drop.innerHTML='<div class="srch-empty">'+(q?'검색 결과 없음':'브랜드를 먼저 선택해 주세요')+'</div>';return;}
   drop.innerHTML=list.slice(0,80).map(p=>{
     const sel=SELECTED_PRODS.includes(p);
-    return`<div class="srch-opt${sel?' sel':''}" onmousedown="selProd('${esc(p)}')">${hi(esc(p),esc(q))}${sel?' <span style="float:right;opacity:.6;font-size:11px">✓선택됨</span>':''}</div>`;
+    return`<div class="srch-opt${sel?' sel':''}" title="${esc(p)}" onmousedown="selProd('${esc(p)}')">${hi(esc(p),esc(q))}${sel?' <span style="float:right;opacity:.6;font-size:11px">✓선택됨</span>':''}</div>`;
   }).join('');
 }
 function selProd(p){
@@ -4231,12 +4231,15 @@ function renderChannel(filtered,filteredP,f){
   // 드릴다운: CHP_DATA(채널×상품 실매출) 우선, 없으면 브랜드 비율 근사 폴백
   function getChProdData(ch){
     const bIdx=f.b==='ALL'?-1:parseInt(f.b);
+    const hasProd=(f.prods&&f.prods.length>0)||f.prod!=='ALL';
+    const prodSet=hasProd?((f.prods&&f.prods.length)?new Set(f.prods):new Set([f.prod])):null;
     if(CHP_DATA&&CHP_DATA.length){
       const rows=CHP_DATA.filter(r=>r[4]===ch
         &&(bIdx<0||r[0]===bIdx)
         &&(f.yrs&&f.yrs.length?f.yrs.includes(r[1]):true)
         &&(f.mo==='ALL'||r[2]===parseInt(f.mo))
         &&(f.wk==='ALL'||r[3]===parseInt(f.wk))
+        &&(!prodSet||prodSet.has(r[5]))
         &&!(r[2]===12&&r[3]===1));
       const prodAgg={};
       rows.forEach(r=>{
@@ -5826,14 +5829,48 @@ function renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f){
     _RENDER_TGT='db1-sum';
     _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f);
     _NO_DESTROY=true;
+    // 상품 필터 활성 시: TOP_DATA(filtered)는 상품 컬럼이 없어 채널 집계가 브랜드 전체로 누설됨.
+    // CHP_DATA(채널×상품)에서 상품 필터를 적용한 채널 데이터로 교체 → 채널/상품별 뷰가 모두 연동됨.
+    const filteredCh=_buildProdAwareChannelData(filtered,filteredP,f);
     _RENDER_TGT='db1-ch';
-    renderChannel(filtered,filteredP,f);
+    renderChannel(filteredCh,filteredP,f);
     _RENDER_TGT='db1-t20';
-    renderTop20(filteredPKpi,filtered,filteredP,f);
+    renderTop20(filteredPKpi,filteredCh,filteredP,f);
   }finally{
     _RENDER_TGT='content';
     _NO_DESTROY=_pSkip;
   }
+}
+
+// 상품 필터가 있으면 CHP_DATA(채널×상품)로 채널-수준 데이터 재구성 (없으면 원본 filtered 반환).
+// 반환 포맷은 TOP_DATA와 동일한 [bi,yr,mo,wk,ch,qty,s,rt] 8-튜플로 맞춤.
+function _buildProdAwareChannelData(filtered,filteredP,f){
+  const hasProd=(f.prods&&f.prods.length>0)||f.prod!=='ALL';
+  if(!hasProd) return filtered;
+  const bI=f.b==='ALL'?-1:parseInt(f.b);
+  const moF=f.mos&&f.mos.length?f.mos:null;
+  const wkF=f.wks&&f.wks.length?f.wks:null;
+  const yrF=f.yrs&&f.yrs.length?f.yrs:null;
+  const prodSet=(f.prods&&f.prods.length)?new Set(f.prods):new Set([f.prod]);
+  const chsF=f.chs&&f.chs.length?new Set(f.chs):null;
+  if(CHP_DATA&&CHP_DATA.length){
+    return CHP_DATA.filter(r=>{
+      if(bI>=0&&r[0]!==bI)return false;
+      if(yrF&&!yrF.includes(r[1]))return false;
+      if(moF&&!moF.includes(r[2]))return false;
+      if(wkF&&!wkF.includes(r[3]))return false;
+      if(chsF&&!chsF.has(r[4]))return false;
+      if(!prodSet.has(r[5]))return false;
+      if(r[2]===12&&r[3]===1)return false;
+      return true;
+    }).map(r=>[r[0],r[1],r[2],r[3],r[4],r[6],r[7],r[8]]);
+  }
+  // CHP_DATA가 비어 있으면 TOP_DATA 채널 분포에 PROD_DATA 상품 합계를 비율 분배 (근사 폴백)
+  const baseTop=TOP_DATA.filter(r=>(bI<0||r[0]===bI)&&(!yrF||yrF.includes(r[1]))&&(!moF||moF.includes(r[2]))&&(!wkF||wkF.includes(r[3]))&&(!chsF||chsF.has(r[4]))&&!(r[2]===12&&r[3]===1));
+  const totalTop=baseTop.reduce((s,r)=>s+r[6],0);
+  const totalP=filteredP.reduce((s,r)=>s+r[6],0);
+  const ratio=totalTop>0?totalP/totalTop:0;
+  return baseTop.map(r=>[r[0],r[1],r[2],r[3],r[4],Math.round(r[5]*ratio),Math.round(r[6]*ratio),Math.round(r[7]*ratio)]);
 }
 
 function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f){
@@ -6289,7 +6326,19 @@ ${bIdx>=0?`
           if(r[1]===2026) wk26[k]=(wk26[k]||0)+r[6];
         });
         const allKeys=[...new Set([...Object.keys(wk25),...Object.keys(wk26)])].sort();
-        const wkLabels=allKeys.map(w=>'W'+w);
+        // ISO 주차 → 해당 주차의 월/일 범위 (월요일~일요일, 2026년 기준)
+        const isoWeekRange=(year,week)=>{
+          const jan4=new Date(year,0,4);
+          const day=jan4.getDay()||7;
+          const s=new Date(year,0,4-day+1+(week-1)*7);
+          const e=new Date(s); e.setDate(s.getDate()+6);
+          return [s,e];
+        };
+        const fmtMD=d=>`${d.getMonth()+1}/${d.getDate()}`;
+        const wkLabels=allKeys.map(w=>{
+          const [s,e]=isoWeekRange(2026,parseInt(w));
+          return ['W'+w,`(${fmtMD(s)}~${fmtMD(e)})`];
+        });
         const data25=allKeys.map(k=>wk25[k]||0);
         const data26=allKeys.map(k=>wk26[k]||0);
         charts.goalWeekly=new Chart(wkEl,{
@@ -6309,7 +6358,7 @@ ${bIdx>=0?`
             },
             scales:{
               y:{ticks:{callback:v=>{if(v>=100000000)return(v/100000000).toFixed(0)+'억';if(v>=10000)return(v/10000).toFixed(0)+'만';return v;}},grid:{color:'rgba(0,0,0,.04)'}},
-              x:{ticks:{font:{size:10},maxRotation:45},grid:{display:false}}
+              x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true,autoSkipPadding:6},grid:{display:false}}
             }
           }
         });
