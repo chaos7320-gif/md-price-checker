@@ -1567,6 +1567,19 @@ function short(n){const a=Math.abs(n);if(a>=1e8)return(n/1e8).toFixed(1)+'억';i
 function discClass(r){return r<5?'disc-low':r<15?'disc-mid':'disc-high';}
 function rankCls(i){return i===0?'gold':i===1?'silver':i===2?'bronze':'';}
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+// ISO 주차 → 차트 x축 멀티라인 라벨 ['W18','(5/4~5/10)']. year가 없으면 'W18'만 반환.
+function wkLabel(year,week){
+  const w=typeof week==='string'?parseInt(week):week;
+  if(!w||isNaN(w))return 'W'+(week||'');
+  const label='W'+w;
+  if(!year)return label;
+  const jan4=new Date(year,0,4);
+  const day=jan4.getDay()||7;
+  const s=new Date(year,0,4-day+1+(w-1)*7);
+  const e=new Date(s); e.setDate(s.getDate()+6);
+  const fmt=d=>`${d.getMonth()+1}/${d.getDate()}`;
+  return [label,`(${fmt(s)}~${fmt(e)})`];
+}
 
 let _RENDER_TGT='content';
 let _NO_DESTROY=false;
@@ -2304,7 +2317,7 @@ ${f.b==='ALL'?`
     
     // 두 연도에 공통으로 존재하는 주차만 비교 (또는 합집합)
     const allWkNums=[...new Set([...Object.keys(wkByNum_prev),...Object.keys(wkByNum_curr)])].sort();
-    const wkLabels=allWkNums.map(w=>'W'+w);
+    const wkLabels=allWkNums.map(w=>wkLabel(cmpYrs[1]||cmpYrs[0],w));
     const wkDataPrev=allWkNums.map(w=>wkByNum_prev[w]||0);
     const wkDataCurr=allWkNums.map(w=>wkByNum_curr[w]||0);
     
@@ -2580,7 +2593,7 @@ function renderTop20(filtP,filtered,filteredP,f){
     }
   });
   const allWkNums=[...new Set(cmpYrs.flatMap(yr=>Object.keys(wkByYr[yr]||{})))].sort();
-  const wkLabels=allWkNums.map(w=>'W'+w);
+  const wkLabels=allWkNums.map(w=>wkLabel(cmpYrs.length?cmpYrs[cmpYrs.length-1]:new Date().getFullYear(),w));
   const wkDataByYr={};
   const wkDataByYrQ={};
   cmpYrs.forEach(yr=>{
@@ -2992,7 +3005,7 @@ ${cmpYrs?`<div class="table-card">
   setTimeout(()=>{
     if(!document.getElementById('c-dp')) return;
     if(cmpYrs){
-      const labels=allWksY.map(w=>'W'+w);
+      const labels=allWksY.map(w=>wkLabel(cmpYrs[cmpYrs.length-1],w));
       const YR_BADGE={2024:'#64748b',2025:'#3b82f6',2026:'#22c55e',2027:'#f97316'};
       const dsCmp=cmpYrs.map((yr,i)=>{
         const col=YR_BADGE[yr]||['#94a3b8','#0284c7','#22c55e','#f97316'][i%4];
@@ -5780,7 +5793,7 @@ ${multiYr?`<div class="kpi-grid" style="margin-bottom:4px">
       charts.insWk=new Chart(document.getElementById('c-ins-wk'),{
         type:'bar',
         data:{
-          labels:wkKeys.map(w=>'W'+parseInt(w)),
+          labels:wkKeys.map(w=>wkLabel(yrList.length?yrList[yrList.length-1]:new Date().getFullYear(),w)),
           datasets:multiYr
             ?yrList.map(yr=>{const c=yrPal(yr);return{label:`${yr}년`,data:wkKeys.map(wk=>byWk[wk]?.[yr]?.qty||0),backgroundColor:c.badge+'CC',borderRadius:4,barPercentage:.7,categoryPercentage:.8};})
             :[{label:'수량',data:wkKeys.map(wk=>Object.values(byWk[wk]).reduce((s,d)=>s+d.qty,0)),backgroundColor:'#22c55eCC',borderRadius:4,barPercentage:.7,categoryPercentage:.8}]
@@ -5988,7 +6001,7 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   const _wkAllRes=cmpYrs.length===0?aggWk(null):{s:{},q:{}};
   const wkAllD=_wkAllRes.s, wkAllDQ=_wkAllRes.q;
   const allWkNumsD=[...new Set([...cmpYrs.flatMap(yr=>Object.keys(wkByYrD[yr]||{})),...Object.keys(wkAllD)])].sort();
-  const wkLabelsD=allWkNumsD.map(w=>'W'+w);
+  const wkLabelsD=allWkNumsD.map(w=>wkLabel(cmpYrs.length?cmpYrs[cmpYrs.length-1]:new Date().getFullYear(),w));
   // 할인율 추이 (N개 연도 선택 시 연도별 분리)
   const cmpYrsD=cmpYrs.length>=2?[...cmpYrs].sort((a,b)=>a-b):null;
   const byWkD={},byWkYD={};
@@ -6078,7 +6091,7 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
     }
     if(document.getElementById('d1-dr')){
       if(cmpYrsD){
-        const labels=allWksYD.map(w=>'W'+w);
+        const labels=allWksYD.map(w=>wkLabel(cmpYrsD[cmpYrsD.length-1],w));
         const dsCmp=cmpYrsD.map((yr,i)=>{
           const p=yrPalD1(yr);
           return {
@@ -6326,19 +6339,7 @@ ${bIdx>=0?`
           if(r[1]===2026) wk26[k]=(wk26[k]||0)+r[6];
         });
         const allKeys=[...new Set([...Object.keys(wk25),...Object.keys(wk26)])].sort();
-        // ISO 주차 → 해당 주차의 월/일 범위 (월요일~일요일, 2026년 기준)
-        const isoWeekRange=(year,week)=>{
-          const jan4=new Date(year,0,4);
-          const day=jan4.getDay()||7;
-          const s=new Date(year,0,4-day+1+(week-1)*7);
-          const e=new Date(s); e.setDate(s.getDate()+6);
-          return [s,e];
-        };
-        const fmtMD=d=>`${d.getMonth()+1}/${d.getDate()}`;
-        const wkLabels=allKeys.map(w=>{
-          const [s,e]=isoWeekRange(2026,parseInt(w));
-          return ['W'+w,`(${fmtMD(s)}~${fmtMD(e)})`];
-        });
+        const wkLabels=allKeys.map(w=>wkLabel(2026,w));
         const data25=allKeys.map(k=>wk25[k]||0);
         const data26=allKeys.map(k=>wk26[k]||0);
         charts.goalWeekly=new Chart(wkEl,{
