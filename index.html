@@ -6226,17 +6226,16 @@ ${brands.map(bi=>{
   <div style="position:relative;height:260px"><canvas id="c-goal-main"></canvas></div>
 </div>
 
-${bIdx>=0?`
-<!-- 단일 브랜드 주간 매출 비교 (2025 vs 2026) -->
+<!-- 주간 매출 비교 (2025 vs 2026) — 전체/단일 브랜드 모두 지원 -->
 <div class="chart-card" style="margin-bottom:16px">
   <div class="chart-header">
     <div>
       <div class="chart-title">주간 매출 비교 (2025 vs 2026)</div>
-      <div class="chart-sub">${BNAMES[bIdx]} | 동일 주차 매출 추이</div>
+      <div class="chart-sub">${bIdx>=0?BNAMES[bIdx]:'전체 브랜드'} | 동일 주차 매출 추이</div>
     </div>
   </div>
   <div style="position:relative;height:280px"><canvas id="c-goal-weekly"></canvas></div>
-</div>`:''}
+</div>
 
 
 <!-- 브랜드별 월별 상세 테이블 -->
@@ -6326,13 +6325,15 @@ ${bIdx>=0?`
       });
     });
 
-    // 단일 브랜드 주간 비교 차트 (2025 vs 2026)
-    if(bIdx>=0){
+    // 주간 비교 차트 (2025 vs 2026) — 전체/단일 브랜드 모두 지원
+    {
       const wkEl=document.getElementById('c-goal-weekly');
       if(wkEl){
-        // TOP_DATA에서 해당 브랜드의 ISO 주차별 매출 집계 (상품별 매출분석과 동일 양식)
+        // TOP_DATA에서 선택 브랜드(들)의 ISO 주차별 매출 집계
+        // 전체 브랜드(bIdx<0) 시 brands 배열의 모든 브랜드를 합산
+        const brSet=new Set(brands);
         const wk25={}, wk26={};
-        TOP_DATA.filter(r=>r[0]===bIdx&&(r[1]===2025||r[1]===2026)).forEach(r=>{
+        TOP_DATA.filter(r=>brSet.has(r[0])&&(r[1]===2025||r[1]===2026)).forEach(r=>{
           if(r[2]===12&&r[3]===1) return; // 12월 1주차는 ISO 주차 오류로 제외
           const k=String(r[3]).padStart(2,'0'); // ISO 주차만 키로 사용 → 사전순=숫자순
           if(r[1]===2025) wk25[k]=(wk25[k]||0)+r[6];
@@ -6342,13 +6343,15 @@ ${bIdx>=0?`
         const wkLabels=allKeys.map(w=>wkLabel(2026,w));
         const data25=allKeys.map(k=>wk25[k]||0);
         const data26=allKeys.map(k=>wk26[k]||0);
+        // 2026 막대 색: 단일 브랜드는 브랜드 컬러, 전체는 진초록(다른 화면 컨벤션과 일치)
+        const c26=bIdx>=0?(BCOLORS[bIdx]+'cc'):'#22c55ecc';
         charts.goalWeekly=new Chart(wkEl,{
           type:'bar',
           data:{
             labels:wkLabels,
             datasets:[
               {label:'2025 실매출',data:data25,backgroundColor:'rgba(148,163,184,.55)',borderRadius:3,order:2},
-              {label:'2026 실매출',data:data26,backgroundColor:BCOLORS[bIdx]+'cc',borderRadius:3,order:1}
+              {label:'2026 실매출',data:data26,backgroundColor:c26,borderRadius:3,order:1}
             ]
           },
           options:{
