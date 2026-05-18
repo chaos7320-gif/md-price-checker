@@ -598,6 +598,10 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 .sz-tooltip-box .sz-title{font-size:12px;font-weight:700;color:var(--sky3);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.12)}
 .sz-grid{display:flex;flex-direction:column;gap:4px}
 
+/* ── 매출 분석 모드(연간/주간)별 차트 표시 제어 ── */
+body[data-db1-mode="annual"] [data-period="weekly"]{display:none !important}
+body[data-db1-mode="weekly"] [data-period="monthly"]{display:none !important}
+
 /* ── 확장 패널 ── */
 .sz-expand-row{display:none}
 .sz-expand-row.open{display:table-row}
@@ -821,7 +825,8 @@ button:focus-visible,select:focus-visible,input:focus-visible{
   <div class="logo"><div class="logo-dot">MD</div>브랜드 매출 대시보드</div>
   <nav class="nav">
     <button class="nav-item active" onclick="setTab('goal',this)">🎯 목표매출</button>
-    <button class="nav-item" onclick="setTab('dashboard1',this)" style="font-weight:700">📊 매출 분석</button>
+    <button class="nav-item" data-tab="dashboard1-annual" onclick="setTab('dashboard1',this,'annual')" style="font-weight:700">📊 연간 매출 분석</button>
+    <button class="nav-item" data-tab="dashboard1-weekly" onclick="setTab('dashboard1',this,'weekly')" style="font-weight:700">📅 주간 매출 분석</button>
     <button class="nav-item" onclick="setTab('growth',this)">🌱 성장률 분석</button>
     <button class="nav-item" onclick="setTab('compare',this)">⚖️ 상품비교</button>
     <button class="nav-item" id="nav-margin" onclick="setTab('margin',this)" style="display:none">💰 마진 분석</button>
@@ -1095,7 +1100,7 @@ function onCostLockClick(){
     try{localStorage.removeItem('cost-auth');}catch(e){}
     syncCostAuth();
     if(typeof activeTab!=='undefined'&&activeTab==='margin'){
-      document.querySelector('.nav-item[onclick*="dashboard1"]')?.click();
+      document.querySelector('.nav-item[data-tab="dashboard1-annual"]')?.click();
     }
     if(typeof showToast==='function') showToast('🔒 마진 탭이 다시 잠겼습니다');
   } else {
@@ -1262,15 +1267,15 @@ function pickGlobalSearch(i){
   closeGlobalSearch();
   if(x.type==='brand'){
     const bs=document.getElementById('f-brand');if(bs){bs.value=String(x.bi);if(typeof onBrandChange==='function')onBrandChange();}
-    document.querySelector('.nav-item[onclick*="dashboard1"]')?.click();
+    document.querySelector('.nav-item[data-tab="dashboard1-annual"]')?.click();
   } else if(x.type==='channel'){
     SELECTED_CHS=[x.label];
     if(typeof renderChCheckboxes==='function')renderChCheckboxes('');
-    document.querySelector('.nav-item[onclick*="dashboard1"]')?.click();
+    document.querySelector('.nav-item[data-tab="dashboard1-annual"]')?.click();
   } else if(x.type==='product'){
     SELECTED_PRODS=[x.label];
     if(typeof renderProdDrop==='function')renderProdDrop('');
-    document.querySelector('.nav-item[onclick*="dashboard1"]')?.click();
+    document.querySelector('.nav-item[data-tab="dashboard1-annual"]')?.click();
   }
   if(typeof apply==='function')try{apply();}catch(e){}
 }
@@ -1375,6 +1380,7 @@ let CH_ONLINE={};   // 채널명 → 'ON'|'OFF'|'WHL'
 let _olTipData={ON:[],OFF:[],WHL:[]};
 let INS_DATA=[];    // 입고데이터: [bi, yr, mo, wk, prod, size, qty, cost]
 let activeTab='goal';
+let _db1Mode='annual'; // 'annual' | 'weekly' — 매출 분석 탭 모드
 let charts={};
 
 // ── 숫자 포맷 ──
@@ -1585,7 +1591,7 @@ let _RENDER_TGT='content';
 let _NO_DESTROY=false;
 function destroyCharts(){if(_NO_DESTROY)return;Object.values(charts).forEach(c=>{try{c.destroy()}catch(e){console.warn('Chart destroy error:',e);}});charts={};}
 
-function setTab(t,el){
+function setTab(t,el,mode){
   // 마진 탭은 인증 필요
   if(t==='margin'&&!isCostUnlocked()){
     if(typeof showToast==='function') showToast('🔒 마진 데이터는 인증이 필요합니다');
@@ -1593,6 +1599,12 @@ function setTab(t,el){
     return;
   }
   activeTab=t;
+  if(t==='dashboard1'){
+    _db1Mode=(mode==='weekly')?'weekly':'annual';
+    document.body.dataset.db1Mode=_db1Mode;
+  } else {
+    delete document.body.dataset.db1Mode;
+  }
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
   if(t==='compare'){renderCompare();return;}
@@ -2154,8 +2166,8 @@ function renderSales(filtered,filteredP,filteredKpi,filteredPKpi,f){
   </div>
 </div>
 
-<!-- 연도 비교 통합 차트 -->
-<div class="chart-card" style="margin-bottom:16px">
+<!-- 연도 비교 통합 차트 (월별) -->
+<div class="chart-card" data-period="monthly" style="margin-bottom:16px">
   <div class="chart-header">
     <div>
       <div class="chart-title">${cmpYrs.length===2?`📊 ${cmpYrs[0]}년 vs ${cmpYrs[1]}년 월별 매출 비교`:cmpYrs.length===1?`📊 ${cmpYrs[0]}년 월별 추이`:'📊 전체 기간 월별 매출'}</div>
@@ -2166,7 +2178,7 @@ function renderSales(filtered,filteredP,filteredKpi,filteredPKpi,f){
 </div>
 
 <!-- 주간 매출 통합 비교 -->
-<div class="chart-card" style="margin-bottom:16px">
+<div class="chart-card" data-period="weekly" style="margin-bottom:16px">
   <div class="chart-header">
     <div>
       <div class="chart-title">${cmpYrs.length===2?`📅 ${cmpYrs[0]}년 vs ${cmpYrs[1]}년 주간 매출 비교`:cmpYrs.length===1?`📅 ${cmpYrs[0]}년 주간 매출 추이`:'📅 전체 기간 주간 매출'}</div>
@@ -4360,8 +4372,8 @@ function renderChannel(filtered,filteredP,f){
   const yrTotals={};
   if(multiYr)yrs.forEach(yr=>{yrTotals[yr]=filtered.filter(r=>r[1]===yr).reduce((s,r)=>s+r[6],0);});
 
-  // 기간 단위
-  const useWk=(f.mo!=='ALL'||f.wk!=='ALL');
+  // 기간 단위 (매출 분석 탭 모드 우선, 다음으로 필터)
+  const useWk=(_db1Mode==='weekly')||(f.mo!=='ALL'||f.wk!=='ALL');
   const periodKey=r=>useWk?`${r[1]}-W${String(r[3]).padStart(2,'0')}`:`${r[1]}-${String(r[2]).padStart(2,'0')}`;
   const periodLabel=k=>{
     if(k.includes('-W')){const[y,w]=k.split('-W');return`${y}년 ${parseInt(w)}주차`;}
@@ -6007,9 +6019,9 @@ function renderDashboard1(filtered,filteredP,filteredKpi,filteredPKpi,f){
   document.getElementById('content').innerHTML=`
     <section class="db1-sec db1-sec-date" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:18px 18px 6px;margin-bottom:20px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px dashed #93c5fd">
-        <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:#3b82f6;color:#fff;font-size:14px">📅</span>
-        <span style="font-size:15px;font-weight:700;color:#1d4ed8">일자별 매출</span>
-        <span style="font-size:11px;color:#3b82f6;background:#dbeafe;padding:3px 10px;border-radius:12px;font-weight:600">KPI · 월별 · 주간 · 할인율</span>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:#3b82f6;color:#fff;font-size:14px">${_db1Mode==='weekly'?'📅':'📊'}</span>
+        <span style="font-size:15px;font-weight:700;color:#1d4ed8">${_db1Mode==='weekly'?'주간 매출':'연간/월별 매출'}</span>
+        <span style="font-size:11px;color:#3b82f6;background:#dbeafe;padding:3px 10px;border-radius:12px;font-weight:600">${_db1Mode==='weekly'?'KPI · 주간 추이 · 할인율':'KPI · 월별 추이'}</span>
       </div>
       <div id="db1-sum"></div>
     </section>
@@ -6223,15 +6235,15 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   <div class="kpi-card"><div class="kpi-label">판매 수량</div><div class="kpi-val">${wonNo(tQ)}건</div><div class="kpi-sub">총 판매 건수</div></div>
   <div class="kpi-card"><div class="kpi-label">평균 단가</div><div class="kpi-val">${won(avg)}</div><div class="kpi-sub">건당 평균</div></div>
 </div>
-<div class="chart-card" style="margin-bottom:14px">
+<div class="chart-card" data-period="monthly" style="margin-bottom:14px">
   <div class="chart-header"><div><div class="chart-title">📅 월별 실매출 추이</div><div class="chart-sub">${cmpYrs.length>=2?cmpYrs.map(y=>y+'년').join(' vs '):cmpYrs.length===1?cmpYrs[0]+'년 월별 추이':'전체 기간 합산'}</div></div></div>
   <div style="position:relative;height:220px"><canvas id="d1-mo"></canvas></div>
 </div>
-<div class="chart-card" style="margin-bottom:14px">
+<div class="chart-card" data-period="weekly" style="margin-bottom:14px">
   <div class="chart-header"><div><div class="chart-title">${cmpYrs.length>=2?`📅 ${cmpYrs.map(y=>y+'년').join(' vs ')} 주간 매출 비교`:cmpYrs.length===1?`📅 ${cmpYrs[0]}년 주간 매출 추이`:'📅 전체 기간 주간 매출'}</div><div class="chart-sub">주차별 실매출액 · 막대 위에 마우스를 올리면 매출+수량 확인</div></div></div>
   <div style="position:relative;height:220px"><canvas id="d1-wk"></canvas></div>
 </div>
-<div class="chart-card" style="margin-bottom:14px">
+<div class="chart-card" data-period="weekly" style="margin-bottom:14px">
   <div class="chart-header"><div><div class="chart-title">📉 할인율 추이</div><div class="chart-sub">${cmpYrs.length>=2?cmpYrs.map(y=>y+'년').join(' vs ')+' · 주차별':cmpYrs.length===1?cmpYrs[0]+'년 주차별 평균':'최근 주차별 평균'}</div></div></div>
   <div style="position:relative;height:200px"><canvas id="d1-dr"></canvas></div>
 </div>
