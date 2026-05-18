@@ -2374,10 +2374,20 @@ ${f.b==='ALL'?`
                   const arr=dp.datasetIndex===0?wkDataPrev:wkDataCurr;
                   const v=dp.raw;
                   const dotColor=dp.datasetIndex===0?'#64748b':'#0ea5e9';
+                  const prevWkVal=wkIdx>0?arr[wkIdx-1]:0;
+                  const wow=prevWkVal>0?((v-prevWkVal)/prevWkVal*100):(prevWkVal===0&&v>0?'NEW':null);
                   html2+=`<div style="margin-bottom:4px">
                     <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${dotColor};margin-right:5px;vertical-align:middle"></span>
                     <span style="color:#ddd">${yr}년:</span>
-                    <span style="font-weight:700;margin-left:4px">${won(v)}</span></div>`;
+                    <span style="font-weight:700;margin-left:4px">${won(v)}</span>`;
+                  if(wow==='NEW'){
+                    html2+=` <span style="color:#fbbf24;font-size:11px;font-weight:600">전주대비 NEW</span>`;
+                  } else if(wow!==null){
+                    const wc=wow>=0?'#ff7b7b':'#7bb8ff';
+                    const ws=wow>=0?'▲':'▼';
+                    html2+=` <span style="color:${wc};font-size:11px;font-weight:600">전주대비 ${ws}${Math.abs(wow).toFixed(1)}%</span>`;
+                  }
+                  html2+='</div>';
                 });
                 // 전년대비 (2개 연도 선택 시)
                 if(cmpYrs.length>=2 && wkIdx>=0){
@@ -6352,7 +6362,17 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
       const tgt26=get26MonthlyTarget(f.b);
       ds.push({type:'line',label:'2026 목표',data:allMos.map(m=>tgt26[parseInt(m)-1]||0),borderColor:'#f97316',backgroundColor:'#f9731620',borderWidth:2,borderDash:[5,4],pointRadius:3,pointBackgroundColor:'#f97316',fill:false,tension:.3,order:0});
       charts.d1mo=new Chart(document.getElementById('d1-mo'),{type:'bar',data:{labels:moLabels,datasets:ds},
-        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${won(c.raw)}`}}},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>{
+          const isLine=c.dataset.type==='line';
+          const curr=c.raw;
+          const prev=!isLine&&c.dataIndex>0?c.dataset.data[c.dataIndex-1]:null;
+          let g='';
+          if(prev!=null){
+            if(prev===0&&curr>0) g=' · 전월대비 NEW';
+            else if(prev>0){const gr=(curr-prev)/prev*100; g=` · 전월대비 ${gr>=0?'▲ +':'▼ '}${Math.abs(gr).toFixed(1)}%`;}
+          }
+          return ` ${c.dataset.label}: ${won(curr)}${g}`;
+        }}}},
         scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}}});
     }
     if(document.getElementById('d1-wk')&&allWkNumsD.length){
@@ -6375,7 +6395,14 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
               const qMap=cmpYrs.length===0?wkAllDQ:wkByYrDQ[cmpYrs[c.datasetIndex]];
               const wkNum=allWkNumsD[c.dataIndex];
               const qv=qMap?.[wkNum]||0;
-              return ` ${yrLbl}: ${won(c.raw)} (${wonNo(qv)}건)`;
+              const curr=c.raw;
+              const prev=c.dataIndex>0?c.dataset.data[c.dataIndex-1]:null;
+              let g='';
+              if(prev!=null){
+                if(prev===0&&curr>0) g=' · 전주대비 NEW';
+                else if(prev>0){const gr=(curr-prev)/prev*100; g=` · 전주대비 ${gr>=0?'▲ +':'▼ '}${Math.abs(gr).toFixed(1)}%`;}
+              }
+              return ` ${yrLbl}: ${won(curr)} (${wonNo(qv)}건)${g}`;
             }}}
           },
           scales:{x:{ticks:{font:{size:10,weight:'600'}}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}
