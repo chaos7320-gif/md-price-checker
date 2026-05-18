@@ -2649,31 +2649,54 @@ function renderTop20(filtP,filtered,filteredP,f){
     });
   })();
   function _prodChTipHTML(prod,fixYr){
-    if(!CHP_DATA||!CHP_DATA.length) return `<div style="color:rgba(255,255,255,.55);font-size:11px;padding:4px 0">상품×채널 데이터가 없습니다. 데이터를 다시 업로드하면 확인할 수 있어요.</div>`;
+    const titleSfx=(fixYr!=null)?` · ${fixYr}년 판매 채널`:' · 판매 채널';
+    const title=`👟 ${escHtml(prod)}${titleSfx}`;
+    const wrap=(inner)=>`<div class="sz-tooltip-box" style="width:780px;max-width:94vw;padding:20px 24px;background:#0f1e36">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:1.5px solid rgba(134,239,172,.25)">
+        <div style="font-size:15px;font-weight:800;color:#86efac;letter-spacing:.2px;max-width:560px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${title}">${title}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.55);font-weight:600;flex-shrink:0;margin-left:10px">전체 데이터 · 스크롤로 이동</div>
+      </div>${inner}</div>`;
+    if(!CHP_DATA||!CHP_DATA.length) return wrap(`<div style="color:rgba(255,255,255,.7);font-size:13px;padding:24px 0;text-align:center;line-height:1.6">상품×채널 데이터가 없습니다.<br><span style="font-size:11px;color:rgba(255,255,255,.45)">데이터를 다시 업로드하면 확인할 수 있어요.</span></div>`);
     const key=multiYr?fixYr:'ALL';
     const m=(_prodChAgg[key]&&_prodChAgg[key][prod])||{};
-    const rows=Object.entries(m).filter(([,d])=>d.s>0).map(([ch,d])=>({ch,q:d.q,s:d.s})).sort((a,b)=>b.s-a.s).slice(0,15);
-    if(!rows.length) return `<div style="color:rgba(255,255,255,.55);font-size:11px;padding:4px 0">데이터 없음</div>`;
+    const rows=Object.entries(m).filter(([,d])=>d.s>0).map(([ch,d])=>({ch,q:d.q,s:d.s})).sort((a,b)=>b.s-a.s);
+    if(!rows.length) return wrap(`<div style="color:rgba(255,255,255,.7);font-size:13px;padding:24px 0;text-align:center">데이터 없음</div>`);
     const sumQ=rows.reduce((s,r)=>s+r.q,0),sumS=rows.reduce((s,r)=>s+r.s,0);
-    return `<div style="max-height:280px;overflow-y:auto"><table style="width:100%;font-size:11px;border-collapse:collapse">
-      <thead><tr style="border-bottom:1px solid rgba(255,255,255,.18)">
-        <th style="text-align:left;padding:5px 6px;color:#94a3b8;font-weight:600;width:24px">#</th>
-        <th style="text-align:left;padding:5px 6px;color:#94a3b8;font-weight:600">매출처</th>
-        <th style="text-align:right;padding:5px 6px;color:#94a3b8;font-weight:600">수량</th>
-        <th style="text-align:right;padding:5px 6px;color:#94a3b8;font-weight:600">실매출액</th>
-      </tr></thead>
-      <tbody>${rows.map((r,i)=>`<tr style="border-bottom:1px dotted rgba(255,255,255,.08)">
-        <td style="padding:4px 6px;color:#cbd5e1">${i+1}</td>
-        <td style="padding:4px 6px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff" title="${escHtml(r.ch)}">${escHtml(r.ch)}</td>
-        <td style="padding:4px 6px;text-align:right;color:#cbd5e1">${wonNo(r.q)}건</td>
-        <td style="padding:4px 6px;text-align:right;color:#6ee7b7;font-weight:700">${won(r.s)}</td>
-      </tr>`).join('')}
-      <tr style="border-top:1px solid rgba(255,255,255,.2);font-weight:700">
-        <td colspan="2" style="padding:6px;color:#fff">합계 (상위 ${rows.length})</td>
-        <td style="padding:6px;text-align:right;color:#fff">${wonNo(sumQ)}건</td>
-        <td style="padding:6px;text-align:right;color:#6ee7b7">${won(sumS)}</td>
-      </tr></tbody>
-    </table></div>`;
+    const maxS=rows[0].s;
+    const body=`<div style="max-height:480px;overflow-y:auto;border-radius:10px;background:rgba(255,255,255,.025)">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <thead style="position:sticky;top:0;background:#0f1e36;z-index:1">
+          <tr style="border-bottom:2px solid rgba(255,255,255,.22)">
+            <th style="text-align:left;padding:10px 12px;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.6px;width:36px">#</th>
+            <th style="text-align:left;padding:10px 12px;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.6px">매출처</th>
+            <th style="text-align:right;padding:10px 12px;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.6px;width:88px">수량</th>
+            <th style="text-align:right;padding:10px 12px;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.6px;width:130px">실매출액</th>
+            <th style="text-align:left;padding:10px 12px;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.6px;width:130px">비중</th>
+          </tr>
+        </thead>
+        <tbody>${rows.map((r,i)=>{
+          const share=sumS>0?(r.s/sumS*100):0;
+          const barW=maxS>0?(r.s/maxS*100):0;
+          const rk=i+1, rkCol=rk===1?'#fbbf24':rk===2?'#cbd5e1':rk===3?'#fb923c':'#94a3b8';
+          return `<tr style="border-bottom:1px solid rgba(255,255,255,.07);background:${i%2===0?'rgba(255,255,255,.025)':'transparent'}">
+            <td style="padding:9px 12px;color:${rkCol};font-weight:700;font-size:12px">${rk}</td>
+            <td style="padding:9px 12px;color:#fff;font-weight:500;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(r.ch)}">${escHtml(r.ch)}</td>
+            <td style="padding:9px 12px;text-align:right;color:#e2e8f0;font-weight:500;white-space:nowrap">${wonNo(r.q)}건</td>
+            <td style="padding:9px 12px;text-align:right;color:#86efac;font-weight:700;white-space:nowrap;font-size:13px">${won(r.s)}</td>
+            <td style="padding:9px 12px"><div style="display:flex;align-items:center;gap:7px"><div style="flex:1;height:7px;background:rgba(255,255,255,.1);border-radius:4px;overflow:hidden"><div style="width:${barW.toFixed(1)}%;height:100%;background:linear-gradient(90deg,#22c55e,#86efac);border-radius:4px"></div></div><span style="font-size:11px;color:#e2e8f0;font-weight:600;min-width:40px;text-align:right">${share.toFixed(1)}%</span></div></td>
+          </tr>`;
+        }).join('')}</tbody>
+        <tfoot style="position:sticky;bottom:0;background:#0f1e36">
+          <tr style="border-top:2px solid rgba(134,239,172,.35);font-weight:700">
+            <td colspan="2" style="padding:12px;color:#fff;font-size:12px">합계 · ${rows.length}개 매출처</td>
+            <td style="padding:12px;text-align:right;color:#fff;white-space:nowrap;font-size:13px">${wonNo(sumQ)}건</td>
+            <td style="padding:12px;text-align:right;color:#86efac;white-space:nowrap;font-size:14px">${won(sumS)}</td>
+            <td style="padding:12px;color:#cbd5e1;font-size:11px;font-weight:600">100%</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`;
+    return wrap(body);
   }
 
   const top20DetailHtml=(()=>{
@@ -2699,7 +2722,7 @@ function renderTop20(filtP,filtered,filteredP,f){
           const dd=yData[k],p=yPals[k],t=yTotalsArr[k];
           const sh=t>0?(dd.s/t*100):0;
           const sCell=dd.s
-            ?`<td class="nr" style="background:${p.bg};font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:${p.text};border-bottom-color:${p.border}">${won(dd.s)}<div class="sz-tooltip-box"><div class="sz-title" style="font-size:12px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">👟 ${escHtml(prod)} · ${yr}년 판매 채널 TOP</div>${_prodChTipHTML(prod,yr)}</div></span></td>`
+            ?`<td class="nr" style="background:${p.bg};font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:${p.text};border-bottom-color:${p.border}">${won(dd.s)}${_prodChTipHTML(prod,yr)}</span></td>`
             :`<td class="nr" style="background:${p.bg};color:var(--hint);font-weight:400">-</td>`;
           return `${sCell}
             <td class="nr" style="background:${p.bg};color:${p.text};font-size:11px">${dd.s?sh.toFixed(1)+'%':'-'}</td>
@@ -2797,7 +2820,7 @@ function renderTop20(filtP,filtered,filteredP,f){
         return`<tr>
           <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
           <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${prod}">${prod}</td>
-          <td class="nr" style="font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--green);border-bottom-color:#86efac">${won(d.s)}<div class="sz-tooltip-box"><div class="sz-title" style="font-size:12px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">👟 ${escHtml(prod)} · 판매 채널 TOP</div>${_prodChTipHTML(prod,null)}</div></span></td>
+          <td class="nr" style="font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--green);border-bottom-color:#86efac">${won(d.s)}${_prodChTipHTML(prod,null)}</span></td>
           <td class="nr" style="color:var(--hint)">${won(d.rt)}</td>
           <td class="nr" style="color:var(--red)">-${won(da)}</td>
           <td class="nr"><span class="disc-pill ${discClass(dr)}">${pct(dr)}</span></td>
@@ -4322,31 +4345,54 @@ function renderChannel(filtered,filteredP,f){
     });
   })();
   function _chProdTipHTML(ch,fixYr){
-    if(!CHP_DATA||!CHP_DATA.length) return `<div style="color:rgba(255,255,255,.55);font-size:11px;padding:4px 0">상품×채널 데이터가 없습니다. 데이터를 다시 업로드하면 확인할 수 있어요.</div>`;
+    const titleSfx=(fixYr!=null)?` · ${fixYr}년 판매 상품`:' · 판매 상품';
+    const title=`🏪 ${escHtml(ch)}${titleSfx}`;
+    const wrap=(inner)=>`<div class="sz-tooltip-box" style="width:780px;max-width:94vw;padding:20px 24px;background:#0f1e36">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:1.5px solid rgba(134,239,172,.25)">
+        <div style="font-size:15px;font-weight:800;color:#86efac;letter-spacing:.2px">${title}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.55);font-weight:600">전체 데이터 · 스크롤로 이동</div>
+      </div>${inner}</div>`;
+    if(!CHP_DATA||!CHP_DATA.length) return wrap(`<div style="color:rgba(255,255,255,.7);font-size:13px;padding:24px 0;text-align:center;line-height:1.6">상품×채널 데이터가 없습니다.<br><span style="font-size:11px;color:rgba(255,255,255,.45)">데이터를 다시 업로드하면 확인할 수 있어요.</span></div>`);
     const key=multiYr?fixYr:'ALL';
     const m=(_chProdAgg[key]&&_chProdAgg[key][ch])||{};
-    const rows=Object.entries(m).filter(([,d])=>d.s>0).map(([prod,d])=>({prod,q:d.q,s:d.s})).sort((a,b)=>b.s-a.s).slice(0,15);
-    if(!rows.length) return `<div style="color:rgba(255,255,255,.55);font-size:11px;padding:4px 0">데이터 없음</div>`;
+    const rows=Object.entries(m).filter(([,d])=>d.s>0).map(([prod,d])=>({prod,q:d.q,s:d.s})).sort((a,b)=>b.s-a.s);
+    if(!rows.length) return wrap(`<div style="color:rgba(255,255,255,.7);font-size:13px;padding:24px 0;text-align:center">데이터 없음</div>`);
     const sumQ=rows.reduce((s,r)=>s+r.q,0),sumS=rows.reduce((s,r)=>s+r.s,0);
-    return `<div style="max-height:280px;overflow-y:auto"><table style="width:100%;font-size:11px;border-collapse:collapse">
-      <thead><tr style="border-bottom:1px solid rgba(255,255,255,.18)">
-        <th style="text-align:left;padding:5px 6px;color:#94a3b8;font-weight:600;width:24px">#</th>
-        <th style="text-align:left;padding:5px 6px;color:#94a3b8;font-weight:600">상품</th>
-        <th style="text-align:right;padding:5px 6px;color:#94a3b8;font-weight:600">수량</th>
-        <th style="text-align:right;padding:5px 6px;color:#94a3b8;font-weight:600">실매출액</th>
-      </tr></thead>
-      <tbody>${rows.map((r,i)=>`<tr style="border-bottom:1px dotted rgba(255,255,255,.08)">
-        <td style="padding:4px 6px;color:#cbd5e1">${i+1}</td>
-        <td style="padding:4px 6px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff" title="${escHtml(r.prod)}">${escHtml(r.prod)}</td>
-        <td style="padding:4px 6px;text-align:right;color:#cbd5e1">${wonNo(r.q)}건</td>
-        <td style="padding:4px 6px;text-align:right;color:#6ee7b7;font-weight:700">${won(r.s)}</td>
-      </tr>`).join('')}
-      <tr style="border-top:1px solid rgba(255,255,255,.2);font-weight:700">
-        <td colspan="2" style="padding:6px;color:#fff">합계 (상위 ${rows.length})</td>
-        <td style="padding:6px;text-align:right;color:#fff">${wonNo(sumQ)}건</td>
-        <td style="padding:6px;text-align:right;color:#6ee7b7">${won(sumS)}</td>
-      </tr></tbody>
-    </table></div>`;
+    const maxS=rows[0].s;
+    const body=`<div style="max-height:480px;overflow-y:auto;border-radius:10px;background:rgba(255,255,255,.025)">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <thead style="position:sticky;top:0;background:#0f1e36;z-index:1">
+          <tr style="border-bottom:2px solid rgba(255,255,255,.22)">
+            <th style="text-align:left;padding:10px 12px;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.6px;width:36px">#</th>
+            <th style="text-align:left;padding:10px 12px;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.6px">상품</th>
+            <th style="text-align:right;padding:10px 12px;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.6px;width:88px">수량</th>
+            <th style="text-align:right;padding:10px 12px;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.6px;width:130px">실매출액</th>
+            <th style="text-align:left;padding:10px 12px;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.6px;width:130px">비중</th>
+          </tr>
+        </thead>
+        <tbody>${rows.map((r,i)=>{
+          const share=sumS>0?(r.s/sumS*100):0;
+          const barW=maxS>0?(r.s/maxS*100):0;
+          const rk=i+1, rkCol=rk===1?'#fbbf24':rk===2?'#cbd5e1':rk===3?'#fb923c':'#94a3b8';
+          return `<tr style="border-bottom:1px solid rgba(255,255,255,.07);background:${i%2===0?'rgba(255,255,255,.025)':'transparent'}">
+            <td style="padding:9px 12px;color:${rkCol};font-weight:700;font-size:12px">${rk}</td>
+            <td style="padding:9px 12px;color:#fff;font-weight:500;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(r.prod)}">${escHtml(r.prod)}</td>
+            <td style="padding:9px 12px;text-align:right;color:#e2e8f0;font-weight:500;white-space:nowrap">${wonNo(r.q)}건</td>
+            <td style="padding:9px 12px;text-align:right;color:#86efac;font-weight:700;white-space:nowrap;font-size:13px">${won(r.s)}</td>
+            <td style="padding:9px 12px"><div style="display:flex;align-items:center;gap:7px"><div style="flex:1;height:7px;background:rgba(255,255,255,.1);border-radius:4px;overflow:hidden"><div style="width:${barW.toFixed(1)}%;height:100%;background:linear-gradient(90deg,#22c55e,#86efac);border-radius:4px"></div></div><span style="font-size:11px;color:#e2e8f0;font-weight:600;min-width:40px;text-align:right">${share.toFixed(1)}%</span></div></td>
+          </tr>`;
+        }).join('')}</tbody>
+        <tfoot style="position:sticky;bottom:0;background:#0f1e36">
+          <tr style="border-top:2px solid rgba(134,239,172,.35);font-weight:700">
+            <td colspan="2" style="padding:12px;color:#fff;font-size:12px">합계 · ${rows.length}개 상품</td>
+            <td style="padding:12px;text-align:right;color:#fff;white-space:nowrap;font-size:13px">${wonNo(sumQ)}건</td>
+            <td style="padding:12px;text-align:right;color:#86efac;white-space:nowrap;font-size:14px">${won(sumS)}</td>
+            <td style="padding:12px;color:#cbd5e1;font-size:11px;font-weight:600">100%</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`;
+    return wrap(body);
   }
 
   // 매출처별 상세 HTML (N개년 비교 vs 단일)
@@ -4369,7 +4415,7 @@ function renderChannel(filtered,filteredP,f){
           const dd=yData[k],p=yPals[k],t=yTotalsArr[k];
           const sh=t>0?(dd.s/t*100):0;
           const sCell=dd.s
-            ?`<td class="nr" style="background:${p.bg};font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:${p.text};border-bottom-color:${p.border}">${won(dd.s)}<div class="sz-tooltip-box"><div class="sz-title" style="font-size:12px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">🏪 ${escHtml(d.ch)} · ${yr}년 판매 상품 TOP</div>${_chProdTipHTML(d.ch,yr)}</div></span></td>`
+            ?`<td class="nr" style="background:${p.bg};font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:${p.text};border-bottom-color:${p.border}">${won(dd.s)}${_chProdTipHTML(d.ch,yr)}</span></td>`
             :`<td class="nr" style="background:${p.bg};color:var(--hint);font-weight:400">-</td>`;
           return `${sCell}
             <td class="nr" style="background:${p.bg};color:${p.text};font-size:11px">${dd.s?sh.toFixed(1)+'%':'-'}</td>`;
@@ -4453,7 +4499,7 @@ function renderChannel(filtered,filteredP,f){
           <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
           <td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(d.ch)}">${escHtml(d.ch)}</td>
           <td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bLabels}</td>
-          <td class="nr" style="font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--green);border-bottom-color:#86efac">${won(d.s)}<div class="sz-tooltip-box"><div class="sz-title" style="font-size:12px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">🏪 ${escHtml(d.ch)} · 판매 상품 TOP</div>${_chProdTipHTML(d.ch,null)}</div></span></td>
+          <td class="nr" style="font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--green);border-bottom-color:#86efac">${won(d.s)}${_chProdTipHTML(d.ch,null)}</span></td>
           <td class="nr" style="color:var(--muted)">${share.toFixed(1)}%</td>
           <td class="nr" style="color:var(--hint)">${won(d.rt)}</td>
           <td class="nr"><span class="disc-pill ${discClass(dr)}">${pct(dr)}</span></td>
