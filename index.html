@@ -2979,7 +2979,7 @@ function renderTop20(filtP,filtered,filteredP,f){
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
-          <input id="t20-search" type="text" oninput="filterT20Rows()" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none">
+          <input type="text" class="t20-search" oninput="filterT20Rows(this)" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none">
           <button onclick="exportTop20CSV()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">\u{1F4E5} CSV</button>
         </div>
       </div>
@@ -3081,7 +3081,7 @@ function renderTop20(filtP,filtered,filteredP,f){
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
-          <input id="t20-search" type="text" oninput="filterT20Rows()" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none">
+          <input type="text" class="t20-search" oninput="filterT20Rows(this)" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none">
           <button onclick="exportTop20CSV()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">\u{1F4E5} CSV</button>
         </div>
       </div>
@@ -3115,7 +3115,7 @@ function renderTop20(filtP,filtered,filteredP,f){
         <div class="chart-sub">${isCustomSel?`\u{1F45F} ${(f.prods||[]).join(', ').slice(0,60)}\u2026`:'실매출액 기준'} \u00b7 수량 위에 커서를 올리면 사이즈별 판매수량을 볼 수 있어요</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
-          <input id="t20-search" type="text" oninput="filterT20Rows()" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none">
+          <input type="text" class="t20-search" oninput="filterT20Rows(this)" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none">
           <button onclick="exportTop20CSV()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">\u{1F4E5} CSV</button>
         </div>
     </div>
@@ -3287,6 +3287,7 @@ function renderTop20(filtP,filtered,filteredP,f){
           <div class="chart-title">📈 상품별 주차 누적 추이</div>
           <div class="chart-sub">최근 ${recentWks.length}주차 · 셀: 주간 판매 / 누적 판매 / 누적 소진율(%) · 소진율 = 누적판매 / (현재재고 + 전체판매)</div>
         </div>
+        <input type="text" class="t20-search" oninput="filterT20Rows(this)" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none;flex-shrink:0">
       </div>
       <div class="table-wrap"><table style="font-size:12px">
         <thead><tr>
@@ -6097,76 +6098,106 @@ function hideSzTip(wrap){
 }
 
 // ── 사이즈 그리드 / 패널 토글 (전역) ──
-// ── 상품 입고주차 + 주차별 누적 소진율 툴팁 (TOP 20 상세 상품명 hover) ──
-// 25년 1월 1일 이후 첫 판매 주차를 '입고주차'로 간주
+// ── 상품 입고주차 + 주차별 입고/판매/누적 소진율 툴팁 (TOP 20 상세 상품명 hover) ──
+// INS_DATA(입고데이터)와 PROD_DATA(판매) 결합, 25년 1월 1일 이후 이력만 표시
 function _prodHistoryTipHTML(prod){
-  if(typeof PROD_DATA==='undefined'||!PROD_DATA||!PROD_DATA.length)
+  if(typeof PROD_DATA==='undefined'||!PROD_DATA)
     return '<div style="color:rgba(255,255,255,.55);font-size:11px">판매 이력 없음</div>';
+  // 판매 집계
   const wkSales={}; let totQ=0;
   PROD_DATA.forEach(r=>{
     if(r[4]!==prod) return;
-    if(r[1]<2025) return;                 // 25년 1월 1일 이후만
-    if(r[2]===12&&r[3]===1) return;       // ISO 12월 1주차 오류 제외
+    if(r[1]<2025) return;
+    if(r[2]===12&&r[3]===1) return;
     const wkKey=`${r[1]}-W${String(r[3]).padStart(2,'0')}`;
     wkSales[wkKey]=(wkSales[wkKey]||0)+(r[5]||0);
     totQ+=(r[5]||0);
   });
-  const allWks=Object.keys(wkSales).filter(w=>wkSales[w]>0).sort();
+  // 입고 집계 (INS_DATA: [bi,yr,mo,wk,prod,size,qty,cost])
+  const wkIns={}; let totIns=0;
+  (typeof INS_DATA!=='undefined'?INS_DATA:[]).forEach(r=>{
+    if(r[4]!==prod) return;
+    if(r[1]<2025) return;
+    if(r[2]===12&&r[3]===1) return;
+    const wkKey=`${r[1]}-W${String(r[3]).padStart(2,'0')}`;
+    wkIns[wkKey]=(wkIns[wkKey]||0)+(r[6]||0);
+    totIns+=(r[6]||0);
+  });
+  // 입고 OR 판매가 있는 모든 주차
+  const wkSet=new Set([...Object.keys(wkSales),...Object.keys(wkIns)]);
+  const allWks=[...wkSet].filter(w=>(wkSales[w]||0)>0||(wkIns[w]||0)>0).sort();
   if(!allWks.length)
-    return '<div style="color:rgba(255,255,255,.55);font-size:11px;padding:8px 0">25년 1월 이후 판매 이력 없음</div>';
+    return '<div style="color:rgba(255,255,255,.55);font-size:11px;padding:8px 0">25년 1월 이후 입고·판매 이력 없음</div>';
+  // 현재 재고
   let stock=0;
   (typeof INV_DATA!=='undefined'?INV_DATA:[]).forEach(r=>{
     if(r.prod===prod) stock+=(r.stock||0);
   });
   const denom=stock+totQ;
-  const firstWk=allWks[0];
-  const lastWk=allWks[allWks.length-1];
+  // 입고주차: 첫 입고 주차 우선, 없으면 첫 판매 주차
+  const firstInsWk=Object.keys(wkIns).filter(w=>wkIns[w]>0).sort()[0];
+  const firstSaleWk=Object.keys(wkSales).filter(w=>wkSales[w]>0).sort()[0];
+  const firstStockWk=firstInsWk||firstSaleWk;
+  const firstLabel=firstInsWk?'입고주차 (첫 입고)':'입고주차 (25년 이후 첫판매)';
   const wkLbl=wk=>{const[y,w]=wk.split('-W');return `${String(y).slice(2)}년 W${parseInt(w)}`;};
-  // 누적 행
   let cum=0;
   const rows=allWks.map(wk=>{
-    const q=Math.round(wkSales[wk]);
+    const ins=Math.round(wkIns[wk]||0);
+    const q=Math.round(wkSales[wk]||0);
     cum+=q;
     const sr=denom>0?(cum/denom*100):0;
     const srCol=sr>=80?'#86efac':sr>=50?'#fbbf24':sr>=20?'#7dd3fc':'#fca5a5';
-    return `<div style="display:grid;grid-template-columns:72px 56px 60px 1fr;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:11px">
+    return `<div style="display:grid;grid-template-columns:62px 56px 50px 60px 1fr;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:11px">
       <span style="color:rgba(255,255,255,.85);font-weight:600">${wkLbl(wk)}</span>
-      <span style="text-align:right;color:#fff;font-weight:600">${q.toLocaleString('ko-KR')}건</span>
+      <span style="text-align:right;color:${ins>0?'#fbbf24':'rgba(255,255,255,.22)'};font-weight:${ins>0?700:400}">${ins>0?ins.toLocaleString('ko-KR')+'건':'-'}</span>
+      <span style="text-align:right;color:${q>0?'#fff':'rgba(255,255,255,.22)'};font-weight:${q>0?600:400}">${q>0?q.toLocaleString('ko-KR')+'건':'-'}</span>
       <span style="text-align:right;color:rgba(255,255,255,.7)">${Math.round(cum).toLocaleString('ko-KR')}</span>
       <span style="text-align:right;color:${srCol};font-weight:800;font-size:11.5px">${sr.toFixed(1)}%</span>
     </div>`;
   }).join('');
   const totRate=denom>0?(totQ/denom*100):0;
   const totCol=totRate>=80?'#86efac':totRate>=50?'#fbbf24':totRate>=20?'#7dd3fc':'#fca5a5';
-  return `<div style="min-width:340px;max-width:380px">
+  return `<div style="min-width:400px;max-width:440px">
     <div style="font-size:12.5px;font-weight:800;color:#86efac;margin-bottom:8px;padding-bottom:8px;border-bottom:1.5px solid rgba(134,239,172,.3);line-height:1.4">
       📦 ${prod.length>30?prod.slice(0,30)+'…':prod}
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:11px">
-      <span style="color:rgba(255,255,255,.55)">입고주차 (25년 이후 첫판매)</span>
-      <span style="color:#fbbf24;font-weight:700">${wkLbl(firstWk)}</span>
+      <span style="color:rgba(255,255,255,.55)">${firstLabel}</span>
+      <span style="color:#fbbf24;font-weight:700">${wkLbl(firstStockWk)}</span>
     </div>
-    <div style="display:grid;grid-template-columns:72px 56px 60px 1fr;gap:6px;padding:0 0 5px;border-bottom:1px solid rgba(255,255,255,.18);margin-bottom:4px;font-size:9.5px;color:rgba(255,255,255,.4);font-weight:600;letter-spacing:.3px">
+    <div style="display:grid;grid-template-columns:62px 56px 50px 60px 1fr;gap:6px;padding:0 0 5px;border-bottom:1px solid rgba(255,255,255,.18);margin-bottom:4px;font-size:9.5px;color:rgba(255,255,255,.4);font-weight:600;letter-spacing:.3px">
       <span>주차</span>
+      <span style="text-align:right">입고</span>
       <span style="text-align:right">판매</span>
       <span style="text-align:right">누적</span>
       <span style="text-align:right">누적 소진율</span>
     </div>
-    <div style="max-height:280px;overflow-y:auto;padding-right:4px">${rows}</div>
-    <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.18);display:flex;justify-content:space-between;align-items:center;font-size:11px">
-      <span style="color:rgba(255,255,255,.6)">현재재고 <span style="color:#fff;font-weight:700">${stock.toLocaleString('ko-KR')}개</span> · 전체판매 <span style="color:#fff;font-weight:700">${Math.round(totQ).toLocaleString('ko-KR')}건</span></span>
-      <span style="color:${totCol};font-weight:800">${totRate.toFixed(1)}%</span>
+    <div style="max-height:260px;overflow-y:auto;padding-right:4px">${rows}</div>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.18);font-size:11px;line-height:1.7">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="color:rgba(255,255,255,.6)">누적입고 <span style="color:#fbbf24;font-weight:700">${Math.round(totIns).toLocaleString('ko-KR')}건</span></span>
+        <span style="color:rgba(255,255,255,.6)">전체판매 <span style="color:#fff;font-weight:700">${Math.round(totQ).toLocaleString('ko-KR')}건</span></span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="color:rgba(255,255,255,.6)">현재재고 <span style="color:#fff;font-weight:700">${stock.toLocaleString('ko-KR')}개</span></span>
+        <span style="color:${totCol};font-weight:800">전체 소진율 ${totRate.toFixed(1)}%</span>
+      </div>
     </div>
   </div>`;
 }
 
-// ── 상품 TOP 20 상세 / 누적 추이 검색 필터 ──
-function filterT20Rows(){
-  const el=document.getElementById('t20-search');
-  const q=(el?.value||'').trim().toLowerCase();
+// ── 상품 TOP 20 상세 / 누적 추이 검색 필터 (검색창 양쪽 동기화) ──
+function filterT20Rows(srcEl){
+  let q='';
+  if(srcEl) q=srcEl.value;
+  else { const first=document.querySelector('.t20-search'); q=first?first.value:''; }
+  q=q.trim();
+  // 다른 검색창 동기화
+  document.querySelectorAll('.t20-search').forEach(inp=>{ if(inp.value!==q) inp.value=q; });
+  const lq=q.toLowerCase();
   document.querySelectorAll('tr[data-t20-prod]').forEach(tr=>{
     const p=(tr.getAttribute('data-t20-prod')||'').toLowerCase();
-    tr.style.display=(!q||p.includes(q))?'':'none';
+    tr.style.display=(!lq||p.includes(lq))?'':'none';
   });
 }
 
