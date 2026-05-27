@@ -6119,15 +6119,16 @@ function showSzTip(e, wrap){
   const box=wrap.querySelector('.sz-tooltip-box');
   if(!box) return;
   box.style.display='block';
-  // 초기 위치: 커서 근처
-  let x=e.clientX+12, y=e.clientY+12;
+  // wrap 요소 기준으로 고정 위치 (커서 따라가지 않음)
+  const rect=wrap.getBoundingClientRect();
   const bw=box.offsetWidth||420, bh=box.offsetHeight||300;
   const vw=window.innerWidth, vh=window.innerHeight;
-  // 오른쪽 잘림 → 왼쪽으로
-  if(x+bw>vw-10) x=e.clientX-bw-12;
-  // 아래 잘림 → 위로
-  if(y+bh>vh-10) y=e.clientY-bh-12;
-  // 최소 여백 보정
+  // 기본: 요소 바로 아래에 왼쪽 정렬
+  let x=rect.left, y=rect.bottom+8;
+  // 오른쪽 잘림 → 오른쪽 끝에서 맞춤
+  if(x+bw>vw-10) x=Math.max(10, vw-bw-10);
+  // 아래 잘림 → 요소 위로
+  if(y+bh>vh-10) y=Math.max(10, rect.top-bh-8);
   if(x<10) x=10;
   if(y<10) y=10;
   box.style.left=x+'px';
