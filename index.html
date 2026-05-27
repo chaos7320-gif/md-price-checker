@@ -2939,9 +2939,9 @@ function renderTop20(filtP,filtered,filteredP,f){
             <div style="flex:1;height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="width:${Math.round(dd.s/maxS2*100)}%;height:100%;background:${p.badge};border-radius:3px"></div></div>
           </div>`;
         }).join('');
-        return`<tr>
+        return`<tr data-t20-prod="${escHtml(prod)}">
           <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
-          <td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}">${escHtml(prod)}</td>
+          <td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
           ${wkCells}
           <td class="nr" style="font-weight:600;color:${diff>0?'#059669':diff<0?'#dc2626':'var(--muted)'}">${diff!==0?(diff>0?'+':'')+won(Math.abs(diff)):'-'}</td>
           <td class="nr"><span style="padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;background:${grBg};color:${grCol}">${grTxt}</span></td>
@@ -2978,7 +2978,10 @@ function renderTop20(filtP,filtered,filteredP,f){
             <span style="font-size:11px;color:var(--hint);margin-left:4px">최근 ${wks.length}주 실매출액 비교 · 증감/성장률은 ${grLabelW}</span>
           </div>
         </div>
-        <button onclick="exportTop20CSV()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">\u{1F4E5} CSV</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+          <input id="t20-search" type="text" oninput="filterT20Rows()" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none">
+          <button onclick="exportTop20CSV()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">\u{1F4E5} CSV</button>
+        </div>
       </div>
       <div class="table-wrap"><table>
         <thead>
@@ -3039,9 +3042,9 @@ function renderTop20(filtP,filtered,filteredP,f){
             <div style="flex:1;height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="width:${Math.round(dd.s/maxS2*100)}%;height:100%;background:${p.badge};border-radius:3px"></div></div>
           </div>`;
         }).join('');
-        return`<tr>
+        return`<tr data-t20-prod="${escHtml(prod)}">
           <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
-          <td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}">${escHtml(prod)}</td>
+          <td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
           ${yrCells}
           <td class="nr" style="font-weight:600;color:${diff>0?'#059669':diff<0?'#dc2626':'var(--muted)'}">${diff!==0?(diff>0?'+':'')+won(Math.abs(diff)):'-'}</td>
           <td class="nr"><span style="padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;background:${grBg};color:${grCol}">${grTxt}</span></td>
@@ -3077,7 +3080,10 @@ function renderTop20(filtP,filtered,filteredP,f){
             <span style="font-size:11px;color:var(--hint);margin-left:4px">연도별 실매출액 기준 비교 · 증감/성장률은 ${yFirst}년 → ${yLast}년</span>
           </div>
         </div>
-        <button onclick="exportTop20CSV()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">\u{1F4E5} CSV</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+          <input id="t20-search" type="text" oninput="filterT20Rows()" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none">
+          <button onclick="exportTop20CSV()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">\u{1F4E5} CSV</button>
+        </div>
       </div>
       <div class="table-wrap"><table>
         <thead>
@@ -3108,7 +3114,10 @@ function renderTop20(filtP,filtered,filteredP,f){
         <div class="chart-title">${isCustomSel?`선택 상품 ${top20.length}개 상세`:'상품 TOP 20 상세'}</div>
         <div class="chart-sub">${isCustomSel?`\u{1F45F} ${(f.prods||[]).join(', ').slice(0,60)}\u2026`:'실매출액 기준'} \u00b7 수량 위에 커서를 올리면 사이즈별 판매수량을 볼 수 있어요</div>
       </div>
-      <button onclick="exportTop20CSV()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">\u{1F4E5} CSV</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+          <input id="t20-search" type="text" oninput="filterT20Rows()" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none">
+          <button onclick="exportTop20CSV()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">\u{1F4E5} CSV</button>
+        </div>
     </div>
     <div class="table-wrap"><table>
       <thead><tr>
@@ -3121,9 +3130,9 @@ function renderTop20(filtP,filtered,filteredP,f){
       </tr></thead>
       <tbody>${top20.map(([prod,d],i)=>{
         const da=d.rt-d.s;const dr=d.rt>0?da/d.rt*100:0;const p=tS>0?Math.round(d.s/tS*100):0;
-        return`<tr>
+        return`<tr data-t20-prod="${escHtml(prod)}">
           <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
-          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${prod}">${prod}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:500">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
           <td class="nr" style="font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--green);border-bottom-color:#86efac">${won(d.s)}${_prodChTipHTML(prod,null)}</span></td>
           <td class="nr" style="color:var(--hint)">${won(d.rt)}</td>
           <td class="nr" style="color:var(--red)">-${won(da)}</td>
@@ -3232,9 +3241,9 @@ function renderTop20(filtP,filtered,filteredP,f){
       const stkHtml=stock<=0
         ?'<span style="color:var(--red);font-weight:700">품절</span>'
         :`<span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)">${wonNo(stock)}개<div class="sz-tooltip-box"><div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${prod.length>24?prod.slice(0,24)+'…':prod} 사이즈별 판매·재고</div>${invSizeGridHTML(prod)}</div></span>`;
-      return `<tr>
+      return `<tr data-t20-prod="${escHtml(prod)}">
         <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
-        <td style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}">${escHtml(prod)}</td>
+        <td style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
         ${wkCells}
         <td class="nr" style="font-weight:600">${stkHtml}</td>
         <td class="nr"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${totSellBg};color:${totSellCol}">${totSellRate.toFixed(1)}%</span></td>
@@ -6088,6 +6097,79 @@ function hideSzTip(wrap){
 }
 
 // ── 사이즈 그리드 / 패널 토글 (전역) ──
+// ── 상품 입고주차 + 주차별 누적 소진율 툴팁 (TOP 20 상세 상품명 hover) ──
+// 25년 1월 1일 이후 첫 판매 주차를 '입고주차'로 간주
+function _prodHistoryTipHTML(prod){
+  if(typeof PROD_DATA==='undefined'||!PROD_DATA||!PROD_DATA.length)
+    return '<div style="color:rgba(255,255,255,.55);font-size:11px">판매 이력 없음</div>';
+  const wkSales={}; let totQ=0;
+  PROD_DATA.forEach(r=>{
+    if(r[4]!==prod) return;
+    if(r[1]<2025) return;                 // 25년 1월 1일 이후만
+    if(r[2]===12&&r[3]===1) return;       // ISO 12월 1주차 오류 제외
+    const wkKey=`${r[1]}-W${String(r[3]).padStart(2,'0')}`;
+    wkSales[wkKey]=(wkSales[wkKey]||0)+(r[5]||0);
+    totQ+=(r[5]||0);
+  });
+  const allWks=Object.keys(wkSales).filter(w=>wkSales[w]>0).sort();
+  if(!allWks.length)
+    return '<div style="color:rgba(255,255,255,.55);font-size:11px;padding:8px 0">25년 1월 이후 판매 이력 없음</div>';
+  let stock=0;
+  (typeof INV_DATA!=='undefined'?INV_DATA:[]).forEach(r=>{
+    if(r.prod===prod) stock+=(r.stock||0);
+  });
+  const denom=stock+totQ;
+  const firstWk=allWks[0];
+  const lastWk=allWks[allWks.length-1];
+  const wkLbl=wk=>{const[y,w]=wk.split('-W');return `${String(y).slice(2)}년 W${parseInt(w)}`;};
+  // 누적 행
+  let cum=0;
+  const rows=allWks.map(wk=>{
+    const q=Math.round(wkSales[wk]);
+    cum+=q;
+    const sr=denom>0?(cum/denom*100):0;
+    const srCol=sr>=80?'#86efac':sr>=50?'#fbbf24':sr>=20?'#7dd3fc':'#fca5a5';
+    return `<div style="display:grid;grid-template-columns:72px 56px 60px 1fr;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:11px">
+      <span style="color:rgba(255,255,255,.85);font-weight:600">${wkLbl(wk)}</span>
+      <span style="text-align:right;color:#fff;font-weight:600">${q.toLocaleString('ko-KR')}건</span>
+      <span style="text-align:right;color:rgba(255,255,255,.7)">${Math.round(cum).toLocaleString('ko-KR')}</span>
+      <span style="text-align:right;color:${srCol};font-weight:800;font-size:11.5px">${sr.toFixed(1)}%</span>
+    </div>`;
+  }).join('');
+  const totRate=denom>0?(totQ/denom*100):0;
+  const totCol=totRate>=80?'#86efac':totRate>=50?'#fbbf24':totRate>=20?'#7dd3fc':'#fca5a5';
+  return `<div style="min-width:340px;max-width:380px">
+    <div style="font-size:12.5px;font-weight:800;color:#86efac;margin-bottom:8px;padding-bottom:8px;border-bottom:1.5px solid rgba(134,239,172,.3);line-height:1.4">
+      📦 ${prod.length>30?prod.slice(0,30)+'…':prod}
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:11px">
+      <span style="color:rgba(255,255,255,.55)">입고주차 (25년 이후 첫판매)</span>
+      <span style="color:#fbbf24;font-weight:700">${wkLbl(firstWk)}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:72px 56px 60px 1fr;gap:6px;padding:0 0 5px;border-bottom:1px solid rgba(255,255,255,.18);margin-bottom:4px;font-size:9.5px;color:rgba(255,255,255,.4);font-weight:600;letter-spacing:.3px">
+      <span>주차</span>
+      <span style="text-align:right">판매</span>
+      <span style="text-align:right">누적</span>
+      <span style="text-align:right">누적 소진율</span>
+    </div>
+    <div style="max-height:280px;overflow-y:auto;padding-right:4px">${rows}</div>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.18);display:flex;justify-content:space-between;align-items:center;font-size:11px">
+      <span style="color:rgba(255,255,255,.6)">현재재고 <span style="color:#fff;font-weight:700">${stock.toLocaleString('ko-KR')}개</span> · 전체판매 <span style="color:#fff;font-weight:700">${Math.round(totQ).toLocaleString('ko-KR')}건</span></span>
+      <span style="color:${totCol};font-weight:800">${totRate.toFixed(1)}%</span>
+    </div>
+  </div>`;
+}
+
+// ── 상품 TOP 20 상세 / 누적 추이 검색 필터 ──
+function filterT20Rows(){
+  const el=document.getElementById('t20-search');
+  const q=(el?.value||'').trim().toLowerCase();
+  document.querySelectorAll('tr[data-t20-prod]').forEach(tr=>{
+    const p=(tr.getAttribute('data-t20-prod')||'').toLowerCase();
+    tr.style.display=(!q||p.includes(q))?'':'none';
+  });
+}
+
 function invSizeGridHTML(prod){
   const szMap=calcSzWkSales();
   const prodMap=calcProdWkSales();
