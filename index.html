@@ -595,6 +595,9 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 /* ── 사이즈 패널 ── */
 .sz-tooltip-wrap{position:relative;display:inline-block;cursor:help;border-bottom:1px dashed var(--sky2);color:var(--sky);font-weight:700}
 .sz-tooltip-box{display:none;position:fixed;background:#0c1a2e;color:#fff;border-radius:14px;padding:16px 18px;width:440px;z-index:9999;box-shadow:0 16px 48px rgba(0,0,0,.45);backdrop-filter:blur(8px)}
+.sz-tooltip-wrap[data-sz-pinned="1"]{background:rgba(134,239,172,.18);border-bottom-style:solid !important;border-bottom-color:var(--green) !important}
+.sz-tooltip-wrap[data-sz-pinned="1"] .sz-tooltip-box{border:1.5px solid rgba(134,239,172,.55);box-shadow:0 16px 48px rgba(0,0,0,.55), 0 0 0 4px rgba(134,239,172,.18)}
+.sz-tooltip-wrap[data-sz-pinned="1"] .sz-tooltip-box::after{content:'📌 고정됨 · 다시 클릭 / ESC / 외부 클릭으로 해제';position:absolute;top:-28px;right:0;font-size:10px;color:#fbbf24;background:#0c1a2e;padding:5px 12px;border-radius:10px;border:1px solid rgba(251,191,36,.4);white-space:nowrap;pointer-events:none;font-weight:700;letter-spacing:.2px}
 .sz-tooltip-box .sz-title{font-size:12px;font-weight:700;color:var(--sky3);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.12)}
 .sz-grid{display:flex;flex-direction:column;gap:4px}
 
@@ -6131,9 +6134,51 @@ function showSzTip(e, wrap){
   box.style.top=y+'px';
 }
 function hideSzTip(wrap){
+  // 핀 고정된 툴팁은 mouseleave로 닫지 않음
+  if(wrap && wrap.dataset && wrap.dataset.szPinned==='1') return;
   const box=wrap.querySelector('.sz-tooltip-box');
   if(box) box.style.display='none';
 }
+
+// ── 툴팁 클릭으로 고정/해제 ──
+// 1) 툴팁 wrap 클릭 → 해당 wrap 고정 (다른 wrap의 고정은 해제)
+// 2) 고정된 wrap 다시 클릭 → 해제
+// 3) 박스 내부 클릭 → 상태 유지 (텍스트 선택 등)
+// 4) 외부 클릭 / ESC → 모두 해제
+function _unpinAllSzTips(){
+  document.querySelectorAll('[data-sz-pinned="1"]').forEach(w=>{
+    delete w.dataset.szPinned;
+    const b=w.querySelector('.sz-tooltip-box');
+    if(b) b.style.display='none';
+  });
+}
+document.addEventListener('click', function(e){
+  if(e.target.closest('.sz-tooltip-box')) return;
+  const wrap=e.target.closest('.sz-tooltip-wrap');
+  document.querySelectorAll('[data-sz-pinned="1"]').forEach(w=>{
+    if(w!==wrap){
+      delete w.dataset.szPinned;
+      const b=w.querySelector('.sz-tooltip-box');
+      if(b) b.style.display='none';
+    }
+  });
+  if(!wrap) return;
+  if(wrap.dataset.szPinned==='1'){
+    delete wrap.dataset.szPinned;
+    const box=wrap.querySelector('.sz-tooltip-box');
+    if(box) box.style.display='none';
+  } else {
+    wrap.dataset.szPinned='1';
+    const box=wrap.querySelector('.sz-tooltip-box');
+    if(box && box.style.display!=='block'){
+      const rect=wrap.getBoundingClientRect();
+      showSzTip({clientX:rect.left+rect.width/2, clientY:rect.bottom}, wrap);
+    }
+  }
+});
+document.addEventListener('keydown', function(e){
+  if(e.key==='Escape') _unpinAllSzTips();
+});
 
 // ── 사이즈 그리드 / 패널 토글 (전역) ──
 // ── 상품 입고주차 + 주차별 입고/판매/누적 소진율 툴팁 (TOP 20 상세 상품명 hover) ──
