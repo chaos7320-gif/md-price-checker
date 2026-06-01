@@ -830,6 +830,7 @@ body[data-db1-mode="weekly"] [data-period="monthly"]{display:none !important}
     <button class="nav-item active" onclick="setTab('goal',this)">🎯 목표매출</button>
     <button class="nav-item" data-tab="dashboard1-annual" onclick="setTab('dashboard1',this,'annual')" style="font-weight:700">📊 연간 매출 분석</button>
     <button class="nav-item" data-tab="dashboard1-weekly" onclick="setTab('dashboard1',this,'weekly')" style="font-weight:700">📅 주간 매출 분석</button>
+    <button class="nav-item" onclick="setTab('matrix',this)">📊 매출 비교</button>
     <button class="nav-item" onclick="setTab('growth',this)">🌱 성장률 분석</button>
     <button class="nav-item" onclick="setTab('compare',this)">⚖️ 상품비교</button>
     <button class="nav-item" id="nav-margin" onclick="setTab('margin',this)" style="display:none">💰 마진 분석</button>
@@ -2089,6 +2090,7 @@ function apply(){
     return;
   }
   if(activeTab==='compare') renderCompare();
+  else if(activeTab==='matrix') renderMatrix(f);
   else if(activeTab==='growth') renderGrowth(filtered,filteredP,f);
   else if(activeTab==='restock') renderRestock(f);
   else if(activeTab==='deadstock') renderDeadStock(f);
@@ -7113,6 +7115,178 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
             scales:{x:{ticks:{font:{size:9},maxRotation:45}},y:{ticks:{font:{size:9},callback:v=>v+'%'}}}}});
       }
     }
+  },80);
+}
+
+// ── 매출 비교 (매트릭스) 탭 ──
+// 행 = 기간(주차/월), 열 = 매출처, 값 = 실매출액 — 상품×주차×채널 비교 한눈에
+function renderMatrix(f){
+  destroyCharts();
+  const tgt=document.getElementById('content');
+  if(!CHP_DATA||!CHP_DATA.length){
+    tgt.innerHTML='<div class="empty"><div class="empty-icon">🔍</div>채널×상품 원장(CHP) 데이터가 없습니다.<br><span style="font-size:12px;color:var(--muted)">데이터를 다시 업로드해주세요.</span></div>';
+    return;
+  }
+  const bI=f.b==='ALL'?-1:parseInt(f.b);
+  const yrF=f.yrs&&f.yrs.length?new Set(f.yrs):null;
+  const moF=f.mos&&f.mos.length?new Set(f.mos):null;
+  const wkF=f.wks&&f.wks.length?new Set(f.wks):null;
+  const chsF=f.chs&&f.chs.length?new Set(f.chs):null;
+  const prodSet=(f.prods&&f.prods.length)?new Set(f.prods):(f.prod!=='ALL'?new Set([f.prod]):null);
+
+  const rows=CHP_DATA.filter(r=>{
+    if(r[2]===12&&r[3]===1) return false;
+    if(bI>=0&&r[0]!==bI) return false;
+    if(yrF&&!yrF.has(r[1])) return false;
+    if(moF&&!moF.has(r[2])) return false;
+    if(wkF&&!wkF.has(r[3])) return false;
+    if(chsF&&!chsF.has(r[4])) return false;
+    if(prodSet&&!prodSet.has(r[5])) return false;
+    return true;
+  });
+
+  // 모드: 주차 선택 있거나(또는 선택 없음) → 주차, 월만 선택 → 월
+  const useWk=!(moF&&!wkF);
+  const perKey=r=>useWk?`${r[1]}-W${String(r[3]).padStart(2,'0')}`:`${r[1]}-${String(r[2]).padStart(2,'0')}월`;
+
+  // 집계: agg[period][ch] = {s,q,rt}
+  const periodSet=new Set(),chSet=new Set();
+  const agg={};
+  rows.forEach(r=>{
+    const k=perKey(r);
+    periodSet.add(k); chSet.add(r[4]);
+    if(!agg[k]) agg[k]={};
+    if(!agg[k][r[4]]) agg[k][r[4]]={s:0,q:0,rt:0};
+    agg[k][r[4]].s+=r[7]; agg[k][r[4]].q+=r[6]; agg[k][r[4]].rt+=r[8];
+  });
+  const periods=[...periodSet].sort();
+  const chTotals={};
+  [...chSet].forEach(ch=>{chTotals[ch]=periods.reduce((s,p)=>s+((agg[p]?.[ch]?.s)||0),0);});
+  const chs=[...chSet].sort((a,b)=>chTotals[b]-chTotals[a]);
+  const totalS=rows.reduce((s,r)=>s+r[7],0);
+  const totalQ=rows.reduce((s,r)=>s+r[6],0);
+  const totalR=rows.reduce((s,r)=>s+r[8],0);
+
+  // 안내
+  const hints=[];
+  if(!prodSet) hints.push('💡 좌측 필터에서 비교할 <b>상품</b>을 1개 이상 선택하면 비교가 명확해집니다');
+  if(!chsF||chsF.size<2) hints.push('💡 <b>매출처</b>를 2개 이상 선택하면 비교 효과가 더 뚜렷합니다');
+  if(!wkF&&!moF) hints.push('💡 <b>주차</b> 또는 <b>월</b>을 한정해 보세요 (예: 2026 21~22주)');
+
+  // 스코프 요약
+  const bSel=document.getElementById('f-brand');
+  const bnLabel=(bSel&&bSel.selectedIndex>=0)?(bSel.options[bSel.selectedIndex].text||''):'';
+  const scope=[];
+  if(f.b!=='ALL') scope.push(bnLabel||'단일 브랜드');
+  if(prodSet) scope.push(`상품 ${prodSet.size}개${prodSet.size<=3?': '+[...prodSet].join(', '):''}`);
+  if(yrF) scope.push(`${[...yrF].sort().join(' · ')}`);
+  if(useWk&&wkF) scope.push(`${[...wkF].sort((a,b)=>a-b).join(', ')}주`);
+  if(!useWk&&moF) scope.push(`${[...moF].sort((a,b)=>a-b).join(', ')}월`);
+  if(chsF) scope.push(`매출처 ${chsF.size}개`);
+
+  if(!rows.length){
+    tgt.innerHTML=`<div class="empty"><div class="empty-icon">📊</div>조건에 맞는 데이터가 없습니다<br><span style="font-size:12px;color:var(--muted)">${scope.join(' · ')||'필터 미설정'}</span></div>`;
+    return;
+  }
+
+  const dr=totalR>0?((totalR-totalS)/totalR*100):0;
+  const PAL=['#0284c7','#22c55e','#f97316','#a855f7','#ef4444','#06b6d4','#eab308','#ec4899','#14b8a6','#6366f1'];
+
+  tgt.innerHTML=`
+<div class="kpi-grid">
+  <div class="kpi-card accent">
+    <div class="kpi-label">선택 범위 총 매출</div>
+    <div class="kpi-val">${won(totalS)}</div>
+    <div class="kpi-sub">${wonNo(totalQ)}건 · ${periods.length}${useWk?'주':'개월'} × 매출처 ${chs.length}개</div>
+  </div>
+  ${chs.slice(0,3).map((ch,i)=>{
+    const sh=chTotals[ch];
+    const pct=totalS>0?(sh/totalS*100).toFixed(1):0;
+    return `<div class="kpi-card">
+      <div class="kpi-label">${i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':''}${ch}</div>
+      <div class="kpi-val" style="font-size:18px">${won(sh)}</div>
+      <div class="kpi-sub">전체의 ${pct}%</div>
+    </div>`;
+  }).join('')}
+</div>
+${hints.length?`<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#9a3412;line-height:1.8">${hints.join('<br>')}</div>`:''}
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#475569">
+  <b>선택 범위:</b> ${scope.join(' · ')||'전체'} ${dr>0?` · 평균 할인율 <b style="color:#dc2626">${dr.toFixed(1)}%</b>`:''}
+</div>
+<div class="chart-card" style="margin-bottom:16px">
+  <div class="chart-header">
+    <div class="chart-title">📈 ${useWk?'주차':'월'}별 매출처 비교</div>
+    <div class="chart-sub">매출처별 ${useWk?'주차':'월'} 추이 — 라인 위에 마우스를 올리면 상세 확인</div>
+  </div>
+  <div style="position:relative;height:300px"><canvas id="c-mx-line"></canvas></div>
+</div>
+<div class="chart-card" style="margin-bottom:16px">
+  <div class="chart-header">
+    <div class="chart-title">🧩 매출 비교 매트릭스</div>
+    <div class="chart-sub">행 = ${useWk?'주차':'월'} · 열 = 매출처 · 값 = 실매출액 (수량) · 노란 셀 = ${useWk?'주차':'월'}별 1위</div>
+  </div>
+  <div class="table-wrap" style="overflow-x:auto"><table>
+    <thead><tr>
+      <th style="position:sticky;left:0;background:#f8fafc;z-index:2">${useWk?'주차':'월'}</th>
+      ${chs.map((ch,i)=>`<th class="nr" style="color:${PAL[i%PAL.length]}">${ch}</th>`).join('')}
+      <th class="nr" style="background:#f1f5f9">행 합계</th>
+    </tr></thead>
+    <tbody>
+      ${periods.map(p=>{
+        const rowTotal=chs.reduce((s,ch)=>s+((agg[p]?.[ch]?.s)||0),0);
+        const max=Math.max(...chs.map(ch=>(agg[p]?.[ch]?.s)||0));
+        return `<tr>
+          <td style="font-weight:600;position:sticky;left:0;background:#fff;z-index:1">${p}</td>
+          ${chs.map(ch=>{
+            const v=(agg[p]?.[ch]?.s)||0;
+            const q=(agg[p]?.[ch]?.q)||0;
+            const isMax=v>0&&v===max&&chs.length>1;
+            return `<td class="nr" style="${isMax?'background:#fef3c7;font-weight:700':''}">${v>0?won(v):'<span style="color:#cbd5e1">-</span>'}${q>0?`<div style="font-size:10px;color:var(--muted);font-weight:400">${wonNo(q)}건</div>`:''}</td>`;
+          }).join('')}
+          <td class="nr" style="font-weight:700;background:#f8fafc">${won(rowTotal)}</td>
+        </tr>`;
+      }).join('')}
+      <tr style="background:#f1f5f9">
+        <td style="font-weight:700;position:sticky;left:0;background:#f1f5f9;z-index:1">열 합계</td>
+        ${chs.map(ch=>`<td class="nr" style="font-weight:700">${won(chTotals[ch])}<div style="font-size:10px;color:var(--muted);font-weight:400">${totalS>0?(chTotals[ch]/totalS*100).toFixed(1):0}%</div></td>`).join('')}
+        <td class="nr" style="font-weight:800;background:#0f1e36;color:#fff">${won(totalS)}</td>
+      </tr>
+    </tbody>
+  </table></div>
+</div>`;
+
+  setTimeout(()=>{
+    const el=document.getElementById('c-mx-line');
+    if(!el) return;
+    charts.mxLine=new Chart(el,{
+      type:'line',
+      data:{
+        labels:periods,
+        datasets:chs.map((ch,i)=>({
+          label:ch,
+          data:periods.map(p=>(agg[p]?.[ch]?.s)||0),
+          borderColor:PAL[i%PAL.length],
+          backgroundColor:PAL[i%PAL.length]+'20',
+          tension:.35,
+          borderWidth:2.5,
+          pointRadius:4,
+          pointHoverRadius:6,
+          fill:false
+        }))
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        plugins:{
+          legend:{display:true,position:'top',labels:{font:{size:11},boxWidth:14,padding:10}},
+          tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${won(c.raw)}`}}
+        },
+        scales:{
+          x:{ticks:{font:{size:10}}},
+          y:{ticks:{font:{size:10},callback:v=>short(v)},beginAtZero:true}
+        }
+      }
+    });
   },80);
 }
 
