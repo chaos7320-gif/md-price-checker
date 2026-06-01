@@ -1979,10 +1979,38 @@ function filterArr(arr,f,isProd){
   });
 }
 
+// 매출처(채널) 필터 활성 + CHP_DATA(채널×상품) 존재 시 PROD_DATA를 채널 인지형으로 재집계.
+// 결과 포맷은 PROD_DATA와 동일: [bi,yr,mo,wk,prod,qty,s,rt]. 비활성/CHP 없으면 null.
+function _buildChAwareProdData(f){
+  if(!f.chs||!f.chs.length) return null;
+  if(!CHP_DATA||!CHP_DATA.length) return null;
+  const bI=f.b==='ALL'?-1:parseInt(f.b);
+  const moF=f.mos&&f.mos.length?f.mos:null;
+  const wkF=f.wks&&f.wks.length?f.wks:null;
+  const yrF=f.yrs&&f.yrs.length?f.yrs:null;
+  const chsSet=new Set(f.chs);
+  const prodSet=(f.prods&&f.prods.length)?new Set(f.prods):(f.prod!=='ALL'?new Set([f.prod]):null);
+  const agg={};
+  CHP_DATA.forEach(r=>{
+    if(bI>=0&&r[0]!==bI)return;
+    if(yrF&&!yrF.includes(r[1]))return;
+    if(moF&&!moF.includes(r[2]))return;
+    if(wkF&&!wkF.includes(r[3]))return;
+    if(!chsSet.has(r[4]))return;
+    if(prodSet&&!prodSet.has(r[5]))return;
+    const k=r[0]+'|'+r[1]+'|'+r[2]+'|'+r[3]+'|'+r[5];
+    if(!agg[k])agg[k]=[r[0],r[1],r[2],r[3],r[5],0,0,0];
+    agg[k][5]+=r[6]; agg[k][6]+=r[7]; agg[k][7]+=r[8];
+  });
+  return Object.values(agg);
+}
+
 function apply(){
   const f=getF();
   const filtered=filterArr(TOP_DATA,f,false);       // 선택연도+전년도 모두
-  const filteredP=filterArr(PROD_DATA,f,true);      // 선택연도+전년도 모두
+  const _chAwareP=_buildChAwareProdData(f);
+  const filteredP=_chAwareP||filterArr(PROD_DATA,f,true);   // 선택연도+전년도 모두 (채널 필터 시 CHP_DATA로 재집계)
+  if(_chAwareP) f.__chAwareP=true;
   // KPI용: 선택연도만 (비교 아닌 합산 수치에 사용)
   const fKpi={...f};
   // KPI용: 선택 연도 전체 (다중선택 시 모두 합산)
@@ -2577,7 +2605,8 @@ function renderTop20(filtP,filtered,filteredP,f){
   const yrPal=yr=>YR_PAL[yr]||{bg:'#fafafa',hdr:'#f1f5f9',border:'#e2e8f0',text:'#475569',badge:'#94a3b8',light:'#e2e8f0'};
   const byProd={};
   const byProdYr={};
-  const chFilter=f.chs&&f.chs.length>0;
+  // filteredP가 이미 채널 인지형(_buildChAwareProdData)이면 ratio 스케일링 불필요
+  const chFilter=f.chs&&f.chs.length>0&&!f.__chAwareP;
   if(!chFilter){
     filtP.forEach(r=>{
       const prod=r[4],yr=r[1];
@@ -2811,7 +2840,7 @@ function renderTop20(filtP,filtered,filteredP,f){
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${periodChips}</div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-size:11px;color:rgba(255,255,255,.6);font-weight:600">
-        <span>${grLabel}</span><span>${focusP?pLabel(focusP)+' 기준 정렬 · 비중':'정렬'} · 스크롤로 전체 확인</span>
+        <span>${grLabel}</span><span>총 매출액 내림차순${focusP?' · 비중('+pLabel(focusP)+')':''} · 스크롤로 전체 확인</span>
       </div>${inner}</div>`;
     if(!CHP_DATA||!CHP_DATA.length||!periods.length) return wrap(`<div style="color:rgba(255,255,255,.7);font-size:13px;padding:24px 0;text-align:center;line-height:1.6">상품×채널 데이터가 없습니다.<br><span style="font-size:11px;color:rgba(255,255,255,.45)">데이터를 다시 업로드하면 확인할 수 있어요.</span></div>`);
     const m=agg[prod]||{};
@@ -2820,7 +2849,7 @@ function renderTop20(filtP,filtered,filteredP,f){
       const total=periods.reduce((s,p)=>s+((pd[p]&&pd[p].s)||0),0);
       const focus=(pd[focusP]&&pd[focusP].s)||0;
       return {ch,pd,total,focus};
-    }).filter(r=>r.total>0).sort((a,b)=>(b.focus-a.focus)||(b.total-a.total));
+    }).filter(r=>r.total>0).sort((a,b)=>(b.total-a.total)||(b.focus-a.focus));
     if(!rowsAll.length) return wrap(`<div style="color:rgba(255,255,255,.7);font-size:13px;padding:24px 0;text-align:center">데이터 없음</div>`);
     const sumPerP={},sumQPerP={};periods.forEach(p=>{sumPerP[p]=rowsAll.reduce((s,r)=>s+((r.pd[p]&&r.pd[p].s)||0),0);sumQPerP[p]=rowsAll.reduce((s,r)=>s+((r.pd[p]&&r.pd[p].q)||0),0);});
     const sumFocus=sumPerP[focusP]||0;
@@ -3171,9 +3200,11 @@ function renderTop20(filtP,filtered,filteredP,f){
   const cumTrendCard=(()=>{
     if(!_isWkModeT20) return '';
     const bI=f.b==='ALL'?-1:parseInt(f.b);
-    // 채널 필터 비율 (PROD_DATA에 채널 없음 → TOP_DATA로 추정)
+    // 채널 필터 시 CHP_DATA(채널×상품) 직접 사용 → ratio 추정 없이 실측. 없으면 PROD_DATA + ratio 폴백.
+    const chFilterCum=f.chs&&f.chs.length>0;
+    const useChp=chFilterCum&&CHP_DATA&&CHP_DATA.length;
     let cumChRatio=1;
-    if(f.chs&&f.chs.length>0){
+    if(chFilterCum&&!useChp){
       const yrSetCh=f.yrs&&f.yrs.length?new Set(f.yrs):null;
       const tAll=TOP_DATA.filter(r=>(bI<0||r[0]===bI)&&(!yrSetCh||yrSetCh.has(r[1]))&&!(r[2]===12&&r[3]===1));
       const tCh=tAll.filter(r=>chOk(r,f));
@@ -3183,16 +3214,20 @@ function renderTop20(filtP,filtered,filteredP,f){
     }
     const prodSetCum=(f.prods&&f.prods.length)?new Set(f.prods):null;
     const yrSetCum=f.yrs&&f.yrs.length?new Set(f.yrs):null;
+    const chsSetCum=useChp?new Set(f.chs):null;
     // 상품×주차 판매수량 (월/주 필터 무시 — 추이 보기 위함)
     const wkQtyByProd={};
     const totQtyByProd={};
-    PROD_DATA.forEach(r=>{
+    const _srcCum=useChp?CHP_DATA:PROD_DATA;
+    const _idxProd=useChp?5:4, _idxQty=useChp?6:5;
+    _srcCum.forEach(r=>{
       if(bI>=0&&r[0]!==bI) return;
       if(r[2]===12&&r[3]===1) return;
-      const prod=r[4];
+      if(useChp&&!chsSetCum.has(r[4])) return;
+      const prod=r[_idxProd];
       if(prodSetCum&&!prodSetCum.has(prod)) return;
       if(yrSetCum&&!yrSetCum.has(r[1])) return;
-      const q=cumChRatio===1?r[5]:r[5]*cumChRatio;
+      const q=cumChRatio===1?r[_idxQty]:r[_idxQty]*cumChRatio;
       if(q<=0) return;
       const wkKey=`${r[1]}-W${String(r[3]).padStart(2,'0')}`;
       if(!wkQtyByProd[prod]) wkQtyByProd[prod]={};
@@ -3417,8 +3452,8 @@ function renderDiscount(filtered,filtP,f){
 
   // 상품별 할인율
   const byProd={};
-  // 채널 필터: PROD_DATA에 채널 없으므로 TOP_DATA 비율로 보정
-  const chFilter_d=f.chs&&f.chs.length>0;
+  // 채널 필터: PROD_DATA에 채널 없으므로 TOP_DATA 비율로 보정 (filteredP가 채널 인지형이면 스킵)
+  const chFilter_d=f.chs&&f.chs.length>0&&!f.__chAwareP;
   let chRatio_d=1;
   if(chFilter_d){
     const bI=f.b==='ALL'?-1:parseInt(f.b);
@@ -4939,7 +4974,7 @@ function renderChannel(filtered,filteredP,f){
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${periodChips}</div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-size:11px;color:rgba(255,255,255,.6);font-weight:600">
-        <span>${grLabel}</span><span>${focusP?pLabel(focusP)+' 기준 정렬 · 비중':'정렬'} · 스크롤로 전체 확인</span>
+        <span>${grLabel}</span><span>총 매출액 내림차순${focusP?' · 비중('+pLabel(focusP)+')':''} · 스크롤로 전체 확인</span>
       </div>${inner}</div>`;
     if(!CHP_DATA||!CHP_DATA.length||!periods.length) return wrap(`<div style="color:rgba(255,255,255,.7);font-size:13px;padding:24px 0;text-align:center;line-height:1.6">상품×채널 데이터가 없습니다.<br><span style="font-size:11px;color:rgba(255,255,255,.45)">데이터를 다시 업로드하면 확인할 수 있어요.</span></div>`);
     const m=agg[ch]||{};
@@ -4948,7 +4983,7 @@ function renderChannel(filtered,filteredP,f){
       const total=periods.reduce((s,p)=>s+((pd[p]&&pd[p].s)||0),0);
       const focus=(pd[focusP]&&pd[focusP].s)||0;
       return {prod,pd,total,focus};
-    }).filter(r=>r.total>0).sort((a,b)=>(b.focus-a.focus)||(b.total-a.total));
+    }).filter(r=>r.total>0).sort((a,b)=>(b.total-a.total)||(b.focus-a.focus));
     if(!rowsAll.length) return wrap(`<div style="color:rgba(255,255,255,.7);font-size:13px;padding:24px 0;text-align:center">데이터 없음</div>`);
     const sumPerP={},sumQPerP={};periods.forEach(p=>{sumPerP[p]=rowsAll.reduce((s,r)=>s+((r.pd[p]&&r.pd[p].s)||0),0);sumQPerP[p]=rowsAll.reduce((s,r)=>s+((r.pd[p]&&r.pd[p].q)||0),0);});
     const sumFocus=sumPerP[focusP]||0;
@@ -6849,8 +6884,8 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   filtC.forEach(r=>{if(!byCh[r[4]])byCh[r[4]]={s:0,q:0};byCh[r[4]].s+=r[6];byCh[r[4]].q+=r[5];});
   const chArr=Object.entries(byCh).sort((a,b)=>b[1].s-a[1].s);
   const totalS_ch=chArr.reduce((s,[,d])=>s+d.s,0);
-  // 상품별 (채널 필터 보정 포함)
-  const chFilter=f.chs&&f.chs.length>0;
+  // 상품별 (채널 필터 보정 포함 — filteredP가 채널 인지형이면 ratio 스킵)
+  const chFilter=f.chs&&f.chs.length>0&&!f.__chAwareP;
   const byProd={};
   if(!chFilter){
     filtPC.forEach(r=>{const p=r[4];if(!byProd[p])byProd[p]={s:0,q:0,rt:0};byProd[p].s+=r[6];byProd[p].q+=r[5];byProd[p].rt+=r[7];});
