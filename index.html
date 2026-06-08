@@ -3267,9 +3267,9 @@ function renderTop20(filtP,filtered,filteredP,f){
     const recentWks=allWks.slice(-N);
     if(!recentWks.length) return '';
     const earliest=recentWks[0];
-    const wkLbl=wk=>{const[y,w]=wk.split('-W');return `${String(y).slice(2)}년 W${parseInt(w)}`;};
+    const wkLbl=wk=>{const[y,w]=wk.split('-W');const r=WK_RANGE_MAP[wk]||'';return `${String(y).slice(2)}년 W${parseInt(w)}${r?'<br><span style="font-size:9.5px;font-weight:500;color:#64748b">('+r+')</span>':''}`;};
     const headCells=recentWks.map(wk=>
-      `<th class="nr" style="min-width:104px;padding:8px 10px;background:#f0fdf4;color:#15803d;font-size:11px;letter-spacing:.2px">${wkLbl(wk)}</th>`
+      `<th class="nr" style="min-width:116px;padding:8px 10px;background:#f0fdf4;color:#15803d;font-size:11px;letter-spacing:.2px;line-height:1.35">${wkLbl(wk)}</th>`
     ).join('');
     const rows=top20.map(([prod,d],i)=>{
       const wkData=wkQtyByProd[prod]||{};
@@ -3764,9 +3764,12 @@ function parseWB(wb,fname){
     const kc=`${bi}|${yr}|${mo}|${wk}|${ch}`;
     if(!aggCh[kc])aggCh[kc]={bi,yr,mo,wk,ch,qty:0,s:0,rt:0};
     aggCh[kc].qty+=qty;aggCh[kc].s+=sales;aggCh[kc].rt+=retail;
-    const kp=`${bi}|${yr}|${mo}|${wk}|${prod}`;
-    if(!aggPr[kp])aggPr[kp]={bi,yr,mo,wk,prod,qty:0,s:0,rt:0};
-    aggPr[kp].qty+=qty;aggPr[kp].s+=sales;aggPr[kp].rt+=retail;
+    // 상품명이 있는 행만 PROD/SZ/CHP에 반영 (빈 prod로 인한 채널·상품 데이터 불일치 방지)
+    if(prod&&prod!=='null'){
+      const kp=`${bi}|${yr}|${mo}|${wk}|${prod}`;
+      if(!aggPr[kp])aggPr[kp]={bi,yr,mo,wk,prod,qty:0,s:0,rt:0};
+      aggPr[kp].qty+=qty;aggPr[kp].s+=sales;aggPr[kp].rt+=retail;
+    }
     if(size&&size!=='null'&&prod&&prod!=='null'){const ks=`${bi}|${yr}|${mo}|${wk}|${prod}|${size}`;if(!aggSz[ks])aggSz[ks]={bi,yr,mo,wk,prod,size,qty:0};aggSz[ks].qty+=qty;}
     if(ch&&prod&&prod!=='null'){const kcp=`${bi}|${yr}|${mo}|${wk}|${ch}|${prod}`;if(!aggChPr[kcp])aggChPr[kcp]={bi,yr,mo,wk,ch,prod,qty:0,s:0,rt:0};aggChPr[kcp].qty+=qty;aggChPr[kcp].s+=sales;aggChPr[kcp].rt+=retail;}
     if(prod&&prod!=='null'){if(!ps[brand])ps[brand]={};if(!ps[brand][prod])ps[brand][prod]=new Set();if(size&&size!=='null')ps[brand][prod].add(size);}
@@ -3776,26 +3779,32 @@ function parseWB(wb,fname){
   // ── 기존 데이터와 교체 ──
   // 누적 업로드 방식: 업로드 파일에 포함된 (브랜드·연도) 전체를 통째로 교체
   // → 주차·월 단위 병합 불필요, 월경계 주차 문제 원천 차단
-  const newByrCombos=new Set(Object.values(aggCh).map(r=>`${r.bi}|${r.yr}`));
-  TOP_DATA=TOP_DATA.filter(r=>!newByrCombos.has(`${r[0]}|${r[1]}`));
+  // 4개 집계(aggCh/aggPr/aggSz/aggChPr) 합집합으로 (브랜드·연도) 키를 정렬 →
+  //   업로드된 모든 brand·yr에 대해 TOP/PROD/SZ/CHP를 함께 비우고 다시 채워
+  //   "채널별엔 W23 있는데 상품별엔 없음" 같은 부분 갱신 누락을 방지.
+  const masterByrCombos=new Set([
+    ...Object.values(aggCh).map(r=>`${r.bi}|${r.yr}`),
+    ...Object.values(aggPr).map(r=>`${r.bi}|${r.yr}`),
+    ...Object.values(aggSz).map(r=>`${r.bi}|${r.yr}`),
+    ...Object.values(aggChPr).map(r=>`${r.bi}|${r.yr}`),
+  ]);
+
+  TOP_DATA=TOP_DATA.filter(r=>!masterByrCombos.has(`${r[0]}|${r[1]}`));
   Object.values(aggCh).filter(r=>r.s!==0).forEach(r=>{
     TOP_DATA.push([r.bi,r.yr,r.mo,r.wk,r.ch,Math.round(r.qty),Math.round(r.s),Math.round(r.rt)]);
   });
 
-  const newProdByrCombos=new Set(Object.values(aggPr).map(r=>`${r.bi}|${r.yr}`));
-  PROD_DATA=PROD_DATA.filter(r=>!newProdByrCombos.has(`${r[0]}|${r[1]}`));
+  PROD_DATA=PROD_DATA.filter(r=>!masterByrCombos.has(`${r[0]}|${r[1]}`));
   Object.values(aggPr).filter(r=>r.s!==0).forEach(r=>{
     PROD_DATA.push([r.bi,r.yr,r.mo,r.wk,r.prod,Math.round(r.qty),Math.round(r.s),Math.round(r.rt)]);
   });
 
-  const newSzByrCombos=new Set(Object.values(aggSz).map(r=>`${r.bi}|${r.yr}`));
-  SZ_DATA=SZ_DATA.filter(r=>!newSzByrCombos.has(`${r[0]}|${r[1]}`));
+  SZ_DATA=SZ_DATA.filter(r=>!masterByrCombos.has(`${r[0]}|${r[1]}`));
   Object.values(aggSz).filter(r=>r.qty!==0).forEach(r=>{
     SZ_DATA.push([r.bi,r.yr,r.mo,r.wk,r.prod,r.size,Math.round(r.qty)]);
   });
 
-  const newChpByrCombos=new Set(Object.values(aggChPr).map(r=>`${r.bi}|${r.yr}`));
-  CHP_DATA=CHP_DATA.filter(r=>!newChpByrCombos.has(`${r[0]}|${r[1]}`));
+  CHP_DATA=CHP_DATA.filter(r=>!masterByrCombos.has(`${r[0]}|${r[1]}`));
   Object.values(aggChPr).filter(r=>r.s!==0).forEach(r=>{
     CHP_DATA.push([r.bi,r.yr,r.mo,r.wk,r.ch,r.prod,Math.round(r.qty),Math.round(r.s),Math.round(r.rt)]);
   });
@@ -6262,7 +6271,8 @@ function _prodHistoryTipHTML(prod){
   const firstSaleWk=Object.keys(wkSales).filter(w=>wkSales[w]>0).sort()[0];
   const firstStockWk=firstInsWk||firstSaleWk;
   const firstLabel=firstInsWk?'입고주차 (첫 입고)':'입고주차 (25년 이후 첫판매)';
-  const wkLbl=wk=>{const[y,w]=wk.split('-W');return `${String(y).slice(2)}년 W${parseInt(w)}`;};
+  const wkLbl=wk=>{const[y,w]=wk.split('-W');const r=WK_RANGE_MAP[wk]||'';return `${String(y).slice(2)}년 W${parseInt(w)}${r?'('+r+')':''}`;};
+  const wkLblCompact=wk=>{const[y,w]=wk.split('-W');const r=WK_RANGE_MAP[wk]||'';return `<div>${String(y).slice(2)}년 W${parseInt(w)}</div>${r?'<div style="font-size:9px;color:rgba(255,255,255,.5);font-weight:500;letter-spacing:-.3px">('+r+')</div>':''}`;};
   let cum=0, cumIns=0;
   const rows=allWks.map(wk=>{
     const ins=Math.round(wkIns[wk]||0);
@@ -6273,8 +6283,8 @@ function _prodHistoryTipHTML(prod){
     const denomW=initStock+cumIns;
     const sr=denomW>0?Math.min(100, cum/denomW*100):0;
     const srCol=sr>=80?'#86efac':sr>=50?'#fbbf24':sr>=20?'#7dd3fc':'#fca5a5';
-    return `<div style="display:grid;grid-template-columns:62px 56px 50px 60px 1fr;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:11px">
-      <span style="color:rgba(255,255,255,.85);font-weight:600">${wkLbl(wk)}</span>
+    return `<div style="display:grid;grid-template-columns:84px 56px 50px 60px 1fr;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:11px">
+      <span style="color:rgba(255,255,255,.85);font-weight:600;line-height:1.25">${wkLblCompact(wk)}</span>
       <span style="text-align:right;color:${ins>0?'#fbbf24':'rgba(255,255,255,.22)'};font-weight:${ins>0?700:400}">${ins>0?ins.toLocaleString('ko-KR')+'건':'-'}</span>
       <span style="text-align:right;color:${q>0?'#fff':'rgba(255,255,255,.22)'};font-weight:${q>0?600:400}">${q>0?q.toLocaleString('ko-KR')+'건':'-'}</span>
       <span style="text-align:right;color:rgba(255,255,255,.7)">${Math.round(cum).toLocaleString('ko-KR')}</span>
@@ -6283,7 +6293,7 @@ function _prodHistoryTipHTML(prod){
   }).join('');
   const totRate=denomLatest>0?(totQ/denomLatest*100):0;
   const totCol=totRate>=80?'#86efac':totRate>=50?'#fbbf24':totRate>=20?'#7dd3fc':'#fca5a5';
-  return `<div style="min-width:400px;max-width:440px">
+  return `<div style="min-width:420px;max-width:460px">
     <div style="font-size:12.5px;font-weight:800;color:#86efac;margin-bottom:8px;padding-bottom:8px;border-bottom:1.5px solid rgba(134,239,172,.3);line-height:1.4">
       📦 ${prod.length>30?prod.slice(0,30)+'…':prod}
     </div>
@@ -6291,7 +6301,7 @@ function _prodHistoryTipHTML(prod){
       <span style="color:rgba(255,255,255,.55)">${firstLabel}</span>
       <span style="color:#fbbf24;font-weight:700">${wkLbl(firstStockWk)}</span>
     </div>
-    <div style="display:grid;grid-template-columns:62px 56px 50px 60px 1fr;gap:6px;padding:0 0 5px;border-bottom:1px solid rgba(255,255,255,.18);margin-bottom:4px;font-size:9.5px;color:rgba(255,255,255,.4);font-weight:600;letter-spacing:.3px">
+    <div style="display:grid;grid-template-columns:84px 56px 50px 60px 1fr;gap:6px;padding:0 0 5px;border-bottom:1px solid rgba(255,255,255,.18);margin-bottom:4px;font-size:9.5px;color:rgba(255,255,255,.4);font-weight:600;letter-spacing:.3px">
       <span>주차</span>
       <span style="text-align:right">입고</span>
       <span style="text-align:right">판매</span>
@@ -7118,8 +7128,30 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   },80);
 }
 
+// 매출비교 탭 — 매출처 칩 토글/해제 (전역 필터 SELECTED_CHS와 동기화)
+function toggleMatrixCh(ch){
+  const idx=SELECTED_CHS.indexOf(ch);
+  if(idx>=0) SELECTED_CHS.splice(idx,1);
+  else SELECTED_CHS.push(ch);
+  const cnt=SELECTED_CHS.length;
+  const sel=document.getElementById('f-ch');
+  if(sel) sel.value=cnt===1?SELECTED_CHS[0]:(cnt===0?'ALL':'MULTI');
+  if(typeof updateChBtn==='function') updateChBtn();
+  if(typeof renderFilterTags==='function') renderFilterTags();
+  renderMatrix(getF());
+}
+function clearMatrixChs(){
+  SELECTED_CHS=[];
+  const sel=document.getElementById('f-ch');
+  if(sel) sel.value='ALL';
+  if(typeof updateChBtn==='function') updateChBtn();
+  if(typeof renderFilterTags==='function') renderFilterTags();
+  renderMatrix(getF());
+}
+
 // ── 매출 비교 (매트릭스) 탭 ──
 // 행 = 기간(주차/월), 열 = 매출처, 값 = 실매출액 — 상품×주차×채널 비교 한눈에
+// 매출처를 직접 선택해야 매트릭스가 렌더링됨 (디폴트 = 미선택 안내 화면)
 function renderMatrix(f){
   destroyCharts();
   const tgt=document.getElementById('content');
@@ -7133,6 +7165,57 @@ function renderMatrix(f){
   const wkF=f.wks&&f.wks.length?new Set(f.wks):null;
   const chsF=f.chs&&f.chs.length?new Set(f.chs):null;
   const prodSet=(f.prods&&f.prods.length)?new Set(f.prods):(f.prod!=='ALL'?new Set([f.prod]):null);
+
+  // 매출처 후보 (현재 브랜드 기준, 연/월/주차 무시 — 항상 전체 노출)
+  const candChs=(()=>{
+    const s=new Set();
+    CHP_DATA.forEach(r=>{
+      if(r[2]===12&&r[3]===1) return;
+      if(bI>=0&&r[0]!==bI) return;
+      s.add(r[4]);
+    });
+    return [...s].sort();
+  })();
+  // 매출처별 총 매출 (선택 보조 정보 — 선택된 브랜드/연/월/주차 범위)
+  const candTotals={};
+  candChs.forEach(c=>{candTotals[c]=0;});
+  CHP_DATA.forEach(r=>{
+    if(r[2]===12&&r[3]===1) return;
+    if(bI>=0&&r[0]!==bI) return;
+    if(yrF&&!yrF.has(r[1])) return;
+    if(moF&&!moF.has(r[2])) return;
+    if(wkF&&!wkF.has(r[3])) return;
+    if(prodSet&&!prodSet.has(r[5])) return;
+    if(candTotals[r[4]]!==undefined) candTotals[r[4]]+=r[7];
+  });
+  const _q=v=>String(v).replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+  const chipBar=`
+  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:14px 16px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <span style="font-size:14px;font-weight:700;color:#0c4a6e">🏪 비교할 매출처 선택</span>
+      <span style="font-size:11px;color:#0369a1;background:#dbeafe;padding:2px 8px;border-radius:10px;font-weight:600">${chsF?chsF.size+'/'+candChs.length+'개 선택':'미선택 ('+candChs.length+'개 후보)'}</span>
+      <span style="font-size:11px;color:#64748b">칩 클릭으로 비교 대상 추가·해제</span>
+      <button onclick="clearMatrixChs()" style="margin-left:auto;font-size:11px;padding:4px 10px;background:#fff;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;color:#475569">전체 해제</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;max-height:148px;overflow-y:auto;padding-right:4px">
+      ${candChs.map(ch=>{
+        const sel=chsF&&chsF.has(ch);
+        const t=candTotals[ch]||0;
+        const sub=t>0?` · ${short(t)}`:'';
+        return `<button onclick="toggleMatrixCh('${_q(ch)}')" title="${escHtml(ch)}${t>0?' '+won(t):''}" style="font-size:11.5px;padding:6px 12px;border-radius:14px;cursor:pointer;background:${sel?'#0284c7':'#fff'};color:${sel?'#fff':'#475569'};border:1.5px solid ${sel?'#0284c7':'#cbd5e1'};font-weight:${sel?700:500};transition:background .15s,color .15s,border-color .15s">${escHtml(ch)}<span style="opacity:.7;font-weight:500;margin-left:3px">${sub}</span></button>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  // 매출처 미선택 → 안내 화면 (매트릭스 미렌더링)
+  if(!chsF){
+    tgt.innerHTML=chipBar+`<div style="background:#fff;border:1.5px dashed #cbd5e1;border-radius:12px;padding:48px 24px;text-align:center">
+      <div style="font-size:48px;margin-bottom:12px">📊</div>
+      <div style="font-size:15px;font-weight:700;color:#0f1e36;margin-bottom:6px">비교할 매출처를 먼저 선택해주세요</div>
+      <div style="font-size:12.5px;color:#64748b;line-height:1.6">위 칩을 클릭하여 비교 대상 매출처를 <b>1개 이상</b> 선택하세요.<br>2개 이상 선택 시 주차별 비교 매트릭스가 더 뚜렷해집니다.</div>
+    </div>`;
+    return;
+  }
 
   const rows=CHP_DATA.filter(r=>{
     if(r[2]===12&&r[3]===1) return false;
@@ -7170,7 +7253,7 @@ function renderMatrix(f){
   // 안내
   const hints=[];
   if(!prodSet) hints.push('💡 좌측 필터에서 비교할 <b>상품</b>을 1개 이상 선택하면 비교가 명확해집니다');
-  if(!chsF||chsF.size<2) hints.push('💡 <b>매출처</b>를 2개 이상 선택하면 비교 효과가 더 뚜렷합니다');
+  if(chsF&&chsF.size<2) hints.push('💡 비교는 <b>매출처 2개 이상</b> 선택 시 더 효과적입니다 (위 칩에서 추가 선택)');
   if(!wkF&&!moF) hints.push('💡 <b>주차</b> 또는 <b>월</b>을 한정해 보세요 (예: 2026 21~22주)');
 
   // 스코프 요약
@@ -7185,14 +7268,14 @@ function renderMatrix(f){
   if(chsF) scope.push(`매출처 ${chsF.size}개`);
 
   if(!rows.length){
-    tgt.innerHTML=`<div class="empty"><div class="empty-icon">📊</div>조건에 맞는 데이터가 없습니다<br><span style="font-size:12px;color:var(--muted)">${scope.join(' · ')||'필터 미설정'}</span></div>`;
+    tgt.innerHTML=chipBar+`<div class="empty"><div class="empty-icon">📊</div>조건에 맞는 데이터가 없습니다<br><span style="font-size:12px;color:var(--muted)">${scope.join(' · ')||'필터 미설정'}</span></div>`;
     return;
   }
 
   const dr=totalR>0?((totalR-totalS)/totalR*100):0;
   const PAL=['#0284c7','#22c55e','#f97316','#a855f7','#ef4444','#06b6d4','#eab308','#ec4899','#14b8a6','#6366f1'];
 
-  tgt.innerHTML=`
+  tgt.innerHTML=chipBar+`
 <div class="kpi-grid">
   <div class="kpi-card accent">
     <div class="kpi-label">선택 범위 총 매출</div>
