@@ -3955,7 +3955,14 @@ function parseWB(wb,fname){
   const uploadedProd=Object.values(aggPr).filter(r=>r.s!==0).map(r=>[r.bi,r.yr,r.mo,r.wk,r.prod,Math.round(r.qty),Math.round(r.s),Math.round(r.rt)]);
   const uploadedSz=Object.values(aggSz).filter(r=>r.qty!==0).map(r=>[r.bi,r.yr,r.mo,r.wk,r.prod,r.size,Math.round(r.qty)]);
   const uploadedChp=Object.values(aggChPr).filter(r=>r.s!==0).map(r=>[r.bi,r.yr,r.mo,r.wk,r.ch,r.prod,Math.round(r.qty),Math.round(r.s),Math.round(r.rt)]);
-  const newByr=new Set(uploadedTop.map(r=>`${r[0]}|${r[1]}`));
+  // 교체 키는 top/prod/sz/chp 4종의 (브랜드·연도) 합집합 — top만 보면 일부 시트가 부분
+  // 갱신되어 prod/chp만 새 W23이 들어오는 케이스에서 saved.top 누락이 mergedProd로 전파됨.
+  const newByr=new Set([
+    ...uploadedTop.map(r=>`${r[0]}|${r[1]}`),
+    ...uploadedProd.map(r=>`${r[0]}|${r[1]}`),
+    ...uploadedSz.map(r=>`${r[0]}|${r[1]}`),
+    ...uploadedChp.map(r=>`${r[0]}|${r[1]}`),
+  ]);
   const mergedTop=(_savedUploaded.top||[]).filter(r=>!newByr.has(`${r[0]}|${r[1]}`)).concat(uploadedTop);
   const mergedProd=(_savedUploaded.prod||[]).filter(r=>!newByr.has(`${r[0]}|${r[1]}`)).concat(uploadedProd);
   const mergedSz=(_savedUploaded.sz||[]).filter(r=>!newByr.has(`${r[0]}|${r[1]}`)).concat(uploadedSz);
@@ -6486,9 +6493,16 @@ function clearIDB(){
 }
 function applyUploadedData(saved){
   // 업로드 데이터를 D_TOP 위에 합산: (브랜드·연도) 단위로 D_TOP 교체
-  const byrCombos=new Set((saved.top||[]).map(r=>`${r[0]}|${r[1]}`));
+  // top/prod/sz/chp 4종의 합집합으로 키 생성 — saved.top에 한 행도 없는 brand·yr 조합도
+  // saved.prod/chp엔 들어있을 수 있어 D_PROD 위로 중복 누적되는 문제 차단.
+  const byrCombos=new Set([
+    ...(saved.top||[]).map(r=>`${r[0]}|${r[1]}`),
+    ...(saved.prod||[]).map(r=>`${r[0]}|${r[1]}`),
+    ...(saved.sz||[]).map(r=>`${r[0]}|${r[1]}`),
+    ...(saved.chp||[]).map(r=>`${r[0]}|${r[1]}`),
+  ]);
   if(byrCombos.size>0){
-    TOP_DATA=[...D_TOP].filter(r=>!byrCombos.has(`${r[0]}|${r[1]}`)).concat(saved.top);
+    TOP_DATA=[...D_TOP].filter(r=>!byrCombos.has(`${r[0]}|${r[1]}`)).concat(saved.top||[]);
     PROD_DATA=[...D_PROD].filter(r=>!byrCombos.has(`${r[0]}|${r[1]}`)).concat(saved.prod||[]);
     SZ_DATA=[...(saved.sz||[])];
     CHP_DATA=[...(saved.chp||[])];
@@ -6508,7 +6522,7 @@ function restoreFromIDB(){
     req.onsuccess=e=>{
       const saved=e.target.result;
       db.close();
-      if(!saved||!saved.top||!saved.top.length) return;
+      if(!saved||!((saved.top&&saved.top.length)||(saved.prod&&saved.prod.length)||(saved.chp&&saved.chp.length))) return;
       applyUploadedData(saved);
       const lastUpload=_uploadHistory[_uploadHistory.length-1];
       const ago=lastUpload?Math.round((Date.now()-lastUpload.ts)/60000):null;
@@ -7726,7 +7740,8 @@ function restoreFromServer(){
     .then(r=>r.ok?r.json():null)
     .then(saved=>{
       if(saved===null){restoreFromIDB();return;}  // 서버 통신 실패 시만 IDB 폴백
-      if(!saved.top||!saved.top.length){clearIDB();return;}  // 서버 초기화 시 IDB도 동기화
+      const hasAny=(saved.top&&saved.top.length)||(saved.prod&&saved.prod.length)||(saved.chp&&saved.chp.length);
+      if(!hasAny){clearIDB();return;}  // 서버 초기화 시 IDB도 동기화
       applyUploadedData(saved);
       saveToIDB({top:_savedUploaded.top,prod:_savedUploaded.prod,sz:_savedUploaded.sz,chp:_savedUploaded.chp,inv:INV_DATA,chOnline:CH_ONLINE,ins:INS_DATA,products:PRODUCTS,channels:CHANNELS,history:_uploadHistory});
       const ts=TOP_DATA.reduce((s,r)=>s+r[6],0);
