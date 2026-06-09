@@ -7173,8 +7173,8 @@ function renderMatrix(f){
     return;
   }
 
-  // 집계 — 전체 합산 + 기간별×항목별 동시 집계
-  const wkAgg={},moAgg={},chAgg={},prodAgg={};
+  // 집계 — 전체 합산 + 기간별×항목별 + 채널×상품 동시 집계
+  const wkAgg={},moAgg={},chAgg={},prodAgg={},chProdAgg={};
   const wkByProd={},moByProd={},wkByCh={},moByCh={};
   rows.forEach(r=>{
     const wk=r[1]+'-W'+String(r[3]).padStart(2,'0');
@@ -7188,6 +7188,10 @@ function renderMatrix(f){
     chAgg[r[4]].s+=r[7]; chAgg[r[4]].q+=r[6];
     if(!prodAgg[r[5]]) prodAgg[r[5]]={s:0,q:0};
     prodAgg[r[5]].s+=r[7]; prodAgg[r[5]].q+=r[6];
+    // 채널×상품
+    const cpKey=r[4]+'|||'+r[5];
+    if(!chProdAgg[cpKey]) chProdAgg[cpKey]={s:0,q:0,ch:r[4],prod:r[5]};
+    chProdAgg[cpKey].s+=r[7]; chProdAgg[cpKey].q+=r[6];
     // 기간별×상품
     if(!wkByProd[wk]) wkByProd[wk]={};
     if(!wkByProd[wk][r[5]]) wkByProd[wk][r[5]]={s:0,q:0};
@@ -7479,42 +7483,84 @@ function renderMatrix(f){
       });
     }
 
-    // ── 상품 도넛 ──
+    // ── 상품 도넛 (채널 비교 모드: 채널×상품 슬라이스, 일반: 상품별) ──
     const prodDonutEl=document.getElementById('c-mx-prod-donut');
     if(prodDonutEl){
-      const prodTotal=prodList.reduce((s,[,d])=>s+d.s,0);
-      charts.mxProdDonut=new Chart(prodDonutEl,{
-        type:'doughnut',
-        data:{
-          labels:prodList.map(([p])=>p),
-          datasets:[{
-            data:prodList.map(([,d])=>d.s),
-            backgroundColor:prodList.map((_,i)=>PAL[i%PAL.length]),
-            borderWidth:2,borderColor:'#fff',hoverOffset:8
-          }]
-        },
-        options:{
-          responsive:true,maintainAspectRatio:false,
-          cutout:'55%',
-          plugins:{
-            legend:{position:'right',labels:{font:{size:10},boxWidth:12,padding:6,
-              generateLabels:chart=>{
-                return chart.data.labels.map((label,i)=>{
-                  const v=chart.data.datasets[0].data[i];
-                  const pct=prodTotal>0?(v/prodTotal*100).toFixed(1):'0.0';
-                  const sl=String(label).length>12?String(label).slice(0,12)+'…':label;
-                  return{text:sl+' '+pct+'%',fillStyle:PAL[i%PAL.length],hidden:false,index:i,strokeStyle:'#fff',lineWidth:2};
-                });
-              }
-            }},
-            tooltip:{callbacks:{label:ctx=>{
-              const d=prodAgg[ctx.label]||{s:0,q:0};
-              const pct=prodTotal>0?(d.s/prodTotal*100).toFixed(1):'0.0';
-              return[' 매출: '+won(d.s)+' ('+pct+'%)',' 수량: '+wonNo(d.q)+'건'];
-            }}}
+      // 채널 비교 모드: 선택 채널별 상품 판매 분포 (채널색으로 구분)
+      if(compareByCh){
+        const chColorMap={};
+        chList.forEach(([ch],i)=>{chColorMap[ch]=i;});
+        const cpEntries=Object.values(chProdAgg)
+          .sort((a,b)=>b.s-a.s).slice(0,14);
+        const cpTotal=cpEntries.reduce((s,d)=>s+d.s,0);
+        charts.mxProdDonut=new Chart(prodDonutEl,{
+          type:'doughnut',
+          data:{
+            labels:cpEntries.map(d=>d.ch+'|||'+d.prod),
+            datasets:[{
+              data:cpEntries.map(d=>d.s),
+              backgroundColor:cpEntries.map(d=>PAL[(chColorMap[d.ch]||0)%PAL.length]),
+              borderWidth:2,borderColor:'#fff',hoverOffset:8
+            }]
+          },
+          options:{
+            responsive:true,maintainAspectRatio:false,
+            cutout:'55%',
+            plugins:{
+              legend:{position:'right',labels:{font:{size:10},boxWidth:12,padding:6,
+                generateLabels:chart=>{
+                  return cpEntries.map((d,i)=>{
+                    const pct=cpTotal>0?(d.s/cpTotal*100).toFixed(1):'0.0';
+                    const chShort=d.ch.length>8?d.ch.slice(0,8)+'…':d.ch;
+                    const prodShort=d.prod.length>8?d.prod.slice(0,8)+'…':d.prod;
+                    return{text:chShort+' / '+prodShort+' '+pct+'%',fillStyle:PAL[(chColorMap[d.ch]||0)%PAL.length],hidden:false,index:i,strokeStyle:'#fff',lineWidth:2};
+                  });
+                }
+              }},
+              tooltip:{callbacks:{label:ctx=>{
+                const d=cpEntries[ctx.dataIndex];
+                if(!d) return[];
+                const pct=cpTotal>0?(d.s/cpTotal*100).toFixed(1):'0.0';
+                return[' 채널: '+d.ch,' 상품: '+d.prod,' 매출: '+won(d.s)+' ('+pct+'%)',' 수량: '+wonNo(d.q)+'건'];
+              }}}
+            }
           }
-        }
-      });
+        });
+      } else {
+        const prodTotal=prodList.reduce((s,[,d])=>s+d.s,0);
+        charts.mxProdDonut=new Chart(prodDonutEl,{
+          type:'doughnut',
+          data:{
+            labels:prodList.map(([p])=>p),
+            datasets:[{
+              data:prodList.map(([,d])=>d.s),
+              backgroundColor:prodList.map((_,i)=>PAL[i%PAL.length]),
+              borderWidth:2,borderColor:'#fff',hoverOffset:8
+            }]
+          },
+          options:{
+            responsive:true,maintainAspectRatio:false,
+            cutout:'55%',
+            plugins:{
+              legend:{position:'right',labels:{font:{size:10},boxWidth:12,padding:6,
+                generateLabels:chart=>{
+                  return chart.data.labels.map((label,i)=>{
+                    const v=chart.data.datasets[0].data[i];
+                    const pct=prodTotal>0?(v/prodTotal*100).toFixed(1):'0.0';
+                    const sl=String(label).length>12?String(label).slice(0,12)+'…':label;
+                    return{text:sl+' '+pct+'%',fillStyle:PAL[i%PAL.length],hidden:false,index:i,strokeStyle:'#fff',lineWidth:2};
+                  });
+                }
+              }},
+              tooltip:{callbacks:{label:ctx=>{
+                const d=prodAgg[ctx.label]||{s:0,q:0};
+                const pct=prodTotal>0?(d.s/prodTotal*100).toFixed(1):'0.0';
+                return[' 매출: '+won(d.s)+' ('+pct+'%)',' 수량: '+wonNo(d.q)+'건'];
+              }}}
+            }
+          }
+        });
+      }
     }
   },80);
 }
