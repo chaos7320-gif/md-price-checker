@@ -7173,11 +7173,13 @@ function renderMatrix(f){
     return;
   }
 
-  // 집계
+  // 집계 — 전체 합산 + 기간별×항목별 동시 집계
   const wkAgg={},moAgg={},chAgg={},prodAgg={};
+  const wkByProd={},moByProd={},wkByCh={},moByCh={};
   rows.forEach(r=>{
     const wk=r[1]+'-W'+String(r[3]).padStart(2,'0');
     const mo=r[1]+'-'+String(r[2]).padStart(2,'0');
+    // 전체 합산
     if(!wkAgg[wk]) wkAgg[wk]={s:0,q:0};
     wkAgg[wk].s+=r[7]; wkAgg[wk].q+=r[6];
     if(!moAgg[mo]) moAgg[mo]={s:0,q:0};
@@ -7186,6 +7188,20 @@ function renderMatrix(f){
     chAgg[r[4]].s+=r[7]; chAgg[r[4]].q+=r[6];
     if(!prodAgg[r[5]]) prodAgg[r[5]]={s:0,q:0};
     prodAgg[r[5]].s+=r[7]; prodAgg[r[5]].q+=r[6];
+    // 기간별×상품
+    if(!wkByProd[wk]) wkByProd[wk]={};
+    if(!wkByProd[wk][r[5]]) wkByProd[wk][r[5]]={s:0,q:0};
+    wkByProd[wk][r[5]].s+=r[7]; wkByProd[wk][r[5]].q+=r[6];
+    if(!moByProd[mo]) moByProd[mo]={};
+    if(!moByProd[mo][r[5]]) moByProd[mo][r[5]]={s:0,q:0};
+    moByProd[mo][r[5]].s+=r[7]; moByProd[mo][r[5]].q+=r[6];
+    // 기간별×채널
+    if(!wkByCh[wk]) wkByCh[wk]={};
+    if(!wkByCh[wk][r[4]]) wkByCh[wk][r[4]]={s:0,q:0};
+    wkByCh[wk][r[4]].s+=r[7]; wkByCh[wk][r[4]].q+=r[6];
+    if(!moByCh[mo]) moByCh[mo]={};
+    if(!moByCh[mo][r[4]]) moByCh[mo][r[4]]={s:0,q:0};
+    moByCh[mo][r[4]].s+=r[7]; moByCh[mo][r[4]].q+=r[6];
   });
 
   const wkKeys=Object.keys(wkAgg).sort();
@@ -7196,7 +7212,15 @@ function renderMatrix(f){
   const prodList=Object.entries(prodAgg).sort((a,b)=>b[1].s-a[1].s).slice(0,15);
   const PAL=['#0284c7','#22c55e','#f97316','#a855f7','#ef4444','#06b6d4','#eab308','#ec4899','#14b8a6','#6366f1'];
 
-  // 최근 전주/전월 대비 증감
+  // 비교 모드 판별: 상품 2개 이상 → 상품별 비교, 채널 2개 이상 → 채널별 비교
+  const compareByProd=prodSet&&prodSet.size>1;
+  const compareByCh=!compareByProd&&chsF&&chsF.size>1;
+  const isCompare=compareByProd||compareByCh;
+  const cmpItems=compareByProd?prodList.slice(0,10):compareByCh?chList.slice(0,10):null;
+  const wkByItem=compareByProd?wkByProd:wkByCh;
+  const moByItem=compareByProd?moByProd:moByCh;
+
+  // KPI (비교 모드엔 상위 2개 항목 나란히 표시)
   const lastWkKey=wkKeys[wkKeys.length-1];
   const prevWkKey=wkKeys[wkKeys.length-2];
   const lastMoKey=moKeys[moKeys.length-1];
@@ -7214,13 +7238,12 @@ function renderMatrix(f){
   if(yrF) scope.push([...yrF].sort().join('·')+'년');
   if(chsF) scope.push('매출처 '+chsF.size+'개');
 
-  tgt.innerHTML=`
-<div class="kpi-grid">
-  <div class="kpi-card accent">
-    <div class="kpi-label">선택 범위 총 매출</div>
-    <div class="kpi-val">${won(totalS)}</div>
-    <div class="kpi-sub">${wonNo(totalQ)}건 · ${scope.join(' · ')||'전체'}</div>
-  </div>
+  const kpiExtra=isCompare&&cmpItems?cmpItems.slice(0,2).map(([name,d],i)=>`
+  <div class="kpi-card">
+    <div class="kpi-label" style="color:${PAL[i]}">${compareByProd?'📦':'🏪'} ${escHtml(name)}</div>
+    <div class="kpi-val" style="font-size:16px">${won(d.s)}</div>
+    <div class="kpi-sub">${wonNo(d.q)}건 · 전체의 ${totalS>0?(d.s/totalS*100).toFixed(1):0}%</div>
+  </div>`).join(''):`
   <div class="kpi-card">
     <div class="kpi-label">최근 주차 매출</div>
     <div class="kpi-val" style="font-size:18px">${lastWkKey?won(wkAgg[lastWkKey].s):'-'}</div>
@@ -7230,7 +7253,19 @@ function renderMatrix(f){
     <div class="kpi-label">최근 월 매출</div>
     <div class="kpi-val" style="font-size:18px">${lastMoKey?won(moAgg[lastMoKey].s):'-'}</div>
     <div class="kpi-sub" style="color:${chgColor(moChg)};font-weight:600">${chgBadge(moChg)} 전월 대비</div>
+  </div>`;
+
+  const wkChartSub=isCompare?(compareByProd?'상품별 주간 매출 비교 · 툴팁에 전주 대비 증감율':'채널별 주간 매출 비교 · 툴팁에 전주 대비 증감율'):'주차별 실매출 · 막대 위 증감율 = 전주 대비';
+  const moChartSub=isCompare?(compareByProd?'상품별 월간 매출 비교 · 툴팁에 전월 대비 증감율':'채널별 월간 매출 비교 · 툴팁에 전월 대비 증감율'):'월별 실매출 · 막대 위 증감율 = 전월 대비';
+
+  tgt.innerHTML=`
+<div class="kpi-grid">
+  <div class="kpi-card accent">
+    <div class="kpi-label">선택 범위 총 매출</div>
+    <div class="kpi-val">${won(totalS)}</div>
+    <div class="kpi-sub">${wonNo(totalQ)}건 · ${scope.join(' · ')||'전체'}</div>
   </div>
+  ${kpiExtra}
   <div class="kpi-card">
     <div class="kpi-label">매출 1위 채널</div>
     <div class="kpi-val" style="font-size:13px;word-break:break-all;line-height:1.3">${chList[0]?escHtml(chList[0][0]):'-'}</div>
@@ -7242,14 +7277,14 @@ function renderMatrix(f){
   <div class="chart-card">
     <div class="chart-header"><div>
       <div class="chart-title">📅 주간 매출 비교</div>
-      <div class="chart-sub">주차별 실매출 · 막대 위 증감율 = 전주 대비</div>
+      <div class="chart-sub">${wkChartSub}</div>
     </div></div>
     <div style="position:relative;height:260px"><canvas id="c-mx-week"></canvas></div>
   </div>
   <div class="chart-card">
     <div class="chart-header"><div>
       <div class="chart-title">📆 월간 매출 비교</div>
-      <div class="chart-sub">월별 실매출 · 막대 위 증감율 = 전월 대비</div>
+      <div class="chart-sub">${moChartSub}</div>
     </div></div>
     <div style="position:relative;height:260px"><canvas id="c-mx-month"></canvas></div>
   </div>
@@ -7273,7 +7308,7 @@ function renderMatrix(f){
 </div>`;
 
   setTimeout(()=>{
-    // 전주/전월 대비 증감율 막대 위 텍스트 플러그인
+    // 단일 모드 전용: 막대 위 증감율 텍스트 플러그인
     const pctPlugin={
       id:'pctLabel',
       afterDatasetsDraw(chart){
@@ -7298,35 +7333,67 @@ function renderMatrix(f){
       }
     };
 
-    // 주간 차트
+    const wkLabels=wkKeys.map(k=>{
+      const [yr,wStr]=k.split('-W');
+      const parts=wkLabel(parseInt(yr),parseInt(wStr));
+      return Array.isArray(parts)?parts[0]+' '+parts[1]:parts;
+    });
+    const moLabels=moKeys.map(k=>{const [yr,mo]=k.split('-');return yr+'.'+mo+'월';});
+
+    // 비교 모드 데이터셋 생성 헬퍼
+    const makeCmpDatasets=(byItem,keys)=>cmpItems.map(([name],i)=>({
+      label:name,
+      data:keys.map(k=>byItem[k]?.[name]?.s||0),
+      backgroundColor:PAL[i%PAL.length]+'cc',
+      borderColor:PAL[i%PAL.length],
+      borderWidth:1,borderRadius:4
+    }));
+
+    // 비교 모드 툴팁 헬퍼
+    const makeCmpTooltip=(byItem,keys,periodLabel)=>ctx=>{
+      const name=ctx.dataset.label;
+      const i=ctx.dataIndex;
+      const v=ctx.raw;
+      const key=keys[i];
+      const prevKey=keys[i-1];
+      const q=byItem[key]?.[name]?.q||0;
+      const prev=prevKey?(byItem[prevKey]?.[name]?.s||0):null;
+      const pct=prev&&prev>0?((v-prev)/prev*100):null;
+      const lines=[' 매출: '+won(v),' 수량: '+wonNo(q)+'건'];
+      if(pct!=null) lines.push(' '+periodLabel+': '+(pct>=0?'▲':'▼')+Math.abs(pct).toFixed(1)+'%');
+      return lines;
+    };
+
+    // ── 주간 차트 ──
     const wkEl=document.getElementById('c-mx-week');
     if(wkEl){
-      const wkLabels=wkKeys.map(k=>{
-        const [yr,wStr]=k.split('-W');
-        const parts=wkLabel(parseInt(yr),parseInt(wStr));
-        return Array.isArray(parts)?parts[0]+' '+parts[1]:parts;
-      });
       charts.mxWeek=new Chart(wkEl,{
         type:'bar',
-        plugins:[pctPlugin],
+        plugins:isCompare?[]:[pctPlugin],
         data:{
           labels:wkLabels,
-          datasets:[{label:'주간 매출',data:wkKeys.map(k=>wkAgg[k].s),backgroundColor:'#0284c7cc',borderColor:'#0284c7',borderWidth:1,borderRadius:4}]
+          datasets:isCompare
+            ?makeCmpDatasets(wkByItem,wkKeys)
+            :[{label:'주간 매출',data:wkKeys.map(k=>wkAgg[k].s),backgroundColor:'#0284c7cc',borderColor:'#0284c7',borderWidth:1,borderRadius:4}]
         },
         options:{
           responsive:true,maintainAspectRatio:false,
-          layout:{padding:{top:22}},
+          layout:{padding:{top:isCompare?4:22}},
+          interaction:isCompare?{mode:'index',intersect:false}:{},
           plugins:{
-            legend:{display:false},
-            tooltip:{callbacks:{label:ctx=>{
-              const i=ctx.dataIndex;
-              const v=ctx.raw;
-              const prev=i>0?wkAgg[wkKeys[i-1]].s:null;
-              const pct=prev&&prev>0?((v-prev)/prev*100):null;
-              const lines=[' 매출: '+won(v),' 수량: '+wonNo(wkAgg[wkKeys[i]].q)+'건'];
-              if(pct!=null) lines.push(' 전주 대비: '+(pct>=0?'▲':'▼')+Math.abs(pct).toFixed(1)+'%');
-              return lines;
-            }}}
+            legend:{display:isCompare,position:'top',labels:{font:{size:10},boxWidth:12,padding:6}},
+            tooltip:{callbacks:{label:isCompare
+              ?makeCmpTooltip(wkByItem,wkKeys,'전주 대비')
+              :ctx=>{
+                const i=ctx.dataIndex;
+                const v=ctx.raw;
+                const prev=i>0?wkAgg[wkKeys[i-1]].s:null;
+                const pct=prev&&prev>0?((v-prev)/prev*100):null;
+                const lines=[' 매출: '+won(v),' 수량: '+wonNo(wkAgg[wkKeys[i]].q)+'건'];
+                if(pct!=null) lines.push(' 전주 대비: '+(pct>=0?'▲':'▼')+Math.abs(pct).toFixed(1)+'%');
+                return lines;
+              }
+            }}
           },
           scales:{
             x:{ticks:{font:{size:9},maxRotation:45}},
@@ -7336,31 +7403,36 @@ function renderMatrix(f){
       });
     }
 
-    // 월간 차트
+    // ── 월간 차트 ──
     const moEl=document.getElementById('c-mx-month');
     if(moEl){
-      const moLabels=moKeys.map(k=>{const [yr,mo]=k.split('-');return yr+'.'+mo+'월';});
       charts.mxMonth=new Chart(moEl,{
         type:'bar',
-        plugins:[pctPlugin],
+        plugins:isCompare?[]:[pctPlugin],
         data:{
           labels:moLabels,
-          datasets:[{label:'월간 매출',data:moKeys.map(k=>moAgg[k].s),backgroundColor:'#22c55ecc',borderColor:'#22c55e',borderWidth:1,borderRadius:4}]
+          datasets:isCompare
+            ?makeCmpDatasets(moByItem,moKeys)
+            :[{label:'월간 매출',data:moKeys.map(k=>moAgg[k].s),backgroundColor:'#22c55ecc',borderColor:'#22c55e',borderWidth:1,borderRadius:4}]
         },
         options:{
           responsive:true,maintainAspectRatio:false,
-          layout:{padding:{top:22}},
+          layout:{padding:{top:isCompare?4:22}},
+          interaction:isCompare?{mode:'index',intersect:false}:{},
           plugins:{
-            legend:{display:false},
-            tooltip:{callbacks:{label:ctx=>{
-              const i=ctx.dataIndex;
-              const v=ctx.raw;
-              const prev=i>0?moAgg[moKeys[i-1]].s:null;
-              const pct=prev&&prev>0?((v-prev)/prev*100):null;
-              const lines=[' 매출: '+won(v),' 수량: '+wonNo(moAgg[moKeys[i]].q)+'건'];
-              if(pct!=null) lines.push(' 전월 대비: '+(pct>=0?'▲':'▼')+Math.abs(pct).toFixed(1)+'%');
-              return lines;
-            }}}
+            legend:{display:isCompare,position:'top',labels:{font:{size:10},boxWidth:12,padding:6}},
+            tooltip:{callbacks:{label:isCompare
+              ?makeCmpTooltip(moByItem,moKeys,'전월 대비')
+              :ctx=>{
+                const i=ctx.dataIndex;
+                const v=ctx.raw;
+                const prev=i>0?moAgg[moKeys[i-1]].s:null;
+                const pct=prev&&prev>0?((v-prev)/prev*100):null;
+                const lines=[' 매출: '+won(v),' 수량: '+wonNo(moAgg[moKeys[i]].q)+'건'];
+                if(pct!=null) lines.push(' 전월 대비: '+(pct>=0?'▲':'▼')+Math.abs(pct).toFixed(1)+'%');
+                return lines;
+              }
+            }}
           },
           scales:{
             x:{ticks:{font:{size:10}}},
@@ -7370,7 +7442,7 @@ function renderMatrix(f){
       });
     }
 
-    // 매출처 도넛
+    // ── 매출처 도넛 ──
     const chDonutEl=document.getElementById('c-mx-ch-donut');
     if(chDonutEl){
       charts.mxChDonut=new Chart(chDonutEl,{
@@ -7407,7 +7479,7 @@ function renderMatrix(f){
       });
     }
 
-    // 상품 도넛
+    // ── 상품 도넛 ──
     const prodDonutEl=document.getElementById('c-mx-prod-donut');
     if(prodDonutEl){
       const prodTotal=prodList.reduce((s,[,d])=>s+d.s,0);
