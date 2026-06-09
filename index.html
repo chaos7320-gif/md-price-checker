@@ -7142,30 +7142,7 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   },80);
 }
 
-// 매출비교 탭 — 매출처 칩 토글/해제 (전역 필터 SELECTED_CHS와 동기화)
-function toggleMatrixCh(ch){
-  const idx=SELECTED_CHS.indexOf(ch);
-  if(idx>=0) SELECTED_CHS.splice(idx,1);
-  else SELECTED_CHS.push(ch);
-  const cnt=SELECTED_CHS.length;
-  const sel=document.getElementById('f-ch');
-  if(sel) sel.value=cnt===1?SELECTED_CHS[0]:(cnt===0?'ALL':'MULTI');
-  if(typeof updateChBtn==='function') updateChBtn();
-  if(typeof renderFilterTags==='function') renderFilterTags();
-  renderMatrix(getF());
-}
-function clearMatrixChs(){
-  SELECTED_CHS=[];
-  const sel=document.getElementById('f-ch');
-  if(sel) sel.value='ALL';
-  if(typeof updateChBtn==='function') updateChBtn();
-  if(typeof renderFilterTags==='function') renderFilterTags();
-  renderMatrix(getF());
-}
-
-// ── 매출 비교 (매트릭스) 탭 ──
-// 행 = 기간(주차/월), 열 = 매출처, 값 = 실매출액 — 상품×주차×채널 비교 한눈에
-// 매출처를 직접 선택해야 매트릭스가 렌더링됨 (디폴트 = 미선택 안내 화면)
+// ── 매출 비교 탭 ──
 function renderMatrix(f){
   destroyCharts();
   const tgt=document.getElementById('content');
@@ -7180,57 +7157,6 @@ function renderMatrix(f){
   const chsF=f.chs&&f.chs.length?new Set(f.chs):null;
   const prodSet=(f.prods&&f.prods.length)?new Set(f.prods):(f.prod!=='ALL'?new Set([f.prod]):null);
 
-  // 매출처 후보 (현재 브랜드 기준, 연/월/주차 무시 — 항상 전체 노출)
-  const candChs=(()=>{
-    const s=new Set();
-    CHP_DATA.forEach(r=>{
-      if(r[2]===12&&r[3]===1) return;
-      if(bI>=0&&r[0]!==bI) return;
-      s.add(r[4]);
-    });
-    return [...s].sort();
-  })();
-  // 매출처별 총 매출 (선택 보조 정보 — 선택된 브랜드/연/월/주차 범위)
-  const candTotals={};
-  candChs.forEach(c=>{candTotals[c]=0;});
-  CHP_DATA.forEach(r=>{
-    if(r[2]===12&&r[3]===1) return;
-    if(bI>=0&&r[0]!==bI) return;
-    if(yrF&&!yrF.has(r[1])) return;
-    if(moF&&!moF.has(r[2])) return;
-    if(wkF&&!wkF.has(r[3])) return;
-    if(prodSet&&!prodSet.has(r[5])) return;
-    if(candTotals[r[4]]!==undefined) candTotals[r[4]]+=r[7];
-  });
-  const _q=v=>String(v).replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
-  const chipBar=`
-  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:14px 16px;margin-bottom:16px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <span style="font-size:14px;font-weight:700;color:#0c4a6e">🏪 비교할 매출처 선택</span>
-      <span style="font-size:11px;color:#0369a1;background:#dbeafe;padding:2px 8px;border-radius:10px;font-weight:600">${chsF?chsF.size+'/'+candChs.length+'개 선택':'미선택 ('+candChs.length+'개 후보)'}</span>
-      <span style="font-size:11px;color:#64748b">칩 클릭으로 비교 대상 추가·해제</span>
-      <button onclick="clearMatrixChs()" style="margin-left:auto;font-size:11px;padding:4px 10px;background:#fff;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;color:#475569">전체 해제</button>
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;max-height:148px;overflow-y:auto;padding-right:4px">
-      ${candChs.map(ch=>{
-        const sel=chsF&&chsF.has(ch);
-        const t=candTotals[ch]||0;
-        const sub=t>0?` · ${short(t)}`:'';
-        return `<button onclick="toggleMatrixCh('${_q(ch)}')" title="${escHtml(ch)}${t>0?' '+won(t):''}" style="font-size:11.5px;padding:6px 12px;border-radius:14px;cursor:pointer;background:${sel?'#0284c7':'#fff'};color:${sel?'#fff':'#475569'};border:1.5px solid ${sel?'#0284c7':'#cbd5e1'};font-weight:${sel?700:500};transition:background .15s,color .15s,border-color .15s">${escHtml(ch)}<span style="opacity:.7;font-weight:500;margin-left:3px">${sub}</span></button>`;
-      }).join('')}
-    </div>
-  </div>`;
-
-  // 매출처 미선택 → 안내 화면 (매트릭스 미렌더링)
-  if(!chsF){
-    tgt.innerHTML=chipBar+`<div style="background:#fff;border:1.5px dashed #cbd5e1;border-radius:12px;padding:48px 24px;text-align:center">
-      <div style="font-size:48px;margin-bottom:12px">📊</div>
-      <div style="font-size:15px;font-weight:700;color:#0f1e36;margin-bottom:6px">비교할 매출처를 먼저 선택해주세요</div>
-      <div style="font-size:12.5px;color:#64748b;line-height:1.6">위 칩을 클릭하여 비교 대상 매출처를 <b>1개 이상</b> 선택하세요.<br>2개 이상 선택 시 주차별 비교 매트릭스가 더 뚜렷해집니다.</div>
-    </div>`;
-    return;
-  }
-
   const rows=CHP_DATA.filter(r=>{
     if(r[2]===12&&r[3]===1) return false;
     if(bI>=0&&r[0]!==bI) return false;
@@ -7242,148 +7168,282 @@ function renderMatrix(f){
     return true;
   });
 
-  // 모드: 주차 선택 있거나(또는 선택 없음) → 주차, 월만 선택 → 월
-  const useWk=!(moF&&!wkF);
-  const perKey=r=>useWk?`${r[1]}-W${String(r[3]).padStart(2,'0')}`:`${r[1]}-${String(r[2]).padStart(2,'0')}월`;
+  if(!rows.length){
+    tgt.innerHTML='<div class="empty"><div class="empty-icon">📊</div>조건에 맞는 데이터가 없습니다<br><span style="font-size:12px;color:var(--muted)">좌측 필터를 조정해보세요.</span></div>';
+    return;
+  }
 
-  // 집계: agg[period][ch] = {s,q,rt}
-  const periodSet=new Set(),chSet=new Set();
-  const agg={};
+  // 집계
+  const wkAgg={},moAgg={},chAgg={},prodAgg={};
   rows.forEach(r=>{
-    const k=perKey(r);
-    periodSet.add(k); chSet.add(r[4]);
-    if(!agg[k]) agg[k]={};
-    if(!agg[k][r[4]]) agg[k][r[4]]={s:0,q:0,rt:0};
-    agg[k][r[4]].s+=r[7]; agg[k][r[4]].q+=r[6]; agg[k][r[4]].rt+=r[8];
+    const wk=r[1]+'-W'+String(r[3]).padStart(2,'0');
+    const mo=r[1]+'-'+String(r[2]).padStart(2,'0');
+    if(!wkAgg[wk]) wkAgg[wk]={s:0,q:0};
+    wkAgg[wk].s+=r[7]; wkAgg[wk].q+=r[6];
+    if(!moAgg[mo]) moAgg[mo]={s:0,q:0};
+    moAgg[mo].s+=r[7]; moAgg[mo].q+=r[6];
+    if(!chAgg[r[4]]) chAgg[r[4]]={s:0,q:0};
+    chAgg[r[4]].s+=r[7]; chAgg[r[4]].q+=r[6];
+    if(!prodAgg[r[5]]) prodAgg[r[5]]={s:0,q:0};
+    prodAgg[r[5]].s+=r[7]; prodAgg[r[5]].q+=r[6];
   });
-  const periods=[...periodSet].sort();
-  const chTotals={};
-  [...chSet].forEach(ch=>{chTotals[ch]=periods.reduce((s,p)=>s+((agg[p]?.[ch]?.s)||0),0);});
-  const chs=[...chSet].sort((a,b)=>chTotals[b]-chTotals[a]);
+
+  const wkKeys=Object.keys(wkAgg).sort();
+  const moKeys=Object.keys(moAgg).sort();
   const totalS=rows.reduce((s,r)=>s+r[7],0);
   const totalQ=rows.reduce((s,r)=>s+r[6],0);
-  const totalR=rows.reduce((s,r)=>s+r[8],0);
+  const chList=Object.entries(chAgg).sort((a,b)=>b[1].s-a[1].s);
+  const prodList=Object.entries(prodAgg).sort((a,b)=>b[1].s-a[1].s).slice(0,15);
+  const PAL=['#0284c7','#22c55e','#f97316','#a855f7','#ef4444','#06b6d4','#eab308','#ec4899','#14b8a6','#6366f1'];
 
-  // 안내
-  const hints=[];
-  if(!prodSet) hints.push('💡 좌측 필터에서 비교할 <b>상품</b>을 1개 이상 선택하면 비교가 명확해집니다');
-  if(chsF&&chsF.size<2) hints.push('💡 비교는 <b>매출처 2개 이상</b> 선택 시 더 효과적입니다 (위 칩에서 추가 선택)');
-  if(!wkF&&!moF) hints.push('💡 <b>주차</b> 또는 <b>월</b>을 한정해 보세요 (예: 2026 21~22주)');
+  // 최근 전주/전월 대비 증감
+  const lastWkKey=wkKeys[wkKeys.length-1];
+  const prevWkKey=wkKeys[wkKeys.length-2];
+  const lastMoKey=moKeys[moKeys.length-1];
+  const prevMoKey=moKeys[moKeys.length-2];
+  const wkChg=prevWkKey&&wkAgg[prevWkKey].s>0?((wkAgg[lastWkKey].s-wkAgg[prevWkKey].s)/wkAgg[prevWkKey].s*100):null;
+  const moChg=prevMoKey&&moAgg[prevMoKey].s>0?((moAgg[lastMoKey].s-moAgg[prevMoKey].s)/moAgg[prevMoKey].s*100):null;
+  const chgColor=v=>v==null?'#64748b':v>=0?'#16a34a':'#dc2626';
+  const chgBadge=v=>v==null?'-':(v>=0?'▲':'▼')+Math.abs(v).toFixed(1)+'%';
 
-  // 스코프 요약
   const bSel=document.getElementById('f-brand');
   const bnLabel=(bSel&&bSel.selectedIndex>=0)?(bSel.options[bSel.selectedIndex].text||''):'';
   const scope=[];
   if(f.b!=='ALL') scope.push(bnLabel||'단일 브랜드');
-  if(prodSet) scope.push(`상품 ${prodSet.size}개${prodSet.size<=3?': '+[...prodSet].join(', '):''}`);
-  if(yrF) scope.push(`${[...yrF].sort().join(' · ')}`);
-  if(useWk&&wkF) scope.push(`${[...wkF].sort((a,b)=>a-b).join(', ')}주`);
-  if(!useWk&&moF) scope.push(`${[...moF].sort((a,b)=>a-b).join(', ')}월`);
-  if(chsF) scope.push(`매출처 ${chsF.size}개`);
+  if(prodSet) scope.push('상품 '+prodSet.size+'개');
+  if(yrF) scope.push([...yrF].sort().join('·')+'년');
+  if(chsF) scope.push('매출처 '+chsF.size+'개');
 
-  if(!rows.length){
-    tgt.innerHTML=chipBar+`<div class="empty"><div class="empty-icon">📊</div>조건에 맞는 데이터가 없습니다<br><span style="font-size:12px;color:var(--muted)">${scope.join(' · ')||'필터 미설정'}</span></div>`;
-    return;
-  }
-
-  const dr=totalR>0?((totalR-totalS)/totalR*100):0;
-  const PAL=['#0284c7','#22c55e','#f97316','#a855f7','#ef4444','#06b6d4','#eab308','#ec4899','#14b8a6','#6366f1'];
-
-  tgt.innerHTML=chipBar+`
+  tgt.innerHTML=`
 <div class="kpi-grid">
   <div class="kpi-card accent">
     <div class="kpi-label">선택 범위 총 매출</div>
     <div class="kpi-val">${won(totalS)}</div>
-    <div class="kpi-sub">${wonNo(totalQ)}건 · ${periods.length}${useWk?'주':'개월'} × 매출처 ${chs.length}개</div>
+    <div class="kpi-sub">${wonNo(totalQ)}건 · ${scope.join(' · ')||'전체'}</div>
   </div>
-  ${chs.slice(0,3).map((ch,i)=>{
-    const sh=chTotals[ch];
-    const pct=totalS>0?(sh/totalS*100).toFixed(1):0;
-    return `<div class="kpi-card">
-      <div class="kpi-label">${i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':''}${ch}</div>
-      <div class="kpi-val" style="font-size:18px">${won(sh)}</div>
-      <div class="kpi-sub">전체의 ${pct}%</div>
-    </div>`;
-  }).join('')}
-</div>
-${hints.length?`<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#9a3412;line-height:1.8">${hints.join('<br>')}</div>`:''}
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#475569">
-  <b>선택 범위:</b> ${scope.join(' · ')||'전체'} ${dr>0?` · 평균 할인율 <b style="color:#dc2626">${dr.toFixed(1)}%</b>`:''}
-</div>
-<div class="chart-card" style="margin-bottom:16px">
-  <div class="chart-header">
-    <div class="chart-title">📈 ${useWk?'주차':'월'}별 매출처 비교</div>
-    <div class="chart-sub">매출처별 ${useWk?'주차':'월'} 추이 — 라인 위에 마우스를 올리면 상세 확인</div>
+  <div class="kpi-card">
+    <div class="kpi-label">최근 주차 매출</div>
+    <div class="kpi-val" style="font-size:18px">${lastWkKey?won(wkAgg[lastWkKey].s):'-'}</div>
+    <div class="kpi-sub" style="color:${chgColor(wkChg)};font-weight:600">${chgBadge(wkChg)} 전주 대비</div>
   </div>
-  <div style="position:relative;height:300px"><canvas id="c-mx-line"></canvas></div>
-</div>
-<div class="chart-card" style="margin-bottom:16px">
-  <div class="chart-header">
-    <div class="chart-title">🧩 매출 비교 매트릭스</div>
-    <div class="chart-sub">행 = ${useWk?'주차':'월'} · 열 = 매출처 · 값 = 실매출액 (수량) · 노란 셀 = ${useWk?'주차':'월'}별 1위</div>
+  <div class="kpi-card">
+    <div class="kpi-label">최근 월 매출</div>
+    <div class="kpi-val" style="font-size:18px">${lastMoKey?won(moAgg[lastMoKey].s):'-'}</div>
+    <div class="kpi-sub" style="color:${chgColor(moChg)};font-weight:600">${chgBadge(moChg)} 전월 대비</div>
   </div>
-  <div class="table-wrap" style="overflow-x:auto"><table>
-    <thead><tr>
-      <th style="position:sticky;left:0;background:#f8fafc;z-index:2">${useWk?'주차':'월'}</th>
-      ${chs.map((ch,i)=>`<th class="nr" style="color:${PAL[i%PAL.length]}">${ch}</th>`).join('')}
-      <th class="nr" style="background:#f1f5f9">행 합계</th>
-    </tr></thead>
-    <tbody>
-      ${periods.map(p=>{
-        const rowTotal=chs.reduce((s,ch)=>s+((agg[p]?.[ch]?.s)||0),0);
-        const max=Math.max(...chs.map(ch=>(agg[p]?.[ch]?.s)||0));
-        return `<tr>
-          <td style="font-weight:600;position:sticky;left:0;background:#fff;z-index:1">${p}</td>
-          ${chs.map(ch=>{
-            const v=(agg[p]?.[ch]?.s)||0;
-            const q=(agg[p]?.[ch]?.q)||0;
-            const isMax=v>0&&v===max&&chs.length>1;
-            return `<td class="nr" style="${isMax?'background:#fef3c7;font-weight:700':''}">${v>0?won(v):'<span style="color:#cbd5e1">-</span>'}${q>0?`<div style="font-size:10px;color:var(--muted);font-weight:400">${wonNo(q)}건</div>`:''}</td>`;
-          }).join('')}
-          <td class="nr" style="font-weight:700;background:#f8fafc">${won(rowTotal)}</td>
-        </tr>`;
-      }).join('')}
-      <tr style="background:#f1f5f9">
-        <td style="font-weight:700;position:sticky;left:0;background:#f1f5f9;z-index:1">열 합계</td>
-        ${chs.map(ch=>`<td class="nr" style="font-weight:700">${won(chTotals[ch])}<div style="font-size:10px;color:var(--muted);font-weight:400">${totalS>0?(chTotals[ch]/totalS*100).toFixed(1):0}%</div></td>`).join('')}
-        <td class="nr" style="font-weight:800;background:#0f1e36;color:#fff">${won(totalS)}</td>
-      </tr>
-    </tbody>
-  </table></div>
+  <div class="kpi-card">
+    <div class="kpi-label">매출 1위 채널</div>
+    <div class="kpi-val" style="font-size:13px;word-break:break-all;line-height:1.3">${chList[0]?escHtml(chList[0][0]):'-'}</div>
+    <div class="kpi-sub">${chList[0]?won(chList[0][1].s):''}</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+  <div class="chart-card">
+    <div class="chart-header"><div>
+      <div class="chart-title">📅 주간 매출 비교</div>
+      <div class="chart-sub">주차별 실매출 · 막대 위 증감율 = 전주 대비</div>
+    </div></div>
+    <div style="position:relative;height:260px"><canvas id="c-mx-week"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-header"><div>
+      <div class="chart-title">📆 월간 매출 비교</div>
+      <div class="chart-sub">월별 실매출 · 막대 위 증감율 = 전월 대비</div>
+    </div></div>
+    <div style="position:relative;height:260px"><canvas id="c-mx-month"></canvas></div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+  <div class="chart-card">
+    <div class="chart-header"><div>
+      <div class="chart-title">🏪 매출처 별 매출 비중</div>
+      <div class="chart-sub">커서를 올리면 판매수량 · 매출액 확인</div>
+    </div></div>
+    <div style="position:relative;height:300px"><canvas id="c-mx-ch-donut"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-header"><div>
+      <div class="chart-title">📦 매출처 별 상품 판매 비중</div>
+      <div class="chart-sub">커서를 올리면 판매수량 · 매출액 확인 (상위 15개)</div>
+    </div></div>
+    <div style="position:relative;height:300px"><canvas id="c-mx-prod-donut"></canvas></div>
+  </div>
 </div>`;
 
   setTimeout(()=>{
-    const el=document.getElementById('c-mx-line');
-    if(!el) return;
-    charts.mxLine=new Chart(el,{
-      type:'line',
-      data:{
-        labels:periods,
-        datasets:chs.map((ch,i)=>({
-          label:ch,
-          data:periods.map(p=>(agg[p]?.[ch]?.s)||0),
-          borderColor:PAL[i%PAL.length],
-          backgroundColor:PAL[i%PAL.length]+'20',
-          tension:.35,
-          borderWidth:2.5,
-          pointRadius:4,
-          pointHoverRadius:6,
-          fill:false
-        }))
-      },
-      options:{
-        responsive:true,maintainAspectRatio:false,
-        interaction:{mode:'index',intersect:false},
-        plugins:{
-          legend:{display:true,position:'top',labels:{font:{size:11},boxWidth:14,padding:10}},
-          tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${won(c.raw)}`}}
-        },
-        scales:{
-          x:{ticks:{font:{size:10}}},
-          y:{ticks:{font:{size:10},callback:v=>short(v)},beginAtZero:true}
-        }
+    // 전주/전월 대비 증감율 막대 위 텍스트 플러그인
+    const pctPlugin={
+      id:'pctLabel',
+      afterDatasetsDraw(chart){
+        const {ctx,data}=chart;
+        const ds=data.datasets[0];
+        if(!ds) return;
+        ds.data.forEach((v,i)=>{
+          if(i===0) return;
+          const prev=ds.data[i-1];
+          if(!prev||prev===0) return;
+          const pct=(v-prev)/prev*100;
+          const meta=chart.getDatasetMeta(0);
+          const bar=meta.data[i];
+          if(!bar) return;
+          ctx.save();
+          ctx.textAlign='center';
+          ctx.font='bold 10px Pretendard,sans-serif';
+          ctx.fillStyle=pct>=0?'#16a34a':'#dc2626';
+          ctx.fillText((pct>=0?'▲':'▼')+Math.abs(pct).toFixed(1)+'%',bar.x,bar.y-7);
+          ctx.restore();
+        });
       }
-    });
+    };
+
+    // 주간 차트
+    const wkEl=document.getElementById('c-mx-week');
+    if(wkEl){
+      const wkLabels=wkKeys.map(k=>{
+        const [yr,wStr]=k.split('-W');
+        const parts=wkLabel(parseInt(yr),parseInt(wStr));
+        return Array.isArray(parts)?parts[0]+' '+parts[1]:parts;
+      });
+      charts.mxWeek=new Chart(wkEl,{
+        type:'bar',
+        plugins:[pctPlugin],
+        data:{
+          labels:wkLabels,
+          datasets:[{label:'주간 매출',data:wkKeys.map(k=>wkAgg[k].s),backgroundColor:'#0284c7cc',borderColor:'#0284c7',borderWidth:1,borderRadius:4}]
+        },
+        options:{
+          responsive:true,maintainAspectRatio:false,
+          layout:{padding:{top:22}},
+          plugins:{
+            legend:{display:false},
+            tooltip:{callbacks:{label:ctx=>{
+              const i=ctx.dataIndex;
+              const v=ctx.raw;
+              const prev=i>0?wkAgg[wkKeys[i-1]].s:null;
+              const pct=prev&&prev>0?((v-prev)/prev*100):null;
+              const lines=[' 매출: '+won(v),' 수량: '+wonNo(wkAgg[wkKeys[i]].q)+'건'];
+              if(pct!=null) lines.push(' 전주 대비: '+(pct>=0?'▲':'▼')+Math.abs(pct).toFixed(1)+'%');
+              return lines;
+            }}}
+          },
+          scales:{
+            x:{ticks:{font:{size:9},maxRotation:45}},
+            y:{ticks:{font:{size:10},callback:v=>short(v)},beginAtZero:true}
+          }
+        }
+      });
+    }
+
+    // 월간 차트
+    const moEl=document.getElementById('c-mx-month');
+    if(moEl){
+      const moLabels=moKeys.map(k=>{const [yr,mo]=k.split('-');return yr+'.'+mo+'월';});
+      charts.mxMonth=new Chart(moEl,{
+        type:'bar',
+        plugins:[pctPlugin],
+        data:{
+          labels:moLabels,
+          datasets:[{label:'월간 매출',data:moKeys.map(k=>moAgg[k].s),backgroundColor:'#22c55ecc',borderColor:'#22c55e',borderWidth:1,borderRadius:4}]
+        },
+        options:{
+          responsive:true,maintainAspectRatio:false,
+          layout:{padding:{top:22}},
+          plugins:{
+            legend:{display:false},
+            tooltip:{callbacks:{label:ctx=>{
+              const i=ctx.dataIndex;
+              const v=ctx.raw;
+              const prev=i>0?moAgg[moKeys[i-1]].s:null;
+              const pct=prev&&prev>0?((v-prev)/prev*100):null;
+              const lines=[' 매출: '+won(v),' 수량: '+wonNo(moAgg[moKeys[i]].q)+'건'];
+              if(pct!=null) lines.push(' 전월 대비: '+(pct>=0?'▲':'▼')+Math.abs(pct).toFixed(1)+'%');
+              return lines;
+            }}}
+          },
+          scales:{
+            x:{ticks:{font:{size:10}}},
+            y:{ticks:{font:{size:10},callback:v=>short(v)},beginAtZero:true}
+          }
+        }
+      });
+    }
+
+    // 매출처 도넛
+    const chDonutEl=document.getElementById('c-mx-ch-donut');
+    if(chDonutEl){
+      charts.mxChDonut=new Chart(chDonutEl,{
+        type:'doughnut',
+        data:{
+          labels:chList.map(([ch])=>ch),
+          datasets:[{
+            data:chList.map(([,d])=>d.s),
+            backgroundColor:chList.map((_,i)=>PAL[i%PAL.length]),
+            borderWidth:2,borderColor:'#fff',hoverOffset:8
+          }]
+        },
+        options:{
+          responsive:true,maintainAspectRatio:false,
+          cutout:'55%',
+          plugins:{
+            legend:{position:'right',labels:{font:{size:10},boxWidth:12,padding:6,
+              generateLabels:chart=>{
+                return chart.data.labels.map((label,i)=>{
+                  const v=chart.data.datasets[0].data[i];
+                  const pct=totalS>0?(v/totalS*100).toFixed(1):'0.0';
+                  const sl=String(label).length>12?String(label).slice(0,12)+'…':label;
+                  return{text:sl+' '+pct+'%',fillStyle:PAL[i%PAL.length],hidden:false,index:i,strokeStyle:'#fff',lineWidth:2};
+                });
+              }
+            }},
+            tooltip:{callbacks:{label:ctx=>{
+              const d=chAgg[ctx.label]||{s:0,q:0};
+              const pct=totalS>0?(d.s/totalS*100).toFixed(1):'0.0';
+              return[' 매출: '+won(d.s)+' ('+pct+'%)',' 수량: '+wonNo(d.q)+'건'];
+            }}}
+          }
+        }
+      });
+    }
+
+    // 상품 도넛
+    const prodDonutEl=document.getElementById('c-mx-prod-donut');
+    if(prodDonutEl){
+      const prodTotal=prodList.reduce((s,[,d])=>s+d.s,0);
+      charts.mxProdDonut=new Chart(prodDonutEl,{
+        type:'doughnut',
+        data:{
+          labels:prodList.map(([p])=>p),
+          datasets:[{
+            data:prodList.map(([,d])=>d.s),
+            backgroundColor:prodList.map((_,i)=>PAL[i%PAL.length]),
+            borderWidth:2,borderColor:'#fff',hoverOffset:8
+          }]
+        },
+        options:{
+          responsive:true,maintainAspectRatio:false,
+          cutout:'55%',
+          plugins:{
+            legend:{position:'right',labels:{font:{size:10},boxWidth:12,padding:6,
+              generateLabels:chart=>{
+                return chart.data.labels.map((label,i)=>{
+                  const v=chart.data.datasets[0].data[i];
+                  const pct=prodTotal>0?(v/prodTotal*100).toFixed(1):'0.0';
+                  const sl=String(label).length>12?String(label).slice(0,12)+'…':label;
+                  return{text:sl+' '+pct+'%',fillStyle:PAL[i%PAL.length],hidden:false,index:i,strokeStyle:'#fff',lineWidth:2};
+                });
+              }
+            }},
+            tooltip:{callbacks:{label:ctx=>{
+              const d=prodAgg[ctx.label]||{s:0,q:0};
+              const pct=prodTotal>0?(d.s/prodTotal*100).toFixed(1):'0.0';
+              return[' 매출: '+won(d.s)+' ('+pct+'%)',' 수량: '+wonNo(d.q)+'건'];
+            }}}
+          }
+        }
+      });
+    }
   },80);
 }
 
