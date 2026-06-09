@@ -7302,22 +7302,28 @@ function renderMatrix(f){
 <div class="chart-card" style="margin-bottom:16px">
   <div class="chart-header"><div>
     <div class="chart-title">🏪 매출처 별 매출 비중</div>
-    <div class="chart-sub">커서를 올리면 판매수량 · 매출액 확인 (상위 20개)</div>
+    <div class="chart-sub">매출처 상위 20개 · 슬라이스 호버 시 상세 확인</div>
   </div></div>
-  <div style="display:flex;gap:20px;align-items:flex-start">
-    <div style="position:relative;width:240px;height:240px;flex-shrink:0"><canvas id="c-mx-ch-donut"></canvas></div>
-    <div id="mx-ch-legend" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px 10px;flex:1;align-content:start;padding-top:4px"></div>
+  <div style="display:flex;gap:32px;align-items:flex-start;margin-top:8px">
+    <div style="flex-shrink:0;position:relative;width:280px;height:280px">
+      <canvas id="c-mx-ch-donut"></canvas>
+      <div id="mx-ch-center" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;line-height:1.5"></div>
+    </div>
+    <div id="mx-ch-legend" style="flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:0 28px;align-content:start"></div>
   </div>
 </div>
 
 <div class="chart-card">
   <div class="chart-header"><div>
     <div class="chart-title">📦 매출처 별 상품 판매 비중</div>
-    <div class="chart-sub">커서를 올리면 판매수량 · 매출액 · 사이즈별 재고 확인 (상위 20개)</div>
+    <div class="chart-sub">상품 상위 20개 · 슬라이스 또는 항목 호버 시 재고 팝업</div>
   </div></div>
-  <div style="display:flex;gap:20px;align-items:flex-start">
-    <div style="position:relative;width:240px;height:240px;flex-shrink:0"><canvas id="c-mx-prod-donut"></canvas></div>
-    <div id="mx-prod-legend" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px 10px;flex:1;align-content:start;padding-top:4px"></div>
+  <div style="display:flex;gap:32px;align-items:flex-start;margin-top:8px">
+    <div style="flex-shrink:0;position:relative;width:280px;height:280px">
+      <canvas id="c-mx-prod-donut"></canvas>
+      <div id="mx-prod-center" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;line-height:1.5"></div>
+    </div>
+    <div id="mx-prod-legend" style="flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:0 28px;align-content:start"></div>
   </div>
 </div>`;
 
@@ -7580,22 +7586,83 @@ function renderMatrix(f){
       }
     }
 
+    // ── 상품 재고+판매 팝업 (sz-detail-tip 사용) ──
+    const showProdPopup=(e,displayName,sData,pTotal,invProd)=>{
+      const tip=document.getElementById('sz-detail-tip');
+      if(!tip) return;
+      const lookupProd=invProd||displayName;
+      const pct=pTotal>0?(sData.s/pTotal*100).toFixed(1):'0.0';
+      let html=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.12)">${escHtml(displayName)}</div>`;
+      html+=`<div style="display:grid;grid-template-columns:70px 1fr;gap:3px 8px;font-size:11px;margin-bottom:10px">`;
+      html+=`<span style="color:rgba(255,255,255,.5)">매출</span><span style="font-weight:700;color:#fff">${won(sData.s)} <span style="font-size:10px;color:rgba(255,255,255,.45)">(${pct}%)</span></span>`;
+      html+=`<span style="color:rgba(255,255,255,.5)">판매수량</span><span style="font-weight:700;color:#fff">${wonNo(sData.q)}건</span></div>`;
+      if(typeof INV_DATA!=='undefined'){
+        const allSz=INV_DATA.filter(r=>(bI<0||r.bi===bI)&&r.prod===lookupProd&&r.stock>0);
+        if(allSz.length){
+          const pm=calcProdWkSales();
+          let wkS=bI>=0?(pm[bI+'|'+lookupProd]||0):[0,1,2,3].reduce((a,bi)=>a+(pm[bi+'|'+lookupProd]||0),0);
+          const nSz=allSz.length||1;const szMap={};let hasSz=false;
+          if(typeof SZ_DATA!=='undefined'&&SZ_DATA.length){
+            const pn=lookupProd.trim().toLowerCase();
+            const pRows=SZ_DATA.filter(r=>(bI<0||r[0]===bI)&&r[4].trim().toLowerCase()===pn);
+            if(pRows.length){
+              hasSz=true;
+              const wks=[...new Set(pRows.map(r=>`${r[1]}-${String(r[2]).padStart(2,'0')}-${String(r[3]).padStart(2,'0')}`))].sort().reverse();
+              const l2=new Set(wks.slice(0,2));const nw=Math.max(l2.size,1);
+              pRows.forEach(r=>{if(!l2.has(`${r[1]}-${String(r[2]).padStart(2,'0')}-${String(r[3]).padStart(2,'0')}`))return;const sz=r[5].trim();if(!szMap[sz])szMap[sz]=0;szMap[sz]+=r[6];});
+              Object.keys(szMap).forEach(k=>{szMap[k]=Math.round(szMap[k]/nw*10)/10;});
+            }
+          }
+          const _pk=(bI>=0?bI:0)+'|'+lookupProd;
+          const _ps=(typeof PROD_SIZE_MAP!=='undefined'?PROD_SIZE_MAP[_pk]:null)||{};
+          const _pt=Object.values(_ps).reduce((s,q)=>s+q,0);
+          const sizes=allSz.map(r=>{
+            let ws=hasSz?szMap[r.size.trim()]||0:wkS>0&&_pt>0&&(_ps[r.size]||0)>0?Math.round(wkS*(_ps[r.size]/_pt)*10)/10:wkS>0?Math.round(wkS/nSz*10)/10:0;
+            const wl=ws>0&&r.stock>0?Math.round(r.stock/ws*10)/10:(r.stock>0?999:0);
+            return{...r,ws,wl,warn:wl>0&&wl<=12&&ws>0};
+          }).sort((a,b)=>(parseFloat(a.size)||0)-(parseFloat(b.size)||0)||a.size.localeCompare(b.size));
+          html+=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.12)">📦 사이즈별 재고</div>`;
+          html+=`<div style="display:grid;grid-template-columns:52px 48px 56px 52px 56px;gap:4px;margin-bottom:6px"><span style="font-size:10px;color:rgba(255,255,255,.4)">사이즈</span><span style="font-size:10px;color:rgba(255,255,255,.4);text-align:right">재고</span><span style="font-size:10px;color:rgba(255,255,255,.4);text-align:right">2주판매평균</span><span style="font-size:10px;color:rgba(255,255,255,.4);text-align:right">가능주차</span><span style="font-size:10px;color:rgba(255,255,255,.4);text-align:center">상태</span></div>`;
+          html+=sizes.map(r=>{
+            const wls=r.wl===999?'∞':r.wl===0?'-':r.wl.toFixed(1)+'주';
+            const wlC=r.warn?'#fca5a5':r.wl===999?'rgba(255,255,255,.35)':'#6ee7b7';
+            const st=r.ws===0?`<span style="font-size:9px;color:rgba(255,255,255,.35)">판매없음</span>`:r.warn?`<span style="font-size:9px;color:#fca5a5;font-weight:700">⚠ 주의</span>`:`<span style="font-size:9px;color:#6ee7b7;font-weight:700">✓ 양호</span>`;
+            return`<div style="display:grid;grid-template-columns:52px 48px 56px 52px 56px;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.06)"><span style="font-size:11px;color:#fff;font-weight:600">${r.size}</span><span style="font-size:11px;font-weight:700;color:${r.warn?'#fca5a5':'#fff'};text-align:right">${wonNo(r.stock)}</span><span style="font-size:11px;color:#7dd3fc;text-align:right">${r.ws>0?r.ws.toFixed(1):'-'}</span><span style="font-size:11px;font-weight:700;color:${wlC};text-align:right">${wls}</span><span style="text-align:center">${st}</span></div>`;
+          }).join('');
+          html+=`<div style="padding-top:6px;font-size:10px;color:rgba(255,255,255,.35)">합계 ${wonNo(sizes.reduce((s,r)=>s+r.stock,0))}개</div>`;
+        } else {
+          html+=`<div style="font-size:11px;color:rgba(255,255,255,.4)">재고 없음</div>`;
+        }
+      }
+      tip.innerHTML=html; tip.style.display='block';
+      const tw=tip.offsetWidth||280;
+      let lx=e.clientX+14; if(lx+tw>window.innerWidth-10)lx=e.clientX-tw-14;
+      let ty=e.clientY+10; if(ty+tip.offsetHeight>window.innerHeight-10)ty=e.clientY-tip.offsetHeight-10; if(ty<0)ty=4;
+      tip.style.left=lx+'px'; tip.style.top=ty+'px';
+    };
+
+    // ── 범례 아이템 생성 헬퍼 ──
+    const mkLegItem=(color,label,pctVal,barW,title,hoverable)=>
+      `<div ${hoverable?'data-leg-hover="1"':''} style="display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid var(--hairline);cursor:${hoverable?'pointer':'default'};border-radius:4px;transition:background .12s" title="${title}">
+        <span style="width:10px;height:10px;border-radius:3px;background:${color};flex-shrink:0"></span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>
+          <div style="display:flex;align-items:center;gap:5px;margin-top:3px">
+            <div style="flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden">
+              <div style="width:${barW}%;height:100%;background:${color};border-radius:2px"></div>
+            </div>
+            <span style="font-size:10.5px;font-weight:600;color:var(--muted);min-width:38px;text-align:right;flex-shrink:0">${pctVal}%</span>
+          </div>
+        </div>
+      </div>`;
+
     // ── 매출처 도넛 ──
     const chDonutEl=document.getElementById('c-mx-ch-donut');
     if(chDonutEl){
       charts.mxChDonut=new Chart(chDonutEl,{
         type:'doughnut',
-        data:{
-          labels:chList.map(([ch])=>ch),
-          datasets:[{
-            data:chList.map(([,d])=>d.s),
-            backgroundColor:chList.map((_,i)=>PAL[i%PAL.length]),
-            borderWidth:2,borderColor:'#fff',hoverOffset:8
-          }]
-        },
-        options:{
-          responsive:true,maintainAspectRatio:false,
-          cutout:'55%',
+        data:{labels:chList.map(([ch])=>ch),datasets:[{data:chList.map(([,d])=>d.s),backgroundColor:chList.map((_,i)=>PAL[i%PAL.length]),borderWidth:2,borderColor:'#fff',hoverOffset:10}]},
+        options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
           plugins:{
             legend:{display:false},
             tooltip:{enabled:false,external:function(ctx){
@@ -7607,165 +7674,123 @@ function renderMatrix(f){
               const ch=chList[dp.dataIndex]?.[0];
               const d=chList[dp.dataIndex]?.[1]||{s:0,q:0};
               const pct=totalS>0?(d.s/totalS*100).toFixed(1):'0.0';
-              let html=`<div style="font-weight:700;margin-bottom:8px;color:#0ea5e9;font-size:13px">${escHtml(ch||'')}</div>`;
-              html+=`<div style="font-size:12px;color:#ddd;margin-bottom:2px">매출: <span style="font-weight:700">${won(d.s)}</span> <span style="color:#94a3b8;font-size:11px">(${pct}%)</span></div>`;
-              html+=`<div style="font-size:12px;color:#ddd">수량: <span style="font-weight:700">${wonNo(d.q)}건</span></div>`;
-              el.innerHTML=html;
+              el.innerHTML=`<div style="font-weight:700;color:#0ea5e9;font-size:13px;margin-bottom:8px">${escHtml(ch||'')}</div>
+                <div style="display:grid;grid-template-columns:70px 1fr;gap:3px 8px;font-size:11.5px">
+                  <span style="color:rgba(255,255,255,.5)">매출</span><span style="font-weight:700">${won(d.s)} <span style="font-size:10px;color:rgba(255,255,255,.45)">(${pct}%)</span></span>
+                  <span style="color:rgba(255,255,255,.5)">판매수량</span><span style="font-weight:700">${wonNo(d.q)}건</span>
+                </div>`;
               const tw=el.offsetWidth||200;let lx=tooltip.caretX+12;if(tooltip.caretX+tw+20>chart.width)lx=tooltip.caretX-tw-12;
               el.style.left=lx+'px';el.style.top=(tooltip.caretY-20)+'px';
             }}
           }
         }
       });
-      // HTML 범례 (5열 그리드)
+      const chCtr=document.getElementById('mx-ch-center');
+      if(chCtr) chCtr.innerHTML=`<div style="font-size:11px;color:var(--muted);font-weight:500">${chList.length}개 채널</div><div style="font-size:15px;font-weight:700;color:var(--text);margin-top:2px">${short(totalS)}</div>`;
+      const chMaxPct=chList.length&&totalS>0?(chList[0][1].s/totalS*100):100;
       const chLegEl=document.getElementById('mx-ch-legend');
       if(chLegEl) chLegEl.innerHTML=chList.map(([ch,d],i)=>{
-        const pct=totalS>0?(d.s/totalS*100).toFixed(1):'0.0';
-        const label=ch.length>9?ch.slice(0,9)+'…':ch;
-        return`<div style="display:flex;align-items:center;gap:4px;font-size:10.5px;cursor:default;min-width:0" title="${escHtml(ch)} ${pct}%">
-          <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${PAL[i%PAL.length]};flex-shrink:0"></span>
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);flex:1">${escHtml(label)}</span>
-          <span style="color:var(--muted);flex-shrink:0;font-size:10px">${pct}%</span>
-        </div>`;
+        const pv=totalS>0?(d.s/totalS*100):0;
+        const bw=chMaxPct>0?(pv/chMaxPct*100).toFixed(1):'0';
+        const label=ch.length>14?ch.slice(0,14)+'…':ch;
+        return mkLegItem(PAL[i%PAL.length],escHtml(label),pv.toFixed(1),bw,escHtml(ch)+' '+pv.toFixed(1)+'%',false);
       }).join('');
     }
 
-    // ── 재고 툴팁 데이터 빌더 (상품명 → 사이즈별 재고 HTML) ──
-    const buildInvHtml=prod=>{
-      if(typeof INV_DATA==='undefined') return '';
-      const invSizes=INV_DATA.filter(r=>(bI<0||r.bi===bI)&&r.prod===prod&&r.stock>0);
-      if(!invSizes.length) return`<div style="padding-top:6px;border-top:1px solid rgba(255,255,255,.15);font-size:11px;color:rgba(255,255,255,.4)">재고 없음</div>`;
-      const prodMap=calcProdWkSales();
-      let productWkSales=0;
-      if(bI>=0){productWkSales=prodMap[bI+'|'+prod]||0;}
-      else{[0,1,2,3].forEach(bi=>{productWkSales+=prodMap[bi+'|'+prod]||0;});}
-      const numSizes=invSizes.length||1;
-      const szSalesMap={};let hasSzData=false;
-      if(typeof SZ_DATA!=='undefined'&&SZ_DATA.length){
-        const pn=prod.trim().toLowerCase();
-        const psRows=SZ_DATA.filter(r=>(bI<0||r[0]===bI)&&r[4].trim().toLowerCase()===pn);
-        if(psRows.length){
-          hasSzData=true;
-          const wk2=[...new Set(psRows.map(r=>`${r[1]}-${String(r[2]).padStart(2,'0')}-${String(r[3]).padStart(2,'0')}`))].sort().reverse();
-          const last2=new Set(wk2.slice(0,2));const nw=Math.max(last2.size,1);
-          psRows.forEach(r=>{if(!last2.has(`${r[1]}-${String(r[2]).padStart(2,'0')}-${String(r[3]).padStart(2,'0')}`))return;const sz=r[5].trim();if(!szSalesMap[sz])szSalesMap[sz]=0;szSalesMap[sz]+=r[6];});
-          Object.keys(szSalesMap).forEach(k=>{szSalesMap[k]=Math.round(szSalesMap[k]/nw*10)/10;});
-        }
-      }
-      const _pk=(bI>=0?bI:0)+'|'+prod;
-      const _ps=(typeof PROD_SIZE_MAP!=='undefined'?PROD_SIZE_MAP[_pk]:null)||{};
-      const _pt=Object.values(_ps).reduce((s,q)=>s+q,0);
-      const sizes=invSizes.map(r=>{
-        let ws;
-        if(hasSzData){ws=szSalesMap[r.size.trim()]||0;}
-        else if(productWkSales>0&&_pt>0&&(_ps[r.size]||0)>0){ws=Math.round(productWkSales*(_ps[r.size]/_pt)*10)/10;}
-        else{ws=productWkSales>0?Math.round(productWkSales/numSizes*10)/10:0;}
-        const wl=ws>0&&r.stock>0?Math.round(r.stock/ws*10)/10:(r.stock>0?999:0);
-        const warn=wl>0&&wl<=12&&ws>0;
-        return{...r,ws,wl,warn};
-      }).sort((a,b)=>(parseFloat(a.size)||0)-(parseFloat(b.size)||0)||a.size.localeCompare(b.size));
-      let h=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:6px;padding-top:8px;border-top:1px solid rgba(255,255,255,.15)">📦 사이즈별 재고</div>`;
-      h+=`<div style="display:grid;grid-template-columns:50px 40px 52px 48px 50px;gap:3px;margin-bottom:4px">`;
-      h+=`<span style="font-size:10px;color:rgba(255,255,255,.4)">사이즈</span><span style="font-size:10px;color:rgba(255,255,255,.4);text-align:right">재고</span><span style="font-size:10px;color:rgba(255,255,255,.4);text-align:right">2주판매</span><span style="font-size:10px;color:rgba(255,255,255,.4);text-align:right">가능주차</span><span style="font-size:10px;color:rgba(255,255,255,.4);text-align:center">상태</span></div>`;
-      h+=sizes.map(r=>{
-        const wlStr=r.wl===999?'∞':r.wl===0?'-':r.wl.toFixed(1)+'주';
-        const wlC=r.warn?'#fca5a5':r.wl===999?'rgba(255,255,255,.35)':'#6ee7b7';
-        const st=r.ws===0?`<span style="font-size:9px;color:rgba(255,255,255,.35)">판매없음</span>`:r.warn?`<span style="font-size:9px;color:#fca5a5;font-weight:700">⚠ 주의</span>`:`<span style="font-size:9px;color:#6ee7b7;font-weight:700">✓ 양호</span>`;
-        return`<div style="display:grid;grid-template-columns:50px 40px 52px 48px 50px;align-items:center;gap:3px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.06)"><span style="font-size:11px;color:#fff;font-weight:600">${r.size}</span><span style="font-size:11px;font-weight:700;color:${r.warn?'#fca5a5':'#fff'};text-align:right">${wonNo(r.stock)}</span><span style="font-size:11px;color:#7dd3fc;text-align:right">${r.ws>0?r.ws.toFixed(1):'-'}</span><span style="font-size:11px;font-weight:700;color:${wlC};text-align:right">${wlStr}</span><span style="text-align:center">${st}</span></div>`;
-      }).join('');
-      h+=`<div style="padding-top:5px;font-size:10px;color:rgba(255,255,255,.35)">합계 ${wonNo(sizes.reduce((s,r)=>s+r.stock,0))}개</div>`;
-      return h;
-    };
-
-    // ── 상품 도넛 (채널 비교 모드: 채널×상품 슬라이스, 일반: 상품별) ──
+    // ── 상품 도넛 (채널 비교 모드: 채널×상품, 일반: 상품별) ──
     const prodDonutEl=document.getElementById('c-mx-prod-donut');
     if(prodDonutEl){
       if(compareByCh){
-        const chColorMap={};
-        chList.forEach(([ch],i)=>{chColorMap[ch]=i;});
+        const chColorMap={};chList.forEach(([ch],i)=>{chColorMap[ch]=i;});
         const cpEntries=Object.values(chProdAgg).sort((a,b)=>b.s-a.s).slice(0,20);
         const cpTotal=cpEntries.reduce((s,d)=>s+d.s,0);
         charts.mxProdDonut=new Chart(prodDonutEl,{
           type:'doughnut',
-          data:{
-            labels:cpEntries.map(d=>d.ch+'|||'+d.prod),
-            datasets:[{data:cpEntries.map(d=>d.s),backgroundColor:cpEntries.map(d=>PAL[(chColorMap[d.ch]||0)%PAL.length]),borderWidth:2,borderColor:'#fff',hoverOffset:8}]
-          },
-          options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
-            plugins:{
-              legend:{display:false},
-              tooltip:{enabled:false,external:function(ctx){
-                const {chart,tooltip}=ctx;
-                const el=makeDarkTip(chart,'mx-prod-tip');
-                if(tooltip.opacity===0){el.style.opacity='0';return;}
-                el.style.opacity='1';
-                const dp=tooltip.dataPoints?.[0];if(!dp)return;
-                const d=cpEntries[dp.dataIndex];if(!d)return;
-                const pct=cpTotal>0?(d.s/cpTotal*100).toFixed(1):'0.0';
-                let html=`<div style="font-weight:700;margin-bottom:6px;color:#0ea5e9;font-size:12px">${escHtml(d.ch)} / ${escHtml(d.prod)}</div>`;
-                html+=`<div style="font-size:12px;color:#ddd;margin-bottom:2px">매출: <span style="font-weight:700">${won(d.s)}</span> <span style="color:#94a3b8;font-size:11px">(${pct}%)</span></div>`;
-                html+=`<div style="font-size:12px;color:#ddd;margin-bottom:2px">수량: <span style="font-weight:700">${wonNo(d.q)}건</span></div>`;
-                html+=buildInvHtml(d.prod);
-                el.innerHTML=html;
-                const tw=el.offsetWidth||260;let lx=tooltip.caretX+12;if(tooltip.caretX+tw+20>chart.width)lx=tooltip.caretX-tw-12;
-                el.style.left=lx+'px';el.style.top=(tooltip.caretY-20)+'px';
-              }}
-            }
-          }
+          data:{labels:cpEntries.map(d=>d.ch+'|||'+d.prod),datasets:[{data:cpEntries.map(d=>d.s),backgroundColor:cpEntries.map(d=>PAL[(chColorMap[d.ch]||0)%PAL.length]),borderWidth:2,borderColor:'#fff',hoverOffset:10}]},
+          options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{display:false},tooltip:{enabled:false}}}
         });
+        const cpCtr=document.getElementById('mx-prod-center');
+        if(cpCtr) cpCtr.innerHTML=`<div style="font-size:11px;color:var(--muted);font-weight:500">${cpEntries.length}개 항목</div><div style="font-size:15px;font-weight:700;color:var(--text);margin-top:2px">${short(cpTotal)}</div>`;
+        prodDonutEl.addEventListener('mousemove',function(ev){
+          if(!charts.mxProdDonut)return;
+          const elems=charts.mxProdDonut.getElementsAtEventForMode(ev,'nearest',{intersect:true},true);
+          if(!elems.length){hideInvStockTip();return;}
+          const d=cpEntries[elems[0].index];if(!d){hideInvStockTip();return;}
+          showProdPopup(ev,d.ch+' / '+d.prod,d,cpTotal,d.prod);
+        });
+        prodDonutEl.addEventListener('mouseleave',hideInvStockTip);
+        const cpMaxPct=cpEntries.length&&cpTotal>0?(cpEntries[0].s/cpTotal*100):100;
         const cpLegEl=document.getElementById('mx-prod-legend');
-        if(cpLegEl) cpLegEl.innerHTML=cpEntries.map((d,i)=>{
-          const pct=cpTotal>0?(d.s/cpTotal*100).toFixed(1):'0.0';
-          const chS=d.ch.length>6?d.ch.slice(0,6)+'…':d.ch;
-          const prS=d.prod.length>6?d.prod.slice(0,6)+'…':d.prod;
-          const color=PAL[(chColorMap[d.ch]||0)%PAL.length];
-          return`<div style="display:flex;align-items:center;gap:3px;font-size:10px;min-width:0;cursor:default" title="${escHtml(d.ch)} / ${escHtml(d.prod)} ${pct}%">
-            <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${color};flex-shrink:0"></span>
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${escHtml(chS)}/${escHtml(prS)}</span>
-            <span style="color:var(--muted);flex-shrink:0">${pct}%</span>
-          </div>`;
-        }).join('');
+        if(cpLegEl){
+          cpLegEl.innerHTML=cpEntries.map((d,i)=>{
+            const pv=cpTotal>0?(d.s/cpTotal*100):0;
+            const bw=cpMaxPct>0?(pv/cpMaxPct*100).toFixed(1):'0';
+            const chS=d.ch.length>7?d.ch.slice(0,7)+'…':d.ch;
+            const prS=d.prod.length>7?d.prod.slice(0,7)+'…':d.prod;
+            const color=PAL[(chColorMap[d.ch]||0)%PAL.length];
+            return`<div data-cp-idx="${i}" style="display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid var(--hairline);cursor:pointer;border-radius:4px;transition:background .12s" title="${escHtml(d.ch)} / ${escHtml(d.prod)} ${pv.toFixed(1)}%">
+              <span style="width:10px;height:10px;border-radius:3px;background:${color};flex-shrink:0"></span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:11.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(chS)}/${escHtml(prS)}</div>
+                <div style="display:flex;align-items:center;gap:5px;margin-top:3px">
+                  <div style="flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden"><div style="width:${bw}%;height:100%;background:${color};border-radius:2px"></div></div>
+                  <span style="font-size:10.5px;font-weight:600;color:var(--muted);min-width:38px;text-align:right;flex-shrink:0">${pv.toFixed(1)}%</span>
+                </div>
+              </div>
+            </div>`;
+          }).join('');
+          cpLegEl.querySelectorAll('[data-cp-idx]').forEach(item=>{
+            const d=cpEntries[parseInt(item.dataset.cpIdx)];if(!d)return;
+            item.addEventListener('mouseenter',ev=>showProdPopup(ev,d.ch+' / '+d.prod,d,cpTotal,d.prod));
+            item.addEventListener('mouseleave',hideInvStockTip);
+          });
+        }
       } else {
         const prodTotal=prodList.reduce((s,[,d])=>s+d.s,0);
         charts.mxProdDonut=new Chart(prodDonutEl,{
           type:'doughnut',
-          data:{
-            labels:prodList.map(([p])=>p),
-            datasets:[{data:prodList.map(([,d])=>d.s),backgroundColor:prodList.map((_,i)=>PAL[i%PAL.length]),borderWidth:2,borderColor:'#fff',hoverOffset:8}]
-          },
-          options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
-            plugins:{
-              legend:{display:false},
-              tooltip:{enabled:false,external:function(ctx){
-                const {chart,tooltip}=ctx;
-                const el=makeDarkTip(chart,'mx-prod-tip');
-                if(tooltip.opacity===0){el.style.opacity='0';return;}
-                el.style.opacity='1';
-                const dp=tooltip.dataPoints?.[0];if(!dp)return;
-                const prod=prodList[dp.dataIndex]?.[0];
-                const d=prodList[dp.dataIndex]?.[1]||{s:0,q:0};
-                const pct=prodTotal>0?(d.s/prodTotal*100).toFixed(1):'0.0';
-                let html=`<div style="font-weight:700;margin-bottom:8px;color:#0ea5e9;font-size:13px">${escHtml(prod||'')}</div>`;
-                html+=`<div style="font-size:12px;color:#ddd;margin-bottom:2px">매출: <span style="font-weight:700">${won(d.s)}</span> <span style="color:#94a3b8;font-size:11px">(${pct}%)</span></div>`;
-                html+=`<div style="font-size:12px;color:#ddd;margin-bottom:2px">수량: <span style="font-weight:700">${wonNo(d.q)}건</span></div>`;
-                if(prod) html+=buildInvHtml(prod);
-                el.innerHTML=html;
-                const tw=el.offsetWidth||260;let lx=tooltip.caretX+12;if(tooltip.caretX+tw+20>chart.width)lx=tooltip.caretX-tw-12;
-                el.style.left=lx+'px';el.style.top=(tooltip.caretY-20)+'px';
-              }}
-            }
-          }
+          data:{labels:prodList.map(([p])=>p),datasets:[{data:prodList.map(([,d])=>d.s),backgroundColor:prodList.map((_,i)=>PAL[i%PAL.length]),borderWidth:2,borderColor:'#fff',hoverOffset:10}]},
+          options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{display:false},tooltip:{enabled:false}}}
         });
+        const pdCtr=document.getElementById('mx-prod-center');
+        if(pdCtr) pdCtr.innerHTML=`<div style="font-size:11px;color:var(--muted);font-weight:500">${prodList.length}개 상품</div><div style="font-size:15px;font-weight:700;color:var(--text);margin-top:2px">${short(totalS)}</div>`;
+        prodDonutEl.addEventListener('mousemove',function(ev){
+          if(!charts.mxProdDonut)return;
+          const elems=charts.mxProdDonut.getElementsAtEventForMode(ev,'nearest',{intersect:true},true);
+          if(!elems.length){hideInvStockTip();return;}
+          const idx=elems[0].index;
+          const prod=prodList[idx]?.[0];const d=prodList[idx]?.[1];
+          if(!prod||!d){hideInvStockTip();return;}
+          showProdPopup(ev,prod,d,prodTotal);
+        });
+        prodDonutEl.addEventListener('mouseleave',hideInvStockTip);
+        const prodMaxPct=prodList.length&&prodTotal>0?(prodList[0][1].s/prodTotal*100):100;
         const prodLegEl=document.getElementById('mx-prod-legend');
-        if(prodLegEl) prodLegEl.innerHTML=prodList.map(([p,d],i)=>{
-          const pct=prodTotal>0?(d.s/prodTotal*100).toFixed(1):'0.0';
-          const label=p.length>9?p.slice(0,9)+'…':p;
-          return`<div style="display:flex;align-items:center;gap:4px;font-size:10.5px;cursor:default;min-width:0" title="${escHtml(p)} ${pct}%">
-            <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${PAL[i%PAL.length]};flex-shrink:0"></span>
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);flex:1">${escHtml(label)}</span>
-            <span style="color:var(--muted);flex-shrink:0;font-size:10px">${pct}%</span>
-          </div>`;
-        }).join('');
+        if(prodLegEl){
+          prodLegEl.innerHTML=prodList.map(([p,d],i)=>{
+            const pv=prodTotal>0?(d.s/prodTotal*100):0;
+            const bw=prodMaxPct>0?(pv/prodMaxPct*100).toFixed(1):'0';
+            const label=p.length>14?p.slice(0,14)+'…':p;
+            const color=PAL[i%PAL.length];
+            return`<div data-pd-idx="${i}" style="display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid var(--hairline);cursor:pointer;border-radius:4px;transition:background .12s" title="${escHtml(p)} ${pv.toFixed(1)}%">
+              <span style="width:10px;height:10px;border-radius:3px;background:${color};flex-shrink:0"></span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:11.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(label)}</div>
+                <div style="display:flex;align-items:center;gap:5px;margin-top:3px">
+                  <div style="flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden"><div style="width:${bw}%;height:100%;background:${color};border-radius:2px"></div></div>
+                  <span style="font-size:10.5px;font-weight:600;color:var(--muted);min-width:38px;text-align:right;flex-shrink:0">${pv.toFixed(1)}%</span>
+                </div>
+              </div>
+            </div>`;
+          }).join('');
+          prodLegEl.querySelectorAll('[data-pd-idx]').forEach(item=>{
+            const idx=parseInt(item.dataset.pdIdx);
+            const prod=prodList[idx]?.[0];const d=prodList[idx]?.[1];
+            if(!prod||!d)return;
+            item.addEventListener('mouseenter',ev=>showProdPopup(ev,prod,d,prodTotal));
+            item.addEventListener('mouseleave',hideInvStockTip);
+          });
+        }
       }
     }
   },80);
