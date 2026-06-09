@@ -7210,10 +7210,16 @@ function renderMatrix(f){
 
   const wkKeys=Object.keys(wkAgg).sort();
   const moKeys=Object.keys(moAgg).sort();
+  const wkYears=[...new Set(wkKeys.map(k=>k.split('-W')[0]))].sort();
+  const moYears=[...new Set(moKeys.map(k=>k.split('-')[0]))].sort();
+  const wkByYear={};wkKeys.forEach(k=>{const[yr,wStr]=k.split('-W');if(!wkByYear[yr])wkByYear[yr]={};wkByYear[yr][wStr]=wkAgg[k];});
+  const moByYear={};moKeys.forEach(k=>{const p=k.split('-');if(!moByYear[p[0]])moByYear[p[0]]={};moByYear[p[0]][p[1]]=moAgg[k];});
+  const uniqueWkNums=[...new Set(wkKeys.map(k=>k.split('-W')[1]))].sort((a,b)=>+a-+b);
+  const uniqueMoNums=[...new Set(moKeys.map(k=>k.split('-')[1]))].sort((a,b)=>+a-+b);
   const totalS=rows.reduce((s,r)=>s+r[7],0);
   const totalQ=rows.reduce((s,r)=>s+r[6],0);
-  const chList=Object.entries(chAgg).sort((a,b)=>b[1].s-a[1].s);
-  const prodList=Object.entries(prodAgg).sort((a,b)=>b[1].s-a[1].s).slice(0,15);
+  const chList=Object.entries(chAgg).sort((a,b)=>b[1].s-a[1].s).slice(0,20);
+  const prodList=Object.entries(prodAgg).sort((a,b)=>b[1].s-a[1].s).slice(0,20);
   const PAL=['#0284c7','#22c55e','#f97316','#a855f7','#ef4444','#06b6d4','#eab308','#ec4899','#14b8a6','#6366f1'];
 
   // 비교 모드 판별: 상품 2개 이상 → 상품별 비교, 채널 2개 이상 → 채널별 비교
@@ -7259,8 +7265,8 @@ function renderMatrix(f){
     <div class="kpi-sub" style="color:${chgColor(moChg)};font-weight:600">${chgBadge(moChg)} 전월 대비</div>
   </div>`;
 
-  const wkChartSub=isCompare?(compareByProd?'상품별 주간 매출 비교 · 툴팁에 전주 대비 증감율':'채널별 주간 매출 비교 · 툴팁에 전주 대비 증감율'):'주차별 실매출 · 막대 위 증감율 = 전주 대비';
-  const moChartSub=isCompare?(compareByProd?'상품별 월간 매출 비교 · 툴팁에 전월 대비 증감율':'채널별 월간 매출 비교 · 툴팁에 전월 대비 증감율'):'월별 실매출 · 막대 위 증감율 = 전월 대비';
+  const wkChartSub=isCompare?(compareByProd?'상품별 주간 매출 비교 · 툴팁에 전주 대비 증감율':'채널별 주간 매출 비교 · 툴팁에 전주 대비 증감율'):'연도별 주간 매출 비교 · 툴팁에 전주 대비 & 전년 대비';
+  const moChartSub=isCompare?(compareByProd?'상품별 월간 매출 비교 · 툴팁에 전월 대비 증감율':'채널별 월간 매출 비교 · 툴팁에 전월 대비 증감율'):'연도별 월간 매출 비교 · 툴팁에 전월 대비 & 전년 대비';
 
   tgt.innerHTML=`
 <div class="kpi-grid">
@@ -7277,38 +7283,36 @@ function renderMatrix(f){
   </div>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-  <div class="chart-card">
-    <div class="chart-header"><div>
-      <div class="chart-title">📅 주간 매출 비교</div>
-      <div class="chart-sub">${wkChartSub}</div>
-    </div></div>
-    <div style="position:relative;height:260px"><canvas id="c-mx-week"></canvas></div>
-  </div>
-  <div class="chart-card">
-    <div class="chart-header"><div>
-      <div class="chart-title">📆 월간 매출 비교</div>
-      <div class="chart-sub">${moChartSub}</div>
-    </div></div>
-    <div style="position:relative;height:260px"><canvas id="c-mx-month"></canvas></div>
-  </div>
+<div class="chart-card" style="margin-bottom:16px">
+  <div class="chart-header"><div>
+    <div class="chart-title">📅 주간 매출 비교</div>
+    <div class="chart-sub">${wkChartSub}</div>
+  </div></div>
+  <div style="position:relative;height:280px"><canvas id="c-mx-week"></canvas></div>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-  <div class="chart-card">
-    <div class="chart-header"><div>
-      <div class="chart-title">🏪 매출처 별 매출 비중</div>
-      <div class="chart-sub">커서를 올리면 판매수량 · 매출액 확인</div>
-    </div></div>
-    <div style="position:relative;height:300px"><canvas id="c-mx-ch-donut"></canvas></div>
-  </div>
-  <div class="chart-card">
-    <div class="chart-header"><div>
-      <div class="chart-title">📦 매출처 별 상품 판매 비중</div>
-      <div class="chart-sub">커서를 올리면 판매수량 · 매출액 확인 (상위 15개)</div>
-    </div></div>
-    <div style="position:relative;height:300px"><canvas id="c-mx-prod-donut"></canvas></div>
-  </div>
+<div class="chart-card" style="margin-bottom:16px">
+  <div class="chart-header"><div>
+    <div class="chart-title">📆 월간 매출 비교</div>
+    <div class="chart-sub">${moChartSub}</div>
+  </div></div>
+  <div style="position:relative;height:280px"><canvas id="c-mx-month"></canvas></div>
+</div>
+
+<div class="chart-card" style="margin-bottom:16px">
+  <div class="chart-header"><div>
+    <div class="chart-title">🏪 매출처 별 매출 비중</div>
+    <div class="chart-sub">커서를 올리면 판매수량 · 매출액 확인 (상위 20개)</div>
+  </div></div>
+  <div style="position:relative;height:360px"><canvas id="c-mx-ch-donut"></canvas></div>
+</div>
+
+<div class="chart-card">
+  <div class="chart-header"><div>
+    <div class="chart-title">📦 매출처 별 상품 판매 비중</div>
+    <div class="chart-sub">커서를 올리면 판매수량 · 매출액 확인 (상위 20개)</div>
+  </div></div>
+  <div style="position:relative;height:360px"><canvas id="c-mx-prod-donut"></canvas></div>
 </div>`;
 
   setTimeout(()=>{
@@ -7368,82 +7372,206 @@ function renderMatrix(f){
       return lines;
     };
 
+    // ── 다크 외부 툴팁 헬퍼 ──
+    const makeDarkTip=(chart,cls)=>{
+      let el=chart.canvas.parentNode.querySelector('.'+cls);
+      if(!el){
+        el=document.createElement('div');el.className=cls;
+        el.style.cssText='position:absolute;background:#0f172a;border-radius:12px;padding:14px 18px;pointer-events:none;z-index:99;font-size:13px;color:#fff;min-width:220px;box-shadow:0 8px 24px rgba(0,0,0,.4);transition:opacity .15s';
+        chart.canvas.parentNode.style.position='relative';
+        chart.canvas.parentNode.appendChild(el);
+      }
+      return el;
+    };
+
     // ── 주간 차트 ──
     const wkEl=document.getElementById('c-mx-week');
     if(wkEl){
-      charts.mxWeek=new Chart(wkEl,{
-        type:'bar',
-        plugins:isCompare?[]:[pctPlugin],
-        data:{
-          labels:wkLabels,
-          datasets:isCompare
-            ?makeCmpDatasets(wkByItem,wkKeys)
-            :[{label:'주간 매출',data:wkKeys.map(k=>wkAgg[k].s),backgroundColor:'#0284c7cc',borderColor:'#0284c7',borderWidth:1,borderRadius:4}]
-        },
-        options:{
-          responsive:true,maintainAspectRatio:false,
-          layout:{padding:{top:isCompare?4:22}},
-          interaction:isCompare?{mode:'index',intersect:false}:{},
-          plugins:{
-            legend:{display:isCompare,position:'top',labels:{font:{size:10},boxWidth:12,padding:6}},
-            tooltip:{callbacks:{label:isCompare
-              ?makeCmpTooltip(wkByItem,wkKeys,'전주 대비')
-              :ctx=>{
-                const i=ctx.dataIndex;
-                const v=ctx.raw;
-                const prev=i>0?wkAgg[wkKeys[i-1]].s:null;
-                const pct=prev&&prev>0?((v-prev)/prev*100):null;
-                const lines=[' 매출: '+won(v),' 수량: '+wonNo(wkAgg[wkKeys[i]].q)+'건'];
-                if(pct!=null) lines.push(' 전주 대비: '+(pct>=0?'▲':'▼')+Math.abs(pct).toFixed(1)+'%');
-                return lines;
-              }
-            }}
-          },
-          scales:{
-            x:{ticks:{font:{size:9},maxRotation:45}},
-            y:{ticks:{font:{size:10},callback:v=>short(v)},beginAtZero:true}
+      if(isCompare){
+        charts.mxWeek=new Chart(wkEl,{
+          type:'bar',
+          data:{labels:wkLabels,datasets:makeCmpDatasets(wkByItem,wkKeys).map(d=>({...d,borderRadius:5,barPercentage:.7,categoryPercentage:.8,borderWidth:0}))},
+          options:{responsive:true,maintainAspectRatio:false,
+            interaction:{mode:'index',intersect:false},
+            plugins:{
+              legend:{display:true,position:'top',labels:{font:{size:11,weight:'600'},boxWidth:12,padding:16}},
+              tooltip:{enabled:false,external:function(ctx){
+                const {chart,tooltip}=ctx;
+                const el=makeDarkTip(chart,'mx-wk-tip');
+                if(tooltip.opacity===0){el.style.opacity='0';return;}
+                el.style.opacity='1';
+                const lbl=tooltip.title?.[0]||'';
+                const wkIdx=tooltip.dataPoints?.[0]?.dataIndex??-1;
+                let html=`<div style="font-weight:700;margin-bottom:8px;color:#0ea5e9;font-size:14px">${lbl}</div>`;
+                tooltip.dataPoints?.forEach(dp=>{
+                  const name=dp.dataset.label;
+                  const v=dp.raw;
+                  const prev=wkIdx>0?(wkByItem[wkKeys[wkIdx-1]]?.[name]?.s||0):0;
+                  const wow=prev>0?((v-prev)/prev*100):(prev===0&&v>0?'NEW':null);
+                  const q=wkByItem[wkKeys[wkIdx]]?.[name]?.q||0;
+                  const color=dp.dataset.backgroundColor;
+                  html+=`<div style="margin-bottom:4px"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${color};margin-right:5px;vertical-align:middle"></span><span style="color:#ddd">${escHtml(name)}:</span> <span style="font-weight:700">${won(v)}</span>`;
+                  if(wow==='NEW'){html+=` <span style="color:#fbbf24;font-size:11px">전주대비 NEW</span>`;}
+                  else if(wow!==null){const wc=wow>=0?'#ff7b7b':'#7bb8ff';html+=` <span style="color:${wc};font-size:11px">${wow>=0?'▲':'▼'}${Math.abs(wow).toFixed(1)}%</span>`;}
+                  html+=` <span style="color:#94a3b8;font-size:11px">(${wonNo(q)}건)</span></div>`;
+                });
+                el.innerHTML=html;
+                const tw=el.offsetWidth||220;let lx=tooltip.caretX+12;if(tooltip.caretX+tw+20>chart.width)lx=tooltip.caretX-tw-12;
+                el.style.left=lx+'px';el.style.top=(tooltip.caretY-20)+'px';
+              }}
+            },
+            scales:{x:{ticks:{font:{size:10,weight:'600'}}},y:{ticks:{font:{size:9},callback:v=>short(v)},beginAtZero:true}}
           }
-        }
-      });
+        });
+      } else {
+        const yrWkData=wkYears.map(yr=>uniqueWkNums.map(w=>wkByYear[yr]?.[w]?.s||0));
+        const yrWkDatasets=wkYears.length===0?[]:wkYears.length===1?[
+          {label:`${wkYears[0]}년`,data:yrWkData[0],backgroundColor:'#0284c7CC',borderRadius:5,barPercentage:.7,categoryPercentage:.8}
+        ]:wkYears.length===2?[
+          {label:`${wkYears[0]}년`,data:yrWkData[0],backgroundColor:'#64748b99',borderRadius:5,barPercentage:.7,categoryPercentage:.8},
+          {label:`${wkYears[1]}년`,data:yrWkData[1],backgroundColor:'#0284c7CC',borderRadius:5,barPercentage:.7,categoryPercentage:.8}
+        ]:wkYears.map((yr,i)=>({label:`${yr}년`,data:yrWkData[i],backgroundColor:PAL[i%PAL.length]+'cc',borderRadius:5,barPercentage:.7,categoryPercentage:.8}));
+        const yrWkLabels=uniqueWkNums.map(w=>{
+          const yr=parseInt(wkYears[wkYears.length-1]||new Date().getFullYear());
+          const parts=wkLabel(yr,parseInt(w));
+          return Array.isArray(parts)?parts[0]+' '+parts[1]:parts;
+        });
+        charts.mxWeek=new Chart(wkEl,{
+          type:'bar',
+          data:{labels:yrWkLabels,datasets:yrWkDatasets},
+          options:{responsive:true,maintainAspectRatio:false,
+            plugins:{
+              legend:{display:true,position:'top',labels:{font:{size:11,weight:'600'},boxWidth:12,padding:16}},
+              tooltip:{enabled:false,external:function(ctx){
+                const {chart,tooltip}=ctx;
+                const el=makeDarkTip(chart,'mx-wk-tip');
+                if(tooltip.opacity===0){el.style.opacity='0';return;}
+                el.style.opacity='1';
+                const lbl=tooltip.title?.[0]||'';
+                const wkIdx=tooltip.dataPoints?.[0]?.dataIndex??-1;
+                const wkNum=wkIdx>=0?uniqueWkNums[wkIdx]:'';
+                const k0=`${wkYears[wkYears.length-1]}-W${wkNum}`;
+                const k1=`${wkYears[0]}-W${wkNum}`;
+                const range=(typeof WK_RANGE_MAP!=='undefined'&&(WK_RANGE_MAP[k0]||WK_RANGE_MAP[k1]))||'';
+                let html=`<div style="font-weight:700;margin-bottom:8px;color:#0ea5e9;font-size:14px">${lbl}${range?' <span style="font-size:11px;color:#94a3b8;font-weight:400">('+range+')</span>':''}</div>`;
+                tooltip.dataPoints?.forEach(dp=>{
+                  const yr=wkYears[dp.datasetIndex];
+                  const arr=yrWkData[dp.datasetIndex]||[];
+                  const v=dp.raw;
+                  const dotColor=wkYears.length===2&&dp.datasetIndex===0?'#64748b':'#0ea5e9';
+                  const prevWkVal=wkIdx>0?(arr[wkIdx-1]||0):0;
+                  const wow=prevWkVal>0?((v-prevWkVal)/prevWkVal*100):(prevWkVal===0&&v>0?'NEW':null);
+                  html+=`<div style="margin-bottom:4px"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${dotColor};margin-right:5px;vertical-align:middle"></span><span style="color:#ddd">${yr}년:</span> <span style="font-weight:700;margin-left:4px">${won(v)}</span>`;
+                  if(wow==='NEW'){html+=` <span style="color:#fbbf24;font-size:11px;font-weight:600">전주대비 NEW</span>`;}
+                  else if(wow!==null){const wc=wow>=0?'#ff7b7b':'#7bb8ff';html+=` <span style="color:${wc};font-size:11px;font-weight:600">${wow>=0?'▲':'▼'}${Math.abs(wow).toFixed(1)}%</span>`;}
+                  html+='</div>';
+                });
+                if(wkYears.length>=2&&wkIdx>=0){
+                  const pv=yrWkData[0]?.[wkIdx]||0;const cv=yrWkData[1]?.[wkIdx]||0;
+                  if(pv>0&&cv>0){const yoy=(cv-pv)/pv*100;const yc=yoy>=0?'#ff7b7b':'#7bb8ff';const ys=yoy>=0?'▲':'▼';
+                    html+=`<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.15);font-size:11px"><span style="color:#a0adb8">전년대비</span> <span style="color:${yc};font-weight:700;margin-left:6px">${ys}${Math.abs(yoy).toFixed(1)}%</span></div>`;
+                  }
+                }
+                el.innerHTML=html;
+                const tw=el.offsetWidth||200;let lx=tooltip.caretX+12;if(tooltip.caretX+tw+20>chart.width)lx=tooltip.caretX-tw-12;
+                el.style.left=lx+'px';el.style.top=(tooltip.caretY-20)+'px';
+              }}
+            },
+            scales:{x:{ticks:{font:{size:10,weight:'600'}}},y:{ticks:{font:{size:9},callback:v=>short(v)},beginAtZero:true}}
+          }
+        });
+      }
     }
 
     // ── 월간 차트 ──
     const moEl=document.getElementById('c-mx-month');
     if(moEl){
-      charts.mxMonth=new Chart(moEl,{
-        type:'bar',
-        plugins:isCompare?[]:[pctPlugin],
-        data:{
-          labels:moLabels,
-          datasets:isCompare
-            ?makeCmpDatasets(moByItem,moKeys)
-            :[{label:'월간 매출',data:moKeys.map(k=>moAgg[k].s),backgroundColor:'#22c55ecc',borderColor:'#22c55e',borderWidth:1,borderRadius:4}]
-        },
-        options:{
-          responsive:true,maintainAspectRatio:false,
-          layout:{padding:{top:isCompare?4:22}},
-          interaction:isCompare?{mode:'index',intersect:false}:{},
-          plugins:{
-            legend:{display:isCompare,position:'top',labels:{font:{size:10},boxWidth:12,padding:6}},
-            tooltip:{callbacks:{label:isCompare
-              ?makeCmpTooltip(moByItem,moKeys,'전월 대비')
-              :ctx=>{
-                const i=ctx.dataIndex;
-                const v=ctx.raw;
-                const prev=i>0?moAgg[moKeys[i-1]].s:null;
-                const pct=prev&&prev>0?((v-prev)/prev*100):null;
-                const lines=[' 매출: '+won(v),' 수량: '+wonNo(moAgg[moKeys[i]].q)+'건'];
-                if(pct!=null) lines.push(' 전월 대비: '+(pct>=0?'▲':'▼')+Math.abs(pct).toFixed(1)+'%');
-                return lines;
-              }
-            }}
-          },
-          scales:{
-            x:{ticks:{font:{size:10}}},
-            y:{ticks:{font:{size:10},callback:v=>short(v)},beginAtZero:true}
+      if(isCompare){
+        charts.mxMonth=new Chart(moEl,{
+          type:'bar',
+          data:{labels:moLabels,datasets:makeCmpDatasets(moByItem,moKeys).map(d=>({...d,borderRadius:5,barPercentage:.7,categoryPercentage:.8,borderWidth:0}))},
+          options:{responsive:true,maintainAspectRatio:false,
+            interaction:{mode:'index',intersect:false},
+            plugins:{
+              legend:{display:true,position:'top',labels:{font:{size:11,weight:'600'},boxWidth:12,padding:16}},
+              tooltip:{enabled:false,external:function(ctx){
+                const {chart,tooltip}=ctx;
+                const el=makeDarkTip(chart,'mx-mo-tip');
+                if(tooltip.opacity===0){el.style.opacity='0';return;}
+                el.style.opacity='1';
+                const lbl=tooltip.title?.[0]||'';
+                const moIdx=tooltip.dataPoints?.[0]?.dataIndex??-1;
+                let html=`<div style="font-weight:700;margin-bottom:8px;color:#0ea5e9;font-size:14px">${lbl}</div>`;
+                tooltip.dataPoints?.forEach(dp=>{
+                  const name=dp.dataset.label;
+                  const v=dp.raw;
+                  const prev=moIdx>0?(moByItem[moKeys[moIdx-1]]?.[name]?.s||0):0;
+                  const mom=prev>0?((v-prev)/prev*100):(prev===0&&v>0?'NEW':null);
+                  const q=moByItem[moKeys[moIdx]]?.[name]?.q||0;
+                  const color=dp.dataset.backgroundColor;
+                  html+=`<div style="margin-bottom:4px"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${color};margin-right:5px;vertical-align:middle"></span><span style="color:#ddd">${escHtml(name)}:</span> <span style="font-weight:700">${won(v)}</span>`;
+                  if(mom==='NEW'){html+=` <span style="color:#fbbf24;font-size:11px">전월대비 NEW</span>`;}
+                  else if(mom!==null){const mc=mom>=0?'#ff7b7b':'#7bb8ff';html+=` <span style="color:${mc};font-size:11px">${mom>=0?'▲':'▼'}${Math.abs(mom).toFixed(1)}%</span>`;}
+                  html+=` <span style="color:#94a3b8;font-size:11px">(${wonNo(q)}건)</span></div>`;
+                });
+                el.innerHTML=html;
+                const tw=el.offsetWidth||220;let lx=tooltip.caretX+12;if(tooltip.caretX+tw+20>chart.width)lx=tooltip.caretX-tw-12;
+                el.style.left=lx+'px';el.style.top=(tooltip.caretY-20)+'px';
+              }}
+            },
+            scales:{x:{ticks:{font:{size:10,weight:'600'}}},y:{ticks:{font:{size:9},callback:v=>short(v)},beginAtZero:true}}
           }
-        }
-      });
+        });
+      } else {
+        const yrMoData=moYears.map(yr=>uniqueMoNums.map(m=>moByYear[yr]?.[m]?.s||0));
+        const yrMoDatasets=moYears.length===0?[]:moYears.length===1?[
+          {label:`${moYears[0]}년`,data:yrMoData[0],backgroundColor:'#0284c7CC',borderRadius:5,barPercentage:.7,categoryPercentage:.8}
+        ]:moYears.length===2?[
+          {label:`${moYears[0]}년`,data:yrMoData[0],backgroundColor:'#64748b99',borderRadius:5,barPercentage:.7,categoryPercentage:.8},
+          {label:`${moYears[1]}년`,data:yrMoData[1],backgroundColor:'#0284c7CC',borderRadius:5,barPercentage:.7,categoryPercentage:.8}
+        ]:moYears.map((yr,i)=>({label:`${yr}년`,data:yrMoData[i],backgroundColor:PAL[i%PAL.length]+'cc',borderRadius:5,barPercentage:.7,categoryPercentage:.8}));
+        const yrMoLabels=uniqueMoNums.map(m=>parseInt(m)+'월');
+        charts.mxMonth=new Chart(moEl,{
+          type:'bar',
+          data:{labels:yrMoLabels,datasets:yrMoDatasets},
+          options:{responsive:true,maintainAspectRatio:false,
+            plugins:{
+              legend:{display:true,position:'top',labels:{font:{size:11,weight:'600'},boxWidth:12,padding:16}},
+              tooltip:{enabled:false,external:function(ctx){
+                const {chart,tooltip}=ctx;
+                const el=makeDarkTip(chart,'mx-mo-tip');
+                if(tooltip.opacity===0){el.style.opacity='0';return;}
+                el.style.opacity='1';
+                const lbl=tooltip.title?.[0]||'';
+                const moIdx=tooltip.dataPoints?.[0]?.dataIndex??-1;
+                let html=`<div style="font-weight:700;margin-bottom:8px;color:#0ea5e9;font-size:14px">${lbl}</div>`;
+                tooltip.dataPoints?.forEach(dp=>{
+                  const yr=moYears[dp.datasetIndex];
+                  const arr=yrMoData[dp.datasetIndex]||[];
+                  const v=dp.raw;
+                  const dotColor=moYears.length===2&&dp.datasetIndex===0?'#64748b':'#0ea5e9';
+                  const prevMoVal=moIdx>0?(arr[moIdx-1]||0):0;
+                  const mom=prevMoVal>0?((v-prevMoVal)/prevMoVal*100):(prevMoVal===0&&v>0?'NEW':null);
+                  html+=`<div style="margin-bottom:4px"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${dotColor};margin-right:5px;vertical-align:middle"></span><span style="color:#ddd">${yr}년:</span> <span style="font-weight:700;margin-left:4px">${won(v)}</span>`;
+                  if(mom==='NEW'){html+=` <span style="color:#fbbf24;font-size:11px;font-weight:600">전월대비 NEW</span>`;}
+                  else if(mom!==null){const mc=mom>=0?'#ff7b7b':'#7bb8ff';html+=` <span style="color:${mc};font-size:11px;font-weight:600">${mom>=0?'▲':'▼'}${Math.abs(mom).toFixed(1)}%</span>`;}
+                  html+='</div>';
+                });
+                if(moYears.length>=2&&moIdx>=0){
+                  const pv=yrMoData[0]?.[moIdx]||0;const cv=yrMoData[1]?.[moIdx]||0;
+                  if(pv>0&&cv>0){const yoy=(cv-pv)/pv*100;const yc=yoy>=0?'#ff7b7b':'#7bb8ff';const ys=yoy>=0?'▲':'▼';
+                    html+=`<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.15);font-size:11px"><span style="color:#a0adb8">전년대비</span> <span style="color:${yc};font-weight:700;margin-left:6px">${ys}${Math.abs(yoy).toFixed(1)}%</span></div>`;
+                  }
+                }
+                el.innerHTML=html;
+                const tw=el.offsetWidth||200;let lx=tooltip.caretX+12;if(tooltip.caretX+tw+20>chart.width)lx=tooltip.caretX-tw-12;
+                el.style.left=lx+'px';el.style.top=(tooltip.caretY-20)+'px';
+              }}
+            },
+            scales:{x:{ticks:{font:{size:10,weight:'600'}}},y:{ticks:{font:{size:9},callback:v=>short(v)},beginAtZero:true}}
+          }
+        });
+      }
     }
 
     // ── 매출처 도넛 ──
@@ -7491,7 +7619,7 @@ function renderMatrix(f){
         const chColorMap={};
         chList.forEach(([ch],i)=>{chColorMap[ch]=i;});
         const cpEntries=Object.values(chProdAgg)
-          .sort((a,b)=>b.s-a.s).slice(0,14);
+          .sort((a,b)=>b.s-a.s).slice(0,20);
         const cpTotal=cpEntries.reduce((s,d)=>s+d.s,0);
         charts.mxProdDonut=new Chart(prodDonutEl,{
           type:'doughnut',
