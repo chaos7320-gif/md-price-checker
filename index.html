@@ -3155,15 +3155,15 @@ function renderTop20(filtP,filtered,filteredP,f){
     </div>
     <div class="table-wrap"><table>
       <thead><tr>
-        <th>순위</th><th>상품명</th>
-        <th class="nr">실매출액</th><th class="nr">정상가</th>
-        <th class="nr">할인액</th><th class="nr">할인율</th>
-        <th class="nr" style="color:#0284c7">판매수량 \u24d8</th>
-        <th class="nr" style="color:#3a7abf">잔여재고</th>
+        <th>순위</th><th class="sortable" onclick="_tblSort(this)">상품명</th>
+        <th class="nr sortable sort-desc" onclick="_tblSort(this)">실매출액</th><th class="nr sortable" onclick="_tblSort(this)">정상가</th>
+        <th class="nr sortable" onclick="_tblSort(this)">할인액</th><th class="nr sortable" onclick="_tblSort(this)">할인율</th>
+        <th class="nr sortable" onclick="_tblSort(this)" style="color:#0284c7">판매수량 \u24d8</th>
+        <th class="nr sortable" onclick="_tblSort(this)" style="color:#3a7abf">잔여재고</th>
         <th style="min-width:100px">비중</th>
       </tr></thead>
       <tbody>${top20.map(([prod,d],i)=>{
-        const da=d.rt-d.s;const dr=d.rt>0?da/d.rt*100:0;const p=tS>0?Math.round(d.s/tS*100):0;
+        const da=d.rt-d.s;const dr=d.rt>0?da/d.rt*100:0;const p=tS>0?Math.round(d.s/tS*100):0;const stk=invStockMap[prod]??-1;
         return`<tr data-t20-prod="${escHtml(prod)}">
           <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
           <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:500">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
@@ -6341,6 +6341,26 @@ function filterT20Rows(srcEl){
   document.querySelectorAll('tr[data-t20-prod]').forEach(tr=>{
     const p=(tr.getAttribute('data-t20-prod')||'').toLowerCase();
     tr.style.display=(!lq||p.includes(lq))?'':'none';
+  });
+}
+function _tblSort(th){
+  const tbl=th.closest('table'),tbody=tbl&&tbl.querySelector('tbody');
+  if(!tbody)return;
+  const asc=th.classList.contains('sort-desc');
+  const ci=[...th.closest('tr').children].indexOf(th);
+  th.closest('tr').querySelectorAll('th.sortable').forEach(t=>t.classList.remove('sort-asc','sort-desc'));
+  th.classList.add(asc?'sort-asc':'sort-desc');
+  const rows=[...tbody.querySelectorAll('tr[data-sr]')];
+  rows.sort((a,b)=>{
+    const va=a.children[ci]?.dataset.v??'',vb=b.children[ci]?.dataset.v??'';
+    const na=parseFloat(va),nb=parseFloat(vb);
+    if(!isNaN(na)&&!isNaN(nb))return asc?na-nb:nb-na;
+    return asc?va.localeCompare(vb,'ko'):vb.localeCompare(va,'ko');
+  });
+  rows.forEach(r=>tbody.appendChild(r));
+  rows.forEach((r,i)=>{
+    const rk=r.querySelector('.rank');
+    if(rk){rk.className='rank '+(i===0?'gold':i===1?'silver':i===2?'bronze':'');rk.textContent=i+1;}
   });
 }
 
