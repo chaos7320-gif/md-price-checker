@@ -7408,7 +7408,7 @@ function renderMatrix(f){
 <div class="chart-card" style="margin-bottom:16px">
   <div class="chart-header"><div>
     <div class="chart-title">🏪 매출처 별 매출 비중</div>
-    <div class="chart-sub">매출처 상위 20개 · 슬라이스 호버 시 상세 확인</div>
+    <div class="chart-sub">매출처 상위 20개 · 슬라이스 호버 시 상세 확인 · 클릭 시 상품별 매출 확인</div>
   </div></div>
   <div style="display:flex;gap:32px;align-items:flex-start;margin-top:8px">
     <div style="flex-shrink:0;position:relative;width:280px;height:280px">
@@ -7835,12 +7835,25 @@ function renderMatrix(f){
       </div>`;
 
     // ── 매출처 도넛 ──
+    const chProdBreakdown=ch=>Object.values(chProdAgg).filter(d=>d.ch===ch).sort((a,b)=>b.s-a.s).slice(0,15).map(d=>[d.prod,d]);
+    const openChBreakdown=(nativeEvt,ch,d)=>{
+      if(!ch)return;
+      const pct=totalS>0?(d.s/totalS*100).toFixed(1):'0.0';
+      showBarBreakdownPopup(nativeEvt,ch,
+        [`<div>매출: <b style="color:#fff">${won(d.s)}</b> <span style="color:rgba(255,255,255,.45)">(${pct}%)</span></div>`,`<div>수량: <b style="color:#fff">${wonNo(d.q)}건</b></div>`],
+        chProdBreakdown(ch));
+    };
     const chDonutEl=document.getElementById('c-mx-ch-donut');
     if(chDonutEl){
       charts.mxChDonut=new Chart(chDonutEl,{
         type:'doughnut',
         data:{labels:chList.map(([ch])=>ch),datasets:[{data:chList.map(([,d])=>d.s),backgroundColor:chList.map((_,i)=>PAL[i%PAL.length]),borderWidth:2,borderColor:'#fff',hoverOffset:10}]},
         options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+          onClick:(evt,els)=>{
+            if(!els.length)return;
+            const [ch,d]=chList[els[0].index]||[];
+            openChBreakdown(evt.native,ch,d);
+          },
           plugins:{
             legend:{display:false},
             tooltip:{enabled:false,external:function(ctx){
@@ -7867,12 +7880,19 @@ function renderMatrix(f){
       if(chCtr) chCtr.innerHTML=`<div style="font-size:11px;color:var(--muted);font-weight:500">${chList.length}개 채널</div><div style="font-size:15px;font-weight:700;color:var(--text);margin-top:2px">${short(totalS)}</div>`;
       const chMaxPct=chList.length&&totalS>0?(chList[0][1].s/totalS*100):100;
       const chLegEl=document.getElementById('mx-ch-legend');
-      if(chLegEl) chLegEl.innerHTML=chList.map(([ch,d],i)=>{
-        const pv=totalS>0?(d.s/totalS*100):0;
-        const bw=chMaxPct>0?(pv/chMaxPct*100).toFixed(1):'0';
-        const label=ch.length>14?ch.slice(0,14)+'…':ch;
-        return mkLegItem(PAL[i%PAL.length],escHtml(label),pv.toFixed(1),bw,escHtml(ch)+' '+pv.toFixed(1)+'%',false);
-      }).join('');
+      if(chLegEl){
+        chLegEl.innerHTML=chList.map(([ch,d],i)=>{
+          const pv=totalS>0?(d.s/totalS*100):0;
+          const bw=chMaxPct>0?(pv/chMaxPct*100).toFixed(1):'0';
+          const label=ch.length>14?ch.slice(0,14)+'…':ch;
+          return`<div data-ch-idx="${i}" style="cursor:pointer">${mkLegItem(PAL[i%PAL.length],escHtml(label),pv.toFixed(1),bw,escHtml(ch)+' '+pv.toFixed(1)+'% · 클릭 시 상품별 매출 확인',false)}</div>`;
+        }).join('');
+        chLegEl.querySelectorAll('[data-ch-idx]').forEach(item=>{
+          const [ch,d]=chList[parseInt(item.dataset.chIdx)]||[];
+          if(!ch)return;
+          item.addEventListener('click',ev=>{ev.stopPropagation();openChBreakdown(ev,ch,d);});
+        });
+      }
     }
 
     // ── 상품 도넛 (채널 비교 모드: 채널×상품, 일반: 상품별) ──
