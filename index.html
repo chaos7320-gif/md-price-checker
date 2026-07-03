@@ -1391,6 +1391,13 @@ let charts={};
 // 모든 숫자를 한국식 천단위 콤마로 완전 표기
 function won(n){return Math.round(n).toLocaleString('ko-KR')+'원';}
 function wonNo(n){return Math.round(n).toLocaleString('ko-KR');}   // 원 없이
+// 차트 툴팁용: base 대비 cur의 차액/증감율 두 줄 생성
+function diffRateLines(base,cur){
+  const diff=cur-base;
+  const diffStr=`${diff>=0?'+':''}${wonNo(diff)}원`;
+  const rateStr=base>0?`${diff>=0?'+':''}${(diff/base*100).toFixed(1)}%`:'—';
+  return [`차액: ${diffStr}`,`증감율: ${rateStr}`];
+}
 
 // ── 사이즈별 재고 툴팁 (잔여재고/재입고 테이블용) ──
 // data-bi, data-prod 속성을 읽어 동적 wkSales 기반으로 계산
@@ -8178,7 +8185,10 @@ ${brands.map(bi=>{
         },
         options:{
           responsive:true,maintainAspectRatio:false,
-          plugins:{legend:{position:'top',labels:{font:{size:12}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${wonNo(ctx.parsed.y)}원`}}},
+          plugins:{legend:{position:'top',labels:{font:{size:12}}},tooltip:{callbacks:{
+            label:ctx=>`${ctx.dataset.label}: ${wonNo(ctx.parsed.y)}원`,
+            afterBody:ctx=>diffRateLines(tgt[ctx[0].dataIndex],act2[ctx[0].dataIndex])
+          }}},
           scales:{y:{ticks:{callback:v=>{if(v>=100000000)return (v/100000000).toFixed(0)+'억';if(v>=10000)return (v/10000).toFixed(0)+'만';return v;}},grid:{color:'rgba(0,0,0,.04)'}},x:{grid:{display:false}}}
         }
       });
@@ -8199,7 +8209,10 @@ ${brands.map(bi=>{
         },
         options:{
           responsive:true,maintainAspectRatio:false,
-          plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${wonNo(ctx.parsed.y)}원`}}},
+          plugins:{legend:{display:false},tooltip:{callbacks:{
+            label:ctx=>`${ctx.dataset.label}: ${wonNo(ctx.parsed.y)}원`,
+            afterBody:ctx=>diffRateLines(g.monthly_target[ctx[0].dataIndex],actual[bi][ctx[0].dataIndex])
+          }}},
           scales:{y:{display:false},x:{ticks:{font:{size:9}},grid:{display:false}}}
         }
       });
@@ -8238,7 +8251,10 @@ ${brands.map(bi=>{
             responsive:true,maintainAspectRatio:false,
             plugins:{
               legend:{position:'top',labels:{font:{size:12}}},
-              tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${wonNo(ctx.parsed.y)}원`}}
+              tooltip:{callbacks:{
+                label:ctx=>`${ctx.dataset.label}: ${wonNo(ctx.parsed.y)}원`,
+                afterBody:ctx=>diffRateLines(data25[ctx[0].dataIndex],data26[ctx[0].dataIndex])
+              }}
             },
             scales:{
               y:{ticks:{callback:v=>{if(v>=100000000)return(v/100000000).toFixed(0)+'억';if(v>=10000)return(v/10000).toFixed(0)+'만';return v;}},grid:{color:'rgba(0,0,0,.04)'}},
