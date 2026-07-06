@@ -7171,6 +7171,12 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
             else if(prev>0){const gr=(curr-prev)/prev*100; g=` · 전월대비 ${gr>=0?'▲ +':'▼ '}${Math.abs(gr).toFixed(1)}%`;}
           }
           return ` ${c.dataset.label}: ${won(curr)}${g}`;
+        },afterBody:c=>{
+          const item=c[0];
+          if(!item||item.dataset.type==='line')return[];
+          const tgt=tgt26[item.dataIndex];
+          if(!tgt)return[];
+          return diffRateLines(tgt,item.raw).map(s=>`목표대비 ${s}`);
         }}}},
         scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}}});
     }
