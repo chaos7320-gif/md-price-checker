@@ -3309,7 +3309,9 @@ function renderTop20(filtP,filtered,filteredP,f){
     const headCells=recentWks.map(wk=>
       `<th class="nr" style="min-width:116px;padding:8px 10px;background:#f0fdf4;color:#15803d;font-size:11px;letter-spacing:.2px;line-height:1.35">${wkLbl(wk)}</th>`
     ).join('');
-    const rows=top20.map(([prod,d],i)=>{
+    // 브랜드 선택 시(bI>=0) 전체 상품, 미선택(전체 브랜드) 시 TOP20만 표시
+    const cumList=bI>=0?allProds:top20;
+    const rows=cumList.map(([prod,d],i)=>{
       const wkData=wkQtyByProd[prod]||{};
       const insData=insWkByProd[prod]||{};
       const stock=stockByProd[prod]||0;
@@ -3358,23 +3360,23 @@ function renderTop20(filtP,filtered,filteredP,f){
     recentWks.forEach(wk=>{ totalsByWk[wk]=0; insTotalsByWk[wk]=0; });
     let cumBeforeAll=0, cumInsBeforeAll=0;
     Object.entries(wkQtyByProd).forEach(([prod,o])=>{
-      if(!top20.some(([p])=>p===prod)) return;
+      if(!cumList.some(([p])=>p===prod)) return;
       Object.entries(o).forEach(([wk,q])=>{
         if(wk<earliest) cumBeforeAll+=q;
         else if(totalsByWk[wk]!==undefined) totalsByWk[wk]+=q;
       });
     });
     Object.entries(insWkByProd).forEach(([prod,o])=>{
-      if(!top20.some(([p])=>p===prod)) return;
+      if(!cumList.some(([p])=>p===prod)) return;
       Object.entries(o).forEach(([wk,q])=>{
         if(wk<earliest) cumInsBeforeAll+=q;
         else if(insTotalsByWk[wk]!==undefined) insTotalsByWk[wk]+=q;
       });
     });
-    const totalStockAll=top20.reduce((s,[p])=>s+(stockByProd[p]||0),0);
-    const totalQAll=top20.reduce((s,[p])=>s+Math.round(totQtyByProd[p]||0),0);
-    const totalInsAll=top20.reduce((s,[p])=>s+Math.round(totInsByProd[p]||0),0);
-    const totalInitStockAll=top20.reduce((s,[p])=>s+Math.max(0,(stockByProd[p]||0)+Math.round(totQtyByProd[p]||0)-Math.round(totInsByProd[p]||0)),0);
+    const totalStockAll=cumList.reduce((s,[p])=>s+(stockByProd[p]||0),0);
+    const totalQAll=cumList.reduce((s,[p])=>s+Math.round(totQtyByProd[p]||0),0);
+    const totalInsAll=cumList.reduce((s,[p])=>s+Math.round(totInsByProd[p]||0),0);
+    const totalInitStockAll=cumList.reduce((s,[p])=>s+Math.max(0,(stockByProd[p]||0)+Math.round(totQtyByProd[p]||0)-Math.round(totInsByProd[p]||0)),0);
     let cumAll=cumBeforeAll, cumInsAll=cumInsBeforeAll;
     const totWkCells=recentWks.map(wk=>{
       const q=Math.round(totalsByWk[wk]||0);
@@ -3392,7 +3394,7 @@ function renderTop20(filtP,filtered,filteredP,f){
     const denomAll=totalStockAll+totalQAll;
     const totalAllRate=denomAll>0?(totalQAll/denomAll*100):0;
     const totalRow=`<tr style="font-weight:700;border-top:2px solid var(--border);background:var(--sky-light)">
-      <td colspan="2" style="color:var(--sky)">합계 (${top20.length}개)</td>
+      <td colspan="2" style="color:var(--sky)">합계 (${cumList.length}개)</td>
       ${totWkCells}
       <td class="nr" style="color:var(--sky)">${wonNo(totalStockAll)}개</td>
       <td class="nr" style="color:var(--sky)">${totalAllRate.toFixed(1)}%</td>
@@ -3400,7 +3402,7 @@ function renderTop20(filtP,filtered,filteredP,f){
     return `<div class="table-card" style="margin-bottom:16px">
       <div class="chart-header">
         <div>
-          <div class="chart-title">📈 상품별 주차 누적 추이</div>
+          <div class="chart-title">📈 상품별 주차 누적 추이 <span style="font-size:11px;font-weight:600;color:var(--muted)">(${bI>=0?`전체 ${cumList.length}개`:'TOP 20'})</span></div>
           <div class="chart-sub">최근 ${recentWks.length}주차 · 셀: 주간 판매 / 누적 판매 / 누적 소진율(%) · 주차별 소진율 = 누적판매 / (초기재고 + 누적입고) · 입고 시 분모 증가로 희석</div>
         </div>
         <input type="text" class="t20-search" oninput="filterT20Rows(this)" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none;flex-shrink:0">
