@@ -3388,18 +3388,19 @@ function renderTop20(filtP,filtered,filteredP,f){
       const swTxt=stock<=0?'-':(avgWk2<=0?'판매없음':`${sellableWks.toFixed(1)}주`);
       const swBg=sellableWks===null?'#f1f5f9':sellableWks<2?'#fef2f2':sellableWks<4?'#fef9c3':'#dcfce7';
       const swCol=sellableWks===null?'var(--hint)':sellableWks<2?'#dc2626':sellableWks<4?'#a16207':'#15803d';
+      const swSortV=stock<=0?-1:(sellableWks===null?9999:sellableWks);
       const stkHtml=stock<=0
         ?'<span style="color:var(--red);font-weight:700">품절</span>'
         :`<span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)">${wonNo(stock)}개<div class="sz-tooltip-box"><div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${prod.length>24?prod.slice(0,24)+'…':prod} 사이즈별 판매·재고</div>${invSizeGridHTML(prod)}</div></span>`;
-      return `<tr data-t20-prod="${escHtml(prod)}">
+      return `<tr data-t20-prod="${escHtml(prod)}" data-cum-row="1">
         <td><span class="rank">${i+1}</span></td>
-        <td style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
+        <td data-v="${escHtml(prod)}" style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
         ${wkCells}
         <td class="nr" style="font-weight:600">${wonNo(initStock)}개</td>
-        <td class="nr" style="font-weight:600"><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" data-prod="${escHtml(prod)}" data-sched="${escHtml(JSON.stringify(Object.fromEntries(Object.entries(insData).map(([k,v])=>[k,Math.round(v)]))))}" onclick="showInboundSchedPopup(event,this)">${wonNo(totIns)}개</span></td>
-        <td class="nr" style="font-weight:600">${stkHtml}</td>
-        <td class="nr"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${swBg};color:${swCol}">${swTxt}</span></td>
-        <td class="nr"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${totSellBg};color:${totSellCol}">${totSellRate.toFixed(1)}%</span></td>
+        <td class="nr" data-v="${totIns}" style="font-weight:600"><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" data-prod="${escHtml(prod)}" data-sched="${escHtml(JSON.stringify(Object.fromEntries(Object.entries(insData).map(([k,v])=>[k,Math.round(v)]))))}" onclick="showInboundSchedPopup(event,this)">${wonNo(totIns)}개</span></td>
+        <td class="nr" data-v="${stock}" style="font-weight:600">${stkHtml}</td>
+        <td class="nr" data-v="${swSortV}"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${swBg};color:${swCol}">${swTxt}</span></td>
+        <td class="nr" data-v="${totSellRate}"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${totSellBg};color:${totSellCol}">${totSellRate.toFixed(1)}%</span></td>
       </tr>`;
     }).join('');
     // 합계 행
@@ -3447,7 +3448,7 @@ function renderTop20(filtP,filtered,filteredP,f){
     const totalAvgWk2=totalLast2Wks.length?totalLast2Wks.reduce((s,wk)=>s+Math.round(totalsByWk[wk]||0),0)/totalLast2Wks.length:0;
     const totalSellableWks=totalStockAll>0&&totalAvgWk2>0?totalStockAll/totalAvgWk2:null;
     const totalSwTxt=totalStockAll<=0?'-':(totalAvgWk2<=0?'판매없음':`${totalSellableWks.toFixed(1)}주`);
-    const totalRow=`<tr style="font-weight:700;border-top:2px solid var(--border);background:var(--sky-light)">
+    const totalRow=`<tr data-cum-total="1" style="font-weight:700;border-top:2px solid var(--border);background:var(--sky-light)">
       <td colspan="2" style="color:var(--sky)">합계 (${cumList.length}개)</td>
       ${totWkCells}
       <td class="nr" style="color:var(--sky)">${wonNo(totalInitStockAll)}개</td>
@@ -3467,13 +3468,13 @@ function renderTop20(filtP,filtered,filteredP,f){
       <div class="table-wrap" style="max-height:720px"><table style="font-size:12px">
         <thead><tr>
           <th style="min-width:38px">순위</th>
-          <th style="min-width:160px">상품명</th>
+          <th class="sortable" onclick="_cumTrendSort(this)" style="min-width:160px">상품명</th>
           ${headCells}
           <th class="nr" style="min-width:90px">${BASE_YR}년 1월<br>기초재고</th>
-          <th class="nr" style="min-width:90px">${BASE_YR}년<br>입고재고</th>
-          <th class="nr" style="min-width:80px">현재 재고</th>
-          <th class="nr" style="min-width:100px">판매가능주차<br>(2주판매기준)</th>
-          <th class="nr" style="min-width:90px">전체 소진율</th>
+          <th class="nr sortable" onclick="_cumTrendSort(this)" style="min-width:90px">${BASE_YR}년<br>입고재고</th>
+          <th class="nr sortable" onclick="_cumTrendSort(this)" style="min-width:80px">현재 재고</th>
+          <th class="nr sortable" onclick="_cumTrendSort(this)" style="min-width:100px">판매가능주차<br>(2주판매기준)</th>
+          <th class="nr sortable" onclick="_cumTrendSort(this)" style="min-width:90px">전체 소진율</th>
         </tr></thead>
         <tbody>${rows}${totalRow}</tbody>
       </table></div>
@@ -6460,6 +6461,29 @@ function _tblSort(th){
   rows.forEach((r,i)=>{
     const rk=r.querySelector('.rank');
     if(rk){rk.className='rank '+(i===0?'gold':i===1?'silver':i===2?'bronze':'');rk.textContent=i+1;}
+  });
+}
+// ── 상품별 주차 누적 추이 전용 정렬 (합계 행은 항상 맨 아래 고정) ──
+function _cumTrendSort(th){
+  const tbl=th.closest('table'),tbody=tbl&&tbl.querySelector('tbody');
+  if(!tbody)return;
+  const asc=th.classList.contains('sort-desc');
+  const ci=[...th.closest('tr').children].indexOf(th);
+  th.closest('tr').querySelectorAll('th.sortable').forEach(t=>t.classList.remove('sort-asc','sort-desc'));
+  th.classList.add(asc?'sort-asc':'sort-desc');
+  const totalRow=tbody.querySelector('tr[data-cum-total]');
+  const rows=[...tbody.querySelectorAll('tr[data-cum-row]')];
+  rows.sort((a,b)=>{
+    const va=a.children[ci]?.dataset.v??'',vb=b.children[ci]?.dataset.v??'';
+    const na=parseFloat(va),nb=parseFloat(vb);
+    if(!isNaN(na)&&!isNaN(nb))return asc?na-nb:nb-na;
+    return asc?va.localeCompare(vb,'ko'):vb.localeCompare(va,'ko');
+  });
+  rows.forEach(r=>tbody.appendChild(r));
+  if(totalRow) tbody.appendChild(totalRow);
+  rows.forEach((r,i)=>{
+    const rk=r.querySelector('.rank');
+    if(rk) rk.textContent=i+1;
   });
 }
 
