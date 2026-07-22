@@ -3298,7 +3298,7 @@ function renderTop20(filtP,filtered,filteredP,f){
       totInsByProd[prod]=(totInsByProd[prod]||0)+q;
     });
     // 최근 N주차
-    const N=8;
+    const N=6;
     const allWksSet=new Set();
     Object.values(wkQtyByProd).forEach(o=>Object.keys(o).forEach(w=>allWksSet.add(w)));
     const allWks=[...allWksSet].sort();
@@ -3309,8 +3309,8 @@ function renderTop20(filtP,filtered,filteredP,f){
     const headCells=recentWks.map(wk=>
       `<th class="nr" style="min-width:116px;padding:8px 10px;background:#f0fdf4;color:#15803d;font-size:11px;letter-spacing:.2px;line-height:1.35">${wkLbl(wk)}</th>`
     ).join('');
-    // 브랜드 선택 시(bI>=0) 전체 상품, 미선택(전체 브랜드) 시 TOP20만 표시
-    const cumList=bI>=0?allProds:top20;
+    // 브랜드 선택 시(bI>=0) 전체 상품, 미선택(전체 브랜드) 시 TOP20만 표시 · 상품명 내림차순 정렬
+    const cumList=(bI>=0?allProds:top20).slice().sort((a,b)=>b[0].localeCompare(a[0],'ko'));
     const rows=cumList.map(([prod,d],i)=>{
       const wkData=wkQtyByProd[prod]||{};
       const insData=insWkByProd[prod]||{};
@@ -3347,9 +3347,11 @@ function renderTop20(filtP,filtered,filteredP,f){
         ?'<span style="color:var(--red);font-weight:700">품절</span>'
         :`<span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)">${wonNo(stock)}개<div class="sz-tooltip-box"><div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${prod.length>24?prod.slice(0,24)+'…':prod} 사이즈별 판매·재고</div>${invSizeGridHTML(prod)}</div></span>`;
       return `<tr data-t20-prod="${escHtml(prod)}">
-        <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
+        <td><span class="rank">${i+1}</span></td>
         <td style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
         ${wkCells}
+        <td class="nr" style="font-weight:600">${wonNo(initStock)}개</td>
+        <td class="nr" style="font-weight:600">${wonNo(totIns)}개</td>
         <td class="nr" style="font-weight:600">${stkHtml}</td>
         <td class="nr"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${totSellBg};color:${totSellCol}">${totSellRate.toFixed(1)}%</span></td>
       </tr>`;
@@ -3396,14 +3398,16 @@ function renderTop20(filtP,filtered,filteredP,f){
     const totalRow=`<tr style="font-weight:700;border-top:2px solid var(--border);background:var(--sky-light)">
       <td colspan="2" style="color:var(--sky)">합계 (${cumList.length}개)</td>
       ${totWkCells}
+      <td class="nr" style="color:var(--sky)">${wonNo(totalInitStockAll)}개</td>
+      <td class="nr" style="color:var(--sky)">${wonNo(totalInsAll)}개</td>
       <td class="nr" style="color:var(--sky)">${wonNo(totalStockAll)}개</td>
       <td class="nr" style="color:var(--sky)">${totalAllRate.toFixed(1)}%</td>
     </tr>`;
     return `<div class="table-card" style="margin-bottom:16px">
       <div class="chart-header">
         <div>
-          <div class="chart-title">📈 상품별 주차 누적 추이 <span style="font-size:11px;font-weight:600;color:var(--muted)">(${bI>=0?`전체 ${cumList.length}개`:'TOP 20'})</span></div>
-          <div class="chart-sub">최근 ${recentWks.length}주차 · ${BASE_YR}년 1월 기초재고 · ${BASE_YR}년 판매·입고 기준 소진율 · 셀: 주간 판매 / 누적 판매 / 누적 소진율(%) · 주차별 소진율 = 누적판매 / (초기재고 + 누적입고) · 입고 시 분모 증가로 희석</div>
+          <div class="chart-title">📈 상품별 주차 누적 추이 <span style="font-size:11px;font-weight:600;color:var(--muted)">(${bI>=0?`전체 ${cumList.length}개`:'TOP 20'} · 상품명 내림차순)</span></div>
+          <div class="chart-sub">최근 ${recentWks.length}주차 · ${BASE_YR}년 1월 기초재고 → ${BASE_YR}년 입고재고 → 현재재고 → 전체소진율 순 · 셀: 주간 판매 / 누적 판매 / 누적 소진율(%) · 주차별 소진율 = 누적판매 / (초기재고 + 누적입고) · 입고 시 분모 증가로 희석</div>
         </div>
         <input type="text" class="t20-search" oninput="filterT20Rows(this)" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none;flex-shrink:0">
       </div>
@@ -3412,6 +3416,8 @@ function renderTop20(filtP,filtered,filteredP,f){
           <th style="min-width:38px">순위</th>
           <th style="min-width:160px">상품명</th>
           ${headCells}
+          <th class="nr" style="min-width:90px">${BASE_YR}년 1월<br>기초재고</th>
+          <th class="nr" style="min-width:90px">${BASE_YR}년<br>입고재고</th>
           <th class="nr" style="min-width:80px">현재 재고</th>
           <th class="nr" style="min-width:90px">전체 소진율</th>
         </tr></thead>
