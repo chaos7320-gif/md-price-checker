@@ -6391,13 +6391,12 @@ function _prodHistoryTipHTML(prod){
 
 // ── 상품 TOP 20 상세 / 누적 추이 검색 필터 (검색창 양쪽 동기화) ──
 function filterT20Rows(srcEl){
-  let q='';
-  if(srcEl) q=srcEl.value;
-  else { const first=document.querySelector('.t20-search'); q=first?first.value:''; }
-  q=q.trim();
-  // 다른 검색창 동기화
-  document.querySelectorAll('.t20-search').forEach(inp=>{ if(inp.value!==q) inp.value=q; });
-  const lq=q.toLowerCase();
+  let raw='';
+  if(srcEl) raw=srcEl.value;
+  else { const first=document.querySelector('.t20-search'); raw=first?first.value:''; }
+  // 다른 검색창만 동기화 — 입력 중인 창은 그대로 두어 끝 공백 입력이 끊기지 않도록 함
+  document.querySelectorAll('.t20-search').forEach(inp=>{ if(inp!==srcEl && inp.value!==raw) inp.value=raw; });
+  const lq=raw.trim().toLowerCase();
   document.querySelectorAll('tr[data-t20-prod]').forEach(tr=>{
     const p=(tr.getAttribute('data-t20-prod')||'').toLowerCase();
     tr.style.display=(!lq||p.includes(lq))?'':'none';
