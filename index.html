@@ -3240,33 +3240,33 @@ function renderTop20(filtP,filtered,filteredP,f){
   const cumTrendCard=(()=>{
     if(!_isWkModeT20) return '';
     const bI=f.b==='ALL'?-1:parseInt(f.b);
+    // 기초재고/소진율 기준연도 — 26년 1월 기초재고 · 26년 판매·입고 기준 (연도 필터와 무관하게 고정)
+    const BASE_YR=2026;
     // 채널 필터 시 CHP_DATA(채널×상품) 직접 사용 → ratio 추정 없이 실측. 없으면 PROD_DATA + ratio 폴백.
     const chFilterCum=f.chs&&f.chs.length>0;
     const useChp=chFilterCum&&CHP_DATA&&CHP_DATA.length;
     let cumChRatio=1;
     if(chFilterCum&&!useChp){
-      const yrSetCh=f.yrs&&f.yrs.length?new Set(f.yrs):null;
-      const tAll=TOP_DATA.filter(r=>(bI<0||r[0]===bI)&&(!yrSetCh||yrSetCh.has(r[1]))&&!(r[2]===12&&r[3]===1));
+      const tAll=TOP_DATA.filter(r=>(bI<0||r[0]===bI)&&r[1]===BASE_YR&&!(r[2]===12&&r[3]===1));
       const tCh=tAll.filter(r=>chOk(r,f));
       const qAll=tAll.reduce((s,r)=>s+r[5],0);
       const qCh=tCh.reduce((s,r)=>s+r[5],0);
       cumChRatio=qAll>0?qCh/qAll:0;
     }
     const prodSetCum=(f.prods&&f.prods.length)?new Set(f.prods):null;
-    const yrSetCum=f.yrs&&f.yrs.length?new Set(f.yrs):null;
     const chsSetCum=useChp?new Set(f.chs):null;
-    // 상품×주차 판매수량 (월/주 필터 무시 — 추이 보기 위함)
+    // 상품×주차 판매수량 (26년 기준 · 월/주 필터 무시 — 추이 보기 위함)
     const wkQtyByProd={};
     const totQtyByProd={};
     const _srcCum=useChp?CHP_DATA:PROD_DATA;
     const _idxProd=useChp?5:4, _idxQty=useChp?6:5;
     _srcCum.forEach(r=>{
       if(bI>=0&&r[0]!==bI) return;
+      if(r[1]!==BASE_YR) return;
       if(r[2]===12&&r[3]===1) return;
       if(useChp&&!chsSetCum.has(r[4])) return;
       const prod=r[_idxProd];
       if(prodSetCum&&!prodSetCum.has(prod)) return;
-      if(yrSetCum&&!yrSetCum.has(r[1])) return;
       const q=cumChRatio===1?r[_idxQty]:r[_idxQty]*cumChRatio;
       if(q<=0) return;
       const wkKey=`${r[1]}-W${String(r[3]).padStart(2,'0')}`;
@@ -3281,15 +3281,15 @@ function renderTop20(filtP,filtered,filteredP,f){
       if(prodSetCum&&!prodSetCum.has(r.prod)) return;
       stockByProd[r.prod]=(stockByProd[r.prod]||0)+(r.stock||0);
     });
-    // 입고 데이터 (INS_DATA: [bi,yr,mo,wk,prod,size,qty,cost])
+    // 입고 데이터 (INS_DATA: [bi,yr,mo,wk,prod,size,qty,cost]) — 26년 기준
     const insWkByProd={};
     const totInsByProd={};
     (typeof INS_DATA!=='undefined'?INS_DATA:[]).forEach(r=>{
       if(bI>=0&&r[0]!==bI) return;
+      if(r[1]!==BASE_YR) return;
       if(r[2]===12&&r[3]===1) return;
       const prod=r[4];
       if(prodSetCum&&!prodSetCum.has(prod)) return;
-      if(yrSetCum&&!yrSetCum.has(r[1])) return;
       const q=cumChRatio===1?(r[6]||0):(r[6]||0)*cumChRatio;
       if(q<=0) return;
       const wkKey=`${r[1]}-W${String(r[3]).padStart(2,'0')}`;
@@ -3403,11 +3403,11 @@ function renderTop20(filtP,filtered,filteredP,f){
       <div class="chart-header">
         <div>
           <div class="chart-title">📈 상품별 주차 누적 추이 <span style="font-size:11px;font-weight:600;color:var(--muted)">(${bI>=0?`전체 ${cumList.length}개`:'TOP 20'})</span></div>
-          <div class="chart-sub">최근 ${recentWks.length}주차 · 셀: 주간 판매 / 누적 판매 / 누적 소진율(%) · 주차별 소진율 = 누적판매 / (초기재고 + 누적입고) · 입고 시 분모 증가로 희석</div>
+          <div class="chart-sub">최근 ${recentWks.length}주차 · ${BASE_YR}년 1월 기초재고 · ${BASE_YR}년 판매·입고 기준 소진율 · 셀: 주간 판매 / 누적 판매 / 누적 소진율(%) · 주차별 소진율 = 누적판매 / (초기재고 + 누적입고) · 입고 시 분모 증가로 희석</div>
         </div>
         <input type="text" class="t20-search" oninput="filterT20Rows(this)" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none;flex-shrink:0">
       </div>
-      <div class="table-wrap"><table style="font-size:12px">
+      <div class="table-wrap" style="max-height:720px"><table style="font-size:12px">
         <thead><tr>
           <th style="min-width:38px">순위</th>
           <th style="min-width:160px">상품명</th>
