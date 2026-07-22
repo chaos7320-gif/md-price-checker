@@ -3316,10 +3316,14 @@ function renderTop20(filtP,filtered,filteredP,f){
       stockByProd[r.prod]=(stockByProd[r.prod]||0)+(r.stock||0);
     });
     // 입고 데이터 (INS_DATA: [bi,yr,mo,wk,prod,size,qty,cost]) — 26년 기준
+    // 입고 시트에 브랜드 컬럼이 없어 bi=-1인 행이 있을 수 있어 상품명 매핑으로 보정 (입고 현황 탭과 동일 로직)
+    const prodBrandMapCum={};
+    (PROD_DATA.length?PROD_DATA:D_PROD).forEach(r=>{if(r[0]>=0&&r[4]&&!(r[4] in prodBrandMapCum))prodBrandMapCum[r[4]]=r[0];});
+    const resolveInsBi=r=>{let bi=r[0];if(bi<0&&r[4]){const m=prodBrandMapCum[r[4]];if(m!==undefined)bi=m;}return bi;};
     const insWkByProd={};
     const totInsByProd={};
     (typeof INS_DATA!=='undefined'?INS_DATA:[]).forEach(r=>{
-      if(bI>=0&&r[0]!==bI) return;
+      if(bI>=0&&resolveInsBi(r)!==bI) return;
       if(r[1]!==BASE_YR) return;
       if(r[2]===12&&r[3]===1) return;
       const prod=r[4];
