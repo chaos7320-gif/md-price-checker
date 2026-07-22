@@ -3309,8 +3309,8 @@ function renderTop20(filtP,filtered,filteredP,f){
     const headCells=recentWks.map(wk=>
       `<th class="nr" style="min-width:116px;padding:8px 10px;background:#f0fdf4;color:#15803d;font-size:11px;letter-spacing:.2px;line-height:1.35">${wkLbl(wk)}</th>`
     ).join('');
-    // 브랜드 선택 시(bI>=0) 전체 상품, 미선택(전체 브랜드) 시 TOP20만 표시 · 상품명 내림차순 정렬
-    const cumList=(bI>=0?allProds:top20).slice().sort((a,b)=>b[0].localeCompare(a[0],'ko'));
+    // 브랜드 선택 시(bI>=0) 전체 상품, 미선택(전체 브랜드) 시 TOP20만 표시 · 상품명 오름차순 정렬
+    const cumList=(bI>=0?allProds:top20).slice().sort((a,b)=>a[0].localeCompare(b[0],'ko'));
     const rows=cumList.map(([prod,d],i)=>{
       const wkData=wkQtyByProd[prod]||{};
       const insData=insWkByProd[prod]||{};
@@ -3406,7 +3406,7 @@ function renderTop20(filtP,filtered,filteredP,f){
     return `<div class="table-card" style="margin-bottom:16px">
       <div class="chart-header">
         <div>
-          <div class="chart-title">📈 상품별 주차 누적 추이 <span style="font-size:11px;font-weight:600;color:var(--muted)">(${bI>=0?`전체 ${cumList.length}개`:'TOP 20'} · 상품명 내림차순)</span></div>
+          <div class="chart-title">📈 상품별 주차 누적 추이 <span style="font-size:11px;font-weight:600;color:var(--muted)">(${bI>=0?`전체 ${cumList.length}개`:'TOP 20'} · 상품명 오름차순)</span></div>
           <div class="chart-sub">최근 ${recentWks.length}주차 · ${BASE_YR}년 1월 기초재고 → ${BASE_YR}년 입고재고 → 현재재고 → 전체소진율 순 · 셀: 주간 판매 / 누적 판매 / 누적 소진율(%) · 주차별 소진율 = 누적판매 / (초기재고 + 누적입고) · 입고 시 분모 증가로 희석</div>
         </div>
         <input type="text" class="t20-search" oninput="filterT20Rows(this)" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none;flex-shrink:0">
