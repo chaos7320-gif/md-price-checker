@@ -1559,6 +1559,40 @@ function showInboundSizeTip(event, el){
   tip.style.top=top+'px';tip.style.left=left+'px';
 }
 
+// ── 입고재고 숫자 클릭 → 주차별 입고일정 팝업 (sz-detail-tip 재사용, 클릭형) ──
+function showInboundSchedPopup(event,el){
+  let sched;
+  try{ sched=JSON.parse(el.dataset.sched||'{}'); }catch(e){ return; }
+  const prodName=el.dataset.prod||'';
+  const entries=Object.entries(sched).filter(([,q])=>q>0).sort((a,b)=>a[0]<b[0]?-1:1);
+  const total=entries.reduce((s,[,q])=>s+q,0);
+  const tip=document.getElementById('sz-detail-tip');
+  if(!tip) return;
+  let html=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.12)">📦 입고일정</div>`;
+  if(prodName) html+=`<div style="font-size:11px;color:#fff;margin-bottom:8px;font-weight:600;line-height:1.4;word-break:break-word">${escHtml(prodName)}</div>`;
+  if(entries.length){
+    html+=`<div style="max-height:260px;overflow:auto"><div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;align-items:center">`
+      +`<span style="font-size:10px;color:rgba(255,255,255,.4)">주차</span>`
+      +`<span style="font-size:10px;color:rgba(255,255,255,.4);text-align:right">입고수량</span>`
+      +entries.map(([wk,q])=>{
+        const[y,w]=wk.split('-W');
+        const rng=WK_RANGE_MAP[wk]||'';
+        return `<span style="font-size:11px;color:#fff;font-weight:600">${String(y).slice(2)}년 W${parseInt(w)}${rng?` <span style="color:rgba(255,255,255,.4);font-weight:400">(${rng})</span>`:''}</span>`
+          +`<span style="font-size:11px;font-weight:700;color:#fbbf24;text-align:right">${wonNo(Math.round(q))}개</span>`;
+      }).join('')
+      +`</div></div>`;
+  } else {
+    html+=`<div style="font-size:11px;color:rgba(255,255,255,.4)">입고 이력 없음</div>`;
+  }
+  html+=`<div style="padding-top:8px;margin-top:6px;border-top:1px solid rgba(255,255,255,.12);font-size:10px;color:rgba(255,255,255,.55)">합계 ${wonNo(Math.round(total))}개 · ${entries.length}회 입고</div>`;
+  tip.innerHTML=html; tip.style.display='block'; tip.style.pointerEvents='auto';
+  const tw=tip.offsetWidth||280;
+  let lx=event.clientX+14; if(lx+tw>window.innerWidth-10)lx=event.clientX-tw-14;
+  let ty=event.clientY+10; if(ty+tip.offsetHeight>window.innerHeight-10)ty=event.clientY-tip.offsetHeight-10; if(ty<0)ty=4;
+  tip.style.left=lx+'px'; tip.style.top=ty+'px';
+  event.stopPropagation();
+}
+
 // ── 최근 2주 상품별 주당평균판매수량 계산 (PROD_DATA 기반) ──
 function calcProdWkSales(){
   const base=PROD_DATA.length?PROD_DATA:D_PROD;
@@ -3358,7 +3392,7 @@ function renderTop20(filtP,filtered,filteredP,f){
         <td style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
         ${wkCells}
         <td class="nr" style="font-weight:600">${wonNo(initStock)}개</td>
-        <td class="nr" style="font-weight:600">${wonNo(totIns)}개</td>
+        <td class="nr" style="font-weight:600"><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" data-prod="${escHtml(prod)}" data-sched="${escHtml(JSON.stringify(Object.fromEntries(Object.entries(insData).map(([k,v])=>[k,Math.round(v)]))))}" onclick="showInboundSchedPopup(event,this)">${wonNo(totIns)}개</span></td>
         <td class="nr" style="font-weight:600">${stkHtml}</td>
         <td class="nr"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${swBg};color:${swCol}">${swTxt}</span></td>
         <td class="nr"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${totSellBg};color:${totSellCol}">${totSellRate.toFixed(1)}%</span></td>
@@ -3387,6 +3421,8 @@ function renderTop20(filtP,filtered,filteredP,f){
     const totalQAll=cumList.reduce((s,[p])=>s+Math.round(totQtyByProd[p]||0),0);
     const totalInsAll=cumList.reduce((s,[p])=>s+Math.round(totInsByProd[p]||0),0);
     const totalInitStockAll=cumList.reduce((s,[p])=>s+Math.max(0,(stockByProd[p]||0)+Math.round(totQtyByProd[p]||0)-Math.round(totInsByProd[p]||0)),0);
+    const insSchedAll={};
+    cumList.forEach(([p])=>{ const o=insWkByProd[p]; if(o) Object.entries(o).forEach(([wk,q])=>{ insSchedAll[wk]=(insSchedAll[wk]||0)+q; }); });
     let cumAll=cumBeforeAll, cumInsAll=cumInsBeforeAll;
     const totWkCells=recentWks.map(wk=>{
       const q=Math.round(totalsByWk[wk]||0);
@@ -3411,7 +3447,7 @@ function renderTop20(filtP,filtered,filteredP,f){
       <td colspan="2" style="color:var(--sky)">합계 (${cumList.length}개)</td>
       ${totWkCells}
       <td class="nr" style="color:var(--sky)">${wonNo(totalInitStockAll)}개</td>
-      <td class="nr" style="color:var(--sky)">${wonNo(totalInsAll)}개</td>
+      <td class="nr" style="color:var(--sky)"><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" data-prod="합계 (${cumList.length}개)" data-sched="${escHtml(JSON.stringify(insSchedAll))}" onclick="showInboundSchedPopup(event,this)">${wonNo(totalInsAll)}개</span></td>
       <td class="nr" style="color:var(--sky)">${wonNo(totalStockAll)}개</td>
       <td class="nr" style="color:var(--sky)">${totalSwTxt}</td>
       <td class="nr" style="color:var(--sky)">${totalAllRate.toFixed(1)}%</td>
