@@ -205,7 +205,8 @@ h1,h2,h3,.chart-title,.kpi-val{letter-spacing:-0.02em}
 .topbar{background:var(--canvas);border-bottom:1px solid var(--hairline);padding:0 24px;display:flex;align-items:center;min-height:64px;position:sticky;top:0;z-index:100}
 .logo{display:flex;align-items:center;gap:12px;font-size:17px;font-weight:700;letter-spacing:-0.02em;color:var(--ink);flex-shrink:0}
 .logo-dot{width:36px;height:36px;background:var(--ink);border-radius:9999px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;letter-spacing:-0.02em;flex-shrink:0}
-.nav{display:flex;gap:2px;position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap}
+.nav{display:flex;gap:2px;flex:1 1 auto;min-width:0;justify-content:center;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
 .nav-item{padding:8px 16px;border-radius:9999px;font-size:14px;cursor:pointer;color:var(--slate);border:none;background:none;transition:color .15s,background .15s;font-weight:500;letter-spacing:-0.005em}
 .nav-item.active{background:var(--ink);color:#fff;font-weight:600}
 .nav-item:not(.active):hover{color:var(--ink)}
