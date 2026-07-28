@@ -8101,12 +8101,14 @@ function renderGoalSales(){
   const bIdx=bSel==='ALL'?-1:parseInt(bSel);
 
   // TOP_DATA에서 2026 브랜드별 월별 실매출 집계 (다른 탭과 동일 데이터 소스)
+  // ISO 주차 오류로 12월 1주차 태그된 행은 다른 탭과 동일하게 제외
   const actual=Array.from({length:4},()=>Array(12).fill(0));
-  TOP_DATA.forEach(r=>{if(r[1]===2026)actual[r[0]][r[2]-1]+=r[6];});
+  TOP_DATA.forEach(r=>{if(r[1]===2026&&!(r[2]===12&&r[3]===1))actual[r[0]][r[2]-1]+=r[6];});
 
   const brands=bIdx<0?[0,1,2,3]:[bIdx];
   const MONTHS=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-  const nowMo=new Date().getMonth(); // 0-indexed, current month
+  // 실제 업로드된 2026 데이터가 반영된 마지막 월 (달력상 오늘이 아니라 데이터 기준 — 성장률 분석 탭의 MAX_MO_26과 동일 로직)
+  const nowMo=(()=>{const mos=TOP_DATA.filter(r=>r[1]===2026&&!(r[2]===12&&r[3]===1)).map(r=>r[2]);return mos.length?Math.max(...mos)-1:0;})(); // 0-indexed
 
   // 전체 합계
   const totalTarget=brands.reduce((s,bi)=>s+GOAL_DATA[bi].target,0);
@@ -8114,7 +8116,7 @@ function renderGoalSales(){
   const totalRate=totalTarget>0?totalActual/totalTarget*100:0;
   const totalRemaining=totalTarget-totalActual;
 
-  // 이번달까지 누적 목표 (달성 기준선)
+  // 데이터 반영월까지 누적 목표 (달성 기준선)
   const cumTarget=brands.reduce((s,bi)=>s+GOAL_DATA[bi].monthly_target.slice(0,nowMo+1).reduce((a,b)=>a+b,0),0);
   const paceRate=cumTarget>0?totalActual/cumTarget*100:0;
 
