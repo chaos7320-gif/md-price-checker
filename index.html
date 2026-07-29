@@ -251,6 +251,10 @@ select:focus,input:focus{border-color:var(--brand-blue-deep);box-shadow:0 0 0 3p
 .btn-reset2{padding:10px 18px;background:var(--canvas);border:1px solid var(--hairline);border-radius:9999px;font-size:13px;color:var(--ink);cursor:pointer;transition:all .15s;font-weight:500;white-space:nowrap}
 .btn-reset2:hover{border-color:var(--ink)}
 
+/* ── 모바일 전용 내비게이션(하단 탭바/더보기 시트/필터 토글) — PC에서는 항상 숨김 ── */
+.filter-toggle-btn,.bottom-nav,.more-sheet,.filter-sheet-header{display:none}
+.sheet-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500}
+
 /* ── 본문 ── */
 .main{padding:24px;max-width:1520px;margin:0 auto}
 .kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:24px;animation:fadeUp .25s ease-out}
@@ -392,31 +396,32 @@ kbd,.kbd{display:inline-flex;align-items:center;justify-content:center;font-fami
     padding:8px 12px;gap:6px;
     align-items:center;
   }
-  .nav{
-    order:3;flex:0 0 100%;
-    position:static;transform:none;  /* absolute 해제 */
-    overflow-x:auto;flex-wrap:nowrap;justify-content:flex-start;
-    padding:6px 12px 10px;
-    border-top:1px solid var(--sky-mid);
-    scrollbar-width:none;-webkit-overflow-scrolling:touch;
-    white-space:nowrap;
-  }
-  .nav::-webkit-scrollbar{display:none}
-  .nav-item{padding:6px 10px;font-size:12px;white-space:nowrap;flex-shrink:0}
+  .nav{display:none}  /* 하단 탭바(.bottom-nav)로 대체 */
   .side-menu{width:220px}
 
-  /* 필터바 */
-  .filterbar{padding:8px 10px;gap:6px;justify-content:flex-start}
-  .filter-label{display:none}
+  /* 필터바: 하단에서 올라오는 시트로 전환 (기본 숨김, .mobile-open일 때만 표시) */
+  .filterbar{
+    display:none;
+    position:fixed;left:0;right:0;bottom:0;z-index:503;
+    max-height:82vh;overflow-y:auto;
+    background:var(--canvas);border-radius:20px 20px 0 0;
+    box-shadow:0 -12px 40px rgba(0,0,0,.3);
+    padding:8px 18px calc(16px + env(safe-area-inset-bottom));
+    gap:14px;
+  }
+  .filterbar.mobile-open{display:flex;flex-direction:column;align-items:stretch;flex-wrap:nowrap;justify-content:flex-start}
+  .filter-group{flex-direction:column;align-items:flex-start;gap:6px;width:100%}
+  .filter-label{display:block!important;font-weight:600}
   .filter-div{display:none}
-  .filter-group{flex:0 0 auto}
+  .filterbar select,.filterbar input[type=text],.filterbar .multi-sel-wrap,.filterbar .srch-wrap{width:100%;max-width:none}
+  .filterbar .multi-sel-btn{width:100%;text-align:left}
   select{font-size:12px;padding:6px 8px;max-width:110px}
   input[type=text]{font-size:12px;padding:6px 8px;width:82px}
-  .btn-search{padding:7px 14px;font-size:12px}
-  .btn-reset2{padding:7px 9px;font-size:12px}
+  .btn-search{padding:13px;font-size:14px;width:100%;order:99}
+  .btn-reset2{padding:11px;font-size:13px;width:100%;order:98}
 
   /* 본문 */
-  .main{padding:12px 12px}
+  .main{padding:12px 12px;padding-bottom:76px}  /* 하단 탭바 높이만큼 여백 확보 */
   .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:16px}
   .kpi-card{padding:13px 14px}
   .kpi-val{font-size:13px}
@@ -429,10 +434,61 @@ kbd,.kbd{display:inline-flex;align-items:center;justify-content:center;font-fami
   th,td{padding:7px 7px}
   .empty{padding:40px 16px}
 
+  /* 표 → 카드형 리스트 전환 (가로 스크롤 대신 세로로 읽기 쉽게, rowspan 있는 표는 제외됨) */
+  table.responsive-stack{min-width:0;width:100%}
+  table.responsive-stack thead{display:none}
+  table.responsive-stack,table.responsive-stack tbody,table.responsive-stack tr{display:block;width:100%}
+  table.responsive-stack tr{border:1px solid var(--hairline-soft);border-radius:12px;margin-bottom:10px;padding:2px 12px;background:var(--card)}
+  table.responsive-stack td{display:flex!important;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--hairline-soft);text-align:right;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;max-width:none!important}
+  table.responsive-stack td:last-child{border-bottom:none}
+  table.responsive-stack td[data-label]::before{content:attr(data-label);font-weight:600;color:var(--muted);text-align:left;flex-shrink:0;margin-right:10px;font-size:11px}
+
   /* 비교·재고 */
   .comp-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px}
   .comp-slot-grid{grid-template-columns:1fr!important}
   #inv-filter-bar{padding:8px 12px}
+
+  /* 필터 시트 / 더보기 시트 공통 헤더(핸들+닫기) */
+  .filter-sheet-header{display:flex;align-items:center;justify-content:center;position:relative;padding-bottom:8px;margin-bottom:6px;flex-shrink:0}
+  .filter-sheet-handle{width:36px;height:4px;border-radius:2px;background:var(--hairline-strong)}
+  .filter-sheet-close{position:absolute;right:0;top:-4px;width:32px;height:32px;border-radius:50%;border:none;background:var(--surface);color:var(--ink);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+  /* 필터 요약 토글 버튼 (필터바가 시트로 접혀있을 때 여는 버튼) */
+  .filter-toggle-btn{
+    display:inline-flex!important;align-items:center;gap:4px;flex-shrink:0;
+    padding:7px 12px;border-radius:9999px;border:1px solid var(--hairline);
+    background:var(--canvas);color:var(--ink);font-size:12px;font-weight:600;cursor:pointer;
+  }
+  #filter-toggle-count{color:var(--sky);font-weight:700}
+
+  /* 하단 탭바 */
+  .bottom-nav{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:501;
+    background:var(--canvas);border-top:1px solid var(--hairline);
+    padding:5px 2px calc(5px + env(safe-area-inset-bottom));
+    justify-content:space-around;
+  }
+  .bottom-nav-item{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+    background:none;border:none;padding:6px 2px;margin:0 2px;color:var(--slate);
+    font-size:10px;font-weight:600;border-radius:12px;cursor:pointer;letter-spacing:-0.01em;
+  }
+  .bottom-nav-item.active{color:var(--ink);background:var(--surface)}
+  .bni-ico{font-size:18px;line-height:1}
+
+  /* 더보기 시트 (하단 탭바의 나머지 탭) */
+  .more-sheet{
+    display:none;position:fixed;left:0;right:0;bottom:0;z-index:503;
+    flex-direction:column;gap:2px;
+    background:var(--canvas);border-radius:20px 20px 0 0;
+    box-shadow:0 -12px 40px rgba(0,0,0,.3);
+    padding:8px 14px calc(14px + env(safe-area-inset-bottom));
+  }
+  .more-sheet.open{display:flex}
+  .more-sheet-item{text-align:left;padding:13px 10px;border-radius:12px;font-size:14px;font-weight:600;background:none;border:none;color:var(--ink)}
+  .more-sheet-item.active{background:var(--surface);color:var(--ink)}
+
+  .sheet-backdrop.show{display:block}
 }
 
 /* ── 반응형 · 소형 폰 ── */
@@ -828,16 +884,16 @@ body[data-db1-mode="weekly"] [data-period="monthly"]{display:none !important}
 <div class="topbar">
   <div class="logo"><div class="logo-dot">MD</div>브랜드 매출 대시보드</div>
   <nav class="nav">
-    <button class="nav-item active" onclick="setTab('goal',this)">🎯 목표매출</button>
-    <button class="nav-item" data-tab="dashboard1-annual" onclick="setTab('dashboard1',this,'annual')" style="font-weight:700">📊 연간 매출 분석</button>
-    <button class="nav-item" data-tab="dashboard1-weekly" onclick="setTab('dashboard1',this,'weekly')" style="font-weight:700">📅 주간 매출 분석</button>
-    <button class="nav-item" onclick="setTab('growth',this)">🌱 성장률 분석</button>
-    <button class="nav-item" onclick="setTab('compare',this)">⚖️ 상품비교</button>
-    <button class="nav-item" id="nav-margin" onclick="setTab('margin',this)" style="display:none">💰 마진 분석</button>
-    <button class="nav-item" onclick="setTab('deadstock',this)">💀 데드스톡</button>
+    <button class="nav-item active" data-navkey="goal" onclick="setTab('goal',this)">🎯 목표매출</button>
+    <button class="nav-item" data-tab="dashboard1-annual" data-navkey="dashboard1-annual" onclick="setTab('dashboard1',this,'annual')" style="font-weight:700">📊 연간 매출 분석</button>
+    <button class="nav-item" data-tab="dashboard1-weekly" data-navkey="dashboard1-weekly" onclick="setTab('dashboard1',this,'weekly')" style="font-weight:700">📅 주간 매출 분석</button>
+    <button class="nav-item" data-navkey="growth" onclick="setTab('growth',this)">🌱 성장률 분석</button>
+    <button class="nav-item" data-navkey="compare" onclick="setTab('compare',this)">⚖️ 상품비교</button>
+    <button class="nav-item" id="nav-margin" data-navkey="margin" onclick="setTab('margin',this)" style="display:none">💰 마진 분석</button>
+    <button class="nav-item" data-navkey="deadstock" onclick="setTab('deadstock',this)">💀 데드스톡</button>
     <!-- <button class="nav-item" onclick="setTab('churn',this)">🔄 신규/이탈</button> -->
     <!-- <button class="nav-item" onclick="setTab('restock',this)">🔄 재입고 우선순위</button> -->
-    <button class="nav-item" onclick="setTab('inbound',this)">📦 입고 현황</button>
+    <button class="nav-item" data-navkey="inbound" onclick="setTab('inbound',this)">📦 입고 현황</button>
   </nav>
   <div class="topbar-right">
     <!-- 통합 검색 트리거 (검색 인풋 형태로 노출, 클릭/단축키로 모달 열기) -->
@@ -900,10 +956,29 @@ body[data-db1-mode="weekly"] [data-period="monthly"]{display:none !important}
   </div>
 </div>
 
+<!-- 모바일 전용: 하단 탭바 (엄지로 닿기 쉬운 위치에 자주 쓰는 탭 배치) -->
+<div class="sheet-backdrop" id="more-backdrop" onclick="closeMoreSheet()"></div>
+<div class="more-sheet" id="more-sheet">
+  <div class="filter-sheet-header"><div class="filter-sheet-handle"></div><button class="filter-sheet-close" onclick="closeMoreSheet()" aria-label="닫기">✕</button></div>
+  <button class="nav-item more-sheet-item" data-navkey="compare" onclick="setTab('compare',this);closeMoreSheet()">⚖️ 상품비교</button>
+  <button class="nav-item more-sheet-item" id="nav-margin-more" data-navkey="margin" onclick="setTab('margin',this);closeMoreSheet()" style="display:none">💰 마진 분석</button>
+  <button class="nav-item more-sheet-item" data-navkey="deadstock" onclick="setTab('deadstock',this);closeMoreSheet()">💀 데드스톡</button>
+  <button class="nav-item more-sheet-item" data-navkey="inbound" onclick="setTab('inbound',this);closeMoreSheet()">📦 입고 현황</button>
+</div>
+<nav class="bottom-nav" id="bottom-nav">
+  <button class="bottom-nav-item nav-item active" data-navkey="goal" onclick="setTab('goal',this)"><span class="bni-ico">🎯</span><span class="bni-label">목표매출</span></button>
+  <button class="bottom-nav-item nav-item" data-navkey="dashboard1-annual" onclick="setTab('dashboard1',this,'annual')"><span class="bni-ico">📊</span><span class="bni-label">연간</span></button>
+  <button class="bottom-nav-item nav-item" data-navkey="dashboard1-weekly" onclick="setTab('dashboard1',this,'weekly')"><span class="bni-ico">📅</span><span class="bni-label">주간</span></button>
+  <button class="bottom-nav-item nav-item" data-navkey="growth" onclick="setTab('growth',this)"><span class="bni-ico">🌱</span><span class="bni-label">성장률</span></button>
+  <button class="bottom-nav-item" id="more-nav-btn" onclick="toggleMoreSheet()"><span class="bni-ico">☰</span><span class="bni-label">더보기</span></button>
+</nav>
+
+<div class="sheet-backdrop" id="filter-backdrop" onclick="closeFilterSheet()"></div>
 <div class="filterbar"
   ondragover="event.preventDefault();document.getElementById('drop-overlay').style.display='flex'"
   ondragleave="document.getElementById('drop-overlay').style.display='none'"
   ondrop="handleDrop(event)">
+  <div class="filter-sheet-header"><div class="filter-sheet-handle"></div><button class="filter-sheet-close" onclick="closeFilterSheet()" aria-label="닫기">✕</button></div>
   <div class="filter-group"><span class="filter-label">브랜드</span>
     <select id="f-brand" onchange="onBrandChange()">
       <option value="ALL">전체</option>
@@ -975,7 +1050,7 @@ body[data-db1-mode="weekly"] [data-period="monthly"]{display:none !important}
     <select id="f-size" style="width:70px"><option value="ALL">전체</option></select>
   </div>
   <div class="filter-div"></div>
-  <button class="btn-search" onclick="apply()">▶ 조회</button>
+  <button class="btn-search" onclick="apply();closeFilterSheet()">▶ 조회</button>
   <button class="btn-reset2" onclick="reset()" id="btn-reset-all" style="display:none">전체 초기화</button>
 </div>
 
@@ -997,6 +1072,7 @@ body[data-db1-mode="weekly"] [data-period="monthly"]{display:none !important}
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;min-height:28px">
     <span id="hdr-badge" style="display:none;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;border-left:3px solid transparent"></span>
     <div class="ftags" id="filter-tags" style="flex:1;margin-bottom:0"></div>
+    <button class="filter-toggle-btn" id="filter-toggle-btn" onclick="toggleFilterSheet()">🔍 필터<span id="filter-toggle-count"></span></button>
   </div>
   <div id="online-off-bar" style="display:none;align-items:center;gap:12px;padding:7px 14px;margin-bottom:10px;background:linear-gradient(90deg,#f0fdf4,#f0f9ff);border-radius:10px;border:1px solid #bae6fd;font-size:12px;flex-wrap:wrap"></div>
   <div id="content">
@@ -1068,6 +1144,36 @@ function closeSideMenu(){
   document.getElementById('side-menu').classList.remove('open');
   document.getElementById('menu-btn').classList.remove('open');
 }
+// ── 모바일 필터 시트 (하단에서 올라오는 필터바) ──
+function toggleFilterSheet(){
+  const fb=document.querySelector('.filterbar');
+  const bd=document.getElementById('filter-backdrop');
+  if(!fb) return;
+  closeMoreSheet();  // 시트는 한 번에 하나만 — 더보기 시트가 열려있으면 먼저 닫기
+  const open=fb.classList.toggle('mobile-open');
+  if(bd) bd.classList.toggle('show',open);
+}
+function closeFilterSheet(){
+  const fb=document.querySelector('.filterbar');
+  if(fb) fb.classList.remove('mobile-open');
+  const bd=document.getElementById('filter-backdrop');
+  if(bd) bd.classList.remove('show');
+}
+// ── 모바일 더보기 시트 (하단 탭바의 나머지 탭) ──
+function toggleMoreSheet(){
+  const ms=document.getElementById('more-sheet');
+  const bd=document.getElementById('more-backdrop');
+  if(!ms) return;
+  closeFilterSheet();  // 시트는 한 번에 하나만 — 필터 시트가 열려있으면 먼저 닫기
+  const open=ms.classList.toggle('open');
+  if(bd) bd.classList.toggle('show',open);
+}
+function closeMoreSheet(){
+  const ms=document.getElementById('more-sheet');
+  if(ms) ms.classList.remove('open');
+  const bd=document.getElementById('more-backdrop');
+  if(bd) bd.classList.remove('show');
+}
 function toggleTheme(){
   const root=document.documentElement;
   const next=root.getAttribute('data-theme')==='dark'?'light':'dark';
@@ -1091,6 +1197,8 @@ function syncCostAuth(){
   const ok=isCostUnlocked();
   const navBtn=document.getElementById('nav-margin');
   if(navBtn) navBtn.style.display=ok?'':'none';
+  const navBtnMore=document.getElementById('nav-margin-more');
+  if(navBtnMore) navBtnMore.style.display=ok?'':'none';
   const lockBtn=document.getElementById('cost-lock-btn');
   if(lockBtn){
     lockBtn.innerHTML=ok
@@ -1139,12 +1247,58 @@ function submitCostAuth(){
   }
 }
 document.addEventListener('DOMContentLoaded',syncCostAuth);
+
+// ── 모바일: 표를 카드형 리스트로 자동 전환 (라벨은 <thead>의 <th> 텍스트를 그대로 사용) ──
+// rowspan이 있는 표(예: 월별 목표 달성 현황)는 스택 레이아웃과 맞지 않아 제외 → 기존 가로스크롤 유지
+function _respLabelRow(tr,heads){
+  if(tr.querySelector('td[colspan],th[colspan]')) return; // colspan 행은 라벨이 밀려 정렬되므로 라벨 없이 값만 표시
+  [...tr.children].forEach((td,i)=>{
+    if(heads[i]&&!td.hasAttribute('data-label')) td.setAttribute('data-label',heads[i]);
+  });
+}
+function _scanResponsiveTables(){
+  document.querySelectorAll('#content table').forEach(table=>{
+    if(table.classList.contains('no-responsive')||table.classList.contains('responsive-stack')) return;
+    if(table.querySelector('td[rowspan],th[rowspan]')){ table.classList.add('no-responsive'); return; }
+    const headRow=table.querySelector('thead tr');
+    if(!headRow) return;
+    const heads=[...headRow.children].map(th=>th.textContent.trim());
+    table.querySelectorAll('tbody tr').forEach(tr=>_respLabelRow(tr,heads));
+    table.classList.add('responsive-stack');
+  });
+  // 이미 responsive-stack으로 표시된 표에 새로 추가된 행(검색 필터 등으로 tbody만 갱신된 경우) 라벨 보강
+  document.querySelectorAll('#content table.responsive-stack').forEach(table=>{
+    const headRow=table.querySelector('thead tr');
+    if(!headRow) return;
+    const heads=[...headRow.children].map(th=>th.textContent.trim());
+    table.querySelectorAll('tbody tr').forEach(tr=>{
+      if(!tr.children.length||tr.children[0].hasAttribute('data-label')) return;
+      _respLabelRow(tr,heads);
+    });
+  });
+}
+let _respScanQueued=false;
+function _queueResponsiveScan(){
+  if(_respScanQueued) return;
+  _respScanQueued=true;
+  requestAnimationFrame(()=>{_respScanQueued=false;_scanResponsiveTables();});
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  const content=document.getElementById('content');
+  if(!content) return;
+  new MutationObserver(_queueResponsiveScan).observe(content,{childList:true,subtree:true});
+  _queueResponsiveScan();
+});
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     const cm=document.getElementById('cost-auth-modal');
     if(cm&&cm.classList.contains('open')){closeCostAuth();return;}
     const sm=document.getElementById('settings-modal');
     if(sm&&sm.classList.contains('open')){closeSettings();return;}
+    const fb=document.querySelector('.filterbar');
+    if(fb&&fb.classList.contains('mobile-open')){closeFilterSheet();return;}
+    const ms=document.getElementById('more-sheet');
+    if(ms&&ms.classList.contains('open')){closeMoreSheet();return;}
   }
 });
 
@@ -1691,7 +1845,10 @@ function setTab(t,el,mode){
     delete document.body.dataset.db1Mode;
   }
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
-  el.classList.add('active');
+  // 같은 탭을 가리키는 버튼이 상단 내비/하단 탭바/더보기 시트에 중복 존재 → data-navkey로 한번에 동기화
+  const navkey=el.dataset.navkey;
+  if(navkey) document.querySelectorAll(`.nav-item[data-navkey="${navkey}"]`).forEach(b=>b.classList.add('active'));
+  else el.classList.add('active');
   if(t==='compare'){renderCompare();return;}
   if(t==='goal'){renderGoalSales();return;}
   apply();
@@ -2007,6 +2164,9 @@ function renderFilterTags(){
   });
   const hasFilter=f.b!=='ALL'||f.yr!=='ALL'||SELECTED_MOS.length>0||SELECTED_WKS.length>0||SELECTED_CHS.length>0||f.size!=='ALL'||SELECTED_PRODS.length>0;
   if(resetBtn) resetBtn.style.display=hasFilter?'':'none';
+  // 모바일 필터 토글 버튼에 활성 필터 개수 배지 표시
+  const toggleCount=document.getElementById('filter-toggle-count');
+  if(toggleCount) toggleCount.textContent=tags.children.length?` (${tags.children.length})`:'';
 }
 function getF(){
   const yrs=SELECTED_YRS.length>0?SELECTED_YRS:[];
