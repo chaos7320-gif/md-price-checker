@@ -1513,11 +1513,20 @@ function showBarBreakdownPopup(e,periodLabel,infoLines,prodRows){
   let ty=e.clientY+10; if(ty+tip.offsetHeight>window.innerHeight-10)ty=e.clientY-tip.offsetHeight-10; if(ty<0)ty=4;
   tip.style.left=lx+'px'; tip.style.top=ty+'px';
 }
+// 터치 기기: hover가 없으므로 .hover-tip-src 탭 → 열기/닫기 토글, 그 외 영역 탭 → 닫기
+let _hoverTipOpenEl=null;
 document.addEventListener('click',function(e){
   const tip=document.getElementById('sz-detail-tip');
+  const src=e.target.closest('.hover-tip-src');
+  if(src){
+    if(_hoverTipOpenEl===src){ hideInvStockTip(); _hoverTipOpenEl=null; return; }
+    _hoverTipOpenEl=src;
+    (src.dataset.tipFn==='inbound'?showInboundSizeTip:showInvStockTip)({currentTarget:src},src);
+    return;
+  }
   if(!tip||tip.style.display==='none') return;
   if(tip.contains(e.target)||e.target.closest('canvas')) return;
-  hideInvStockTip();
+  hideInvStockTip(); _hoverTipOpenEl=null;
 });
 
 // ── 입고 사이즈별 수량 툴팁 (입고현황 상품 표용) ──
@@ -2124,21 +2133,21 @@ function apply(){
     const onPct=onS/total*100,offPct=offS/total*100,whlPct=whlS/total*100;
     bar.innerHTML=`
       <span style="font-weight:700;color:#0369a1;font-size:12px;white-space:nowrap">온/오프/홀세일 매출</span>
-      <span style="cursor:default;display:inline-flex;align-items:center;gap:4px;background:#dbeafe;border-radius:6px;padding:3px 8px"
+      <span class="ol-tip-src" data-ol-type="ON" style="cursor:help;display:inline-flex;align-items:center;gap:4px;background:#dbeafe;border-radius:6px;padding:3px 8px"
         onmouseenter="showOlTip(this,'ON')" onmouseleave="hideOlTip()">
         <span style="width:8px;height:8px;border-radius:50%;background:#0284c7;flex-shrink:0"></span>
         <span style="font-weight:700;color:#0284c7">온라인</span>
         <span style="font-weight:700;color:#0369a1">${won(onS)}</span>
         <span style="color:#64748b;font-size:11px">(${onPct.toFixed(1)}%)</span>
       </span>
-      <span style="cursor:default;display:inline-flex;align-items:center;gap:4px;background:#dcfce7;border-radius:6px;padding:3px 8px"
+      <span class="ol-tip-src" data-ol-type="OFF" style="cursor:help;display:inline-flex;align-items:center;gap:4px;background:#dcfce7;border-radius:6px;padding:3px 8px"
         onmouseenter="showOlTip(this,'OFF')" onmouseleave="hideOlTip()">
         <span style="width:8px;height:8px;border-radius:50%;background:#16a34a;flex-shrink:0"></span>
         <span style="font-weight:700;color:#16a34a">오프라인</span>
         <span style="font-weight:700;color:#15803d">${won(offS)}</span>
         <span style="color:#64748b;font-size:11px">(${offPct.toFixed(1)}%)</span>
       </span>
-      <span style="cursor:default;display:inline-flex;align-items:center;gap:4px;background:#f3e8ff;border-radius:6px;padding:3px 8px"
+      <span class="ol-tip-src" data-ol-type="WHL" style="cursor:help;display:inline-flex;align-items:center;gap:4px;background:#f3e8ff;border-radius:6px;padding:3px 8px"
         onmouseenter="showOlTip(this,'WHL')" onmouseleave="hideOlTip()">
         <span style="width:8px;height:8px;border-radius:50%;background:#a855f7;flex-shrink:0"></span>
         <span style="font-weight:700;color:#a855f7">홀세일</span>
@@ -4131,7 +4140,7 @@ function invLoadMore(){
       <td><span style="font-size:10px;padding:2px 6px;border-radius:10px;background:${BBGS[r.bi]};color:${BTCS[r.bi]};font-weight:600">${BNAMES[r.bi]}</span></td>
       <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(r.prod)}">${escHtml(r.prod)}</td>
       <td style="color:var(--muted)">${escHtml(r.size)}</td>
-      <td class="nr" style="font-weight:600;cursor:help;text-decoration:underline dotted" data-bi="${r.bi}" data-prod="${escHtml(r.prod)}" onmouseenter="showInvStockTip(event,this)" onmouseleave="hideInvStockTip()">${wonNo(r.stock)}</td>
+      <td class="nr hover-tip-src" style="font-weight:600;cursor:help;text-decoration:underline dotted" data-bi="${r.bi}" data-prod="${escHtml(r.prod)}" onmouseenter="showInvStockTip(event,this)" onmouseleave="hideInvStockTip()">${wonNo(r.stock)}</td>
       <td class="nr" style="color:#0284c7">${r.prodWkSales.toFixed(1)}</td>
       <td class="nr" style="font-weight:600;color:${r.prodWksLeft===999?'var(--hint)':'#0284c7'}">${pwl}</td>
       <td class="nr" style="color:#059669">${r.szWkSales.toFixed(1)}</td>
@@ -4342,7 +4351,7 @@ function renderInventory(f){
         <td><span style="font-size:10px;padding:2px 6px;border-radius:10px;background:${BBGS[r.bi]};color:${BTCS[r.bi]};font-weight:600">${BNAMES[r.bi]}</span></td>
         <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.prod}">${r.prod}</td>
         <td style="color:var(--muted)">${r.size}</td>
-        <td class="nr" style="font-weight:600;cursor:help;text-decoration:underline dotted" data-bi="${r.bi}" data-prod="${escHtml(r.prod)}" onmouseenter="showInvStockTip(event,this)" onmouseleave="hideInvStockTip()">${wonNo(r.stock)}</td>
+        <td class="nr hover-tip-src" style="font-weight:600;cursor:help;text-decoration:underline dotted" data-bi="${r.bi}" data-prod="${escHtml(r.prod)}" onmouseenter="showInvStockTip(event,this)" onmouseleave="hideInvStockTip()">${wonNo(r.stock)}</td>
         <td class="nr" style="color:#0284c7">${r.prodWkSales.toFixed(1)}</td>
         <td class="nr" style="font-weight:600;color:${r.prodWksLeft===999?'var(--hint)':'#0284c7'}">${pwl}</td>
         <td class="nr" style="color:#059669">${r.szWkSales.toFixed(1)}</td>
@@ -5621,7 +5630,7 @@ function rstFilter(){
     <td><span class="rank ${i===0?'gold':i===1?'silver':i===2?'bronze':''}">${i+1}</span></td>
     <td><span style="font-size:10px;padding:2px 6px;border-radius:10px;background:${BBGS[r[0]]};color:${BTCS[r[0]]};font-weight:600">${BNAMES[r[0]]}</span></td>
     <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r[1]}">${r[1]}</td>
-    <td class="nr" style="font-weight:600;cursor:help;text-decoration:underline dotted" data-bi="${r[0]}" data-prod="${escHtml(r[1])}" onmouseenter="showInvStockTip(event,this)" onmouseleave="hideInvStockTip()">${wonNo(r[2])}</td>
+    <td class="nr hover-tip-src" style="font-weight:600;cursor:help;text-decoration:underline dotted" data-bi="${r[0]}" data-prod="${escHtml(r[1])}" onmouseenter="showInvStockTip(event,this)" onmouseleave="hideInvStockTip()">${wonNo(r[2])}</td>
     <td class="nr" style="color:var(--green);font-weight:600">${r[3].toFixed(1)}/주</td>
     <td class="nr" style="font-weight:700;color:${rstUrgencyColor(r[4])}">${r[4].toFixed(1)}주</td>
     <td><span style="padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;background:${rstUrgencyBg(r[4])};color:${rstUrgencyColor(r[4])}">${rstUrgencyLabel(r[4])}</span></td>
@@ -5726,7 +5735,7 @@ function renderRestock(f){
       <td><span class="rank ${i===0?'gold':i===1?'silver':i===2?'bronze':''}">${i+1}</span></td>
       <td><span style="font-size:10px;padding:2px 6px;border-radius:10px;background:${BBGS[r[0]]};color:${BTCS[r[0]]};font-weight:600">${BNAMES[r[0]]}</span></td>
       <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r[1]}">${r[1]}</td>
-      <td class="nr" style="font-weight:600;cursor:help;text-decoration:underline dotted" data-bi="${r[0]}" data-prod="${escHtml(r[1])}" onmouseenter="showInvStockTip(event,this)" onmouseleave="hideInvStockTip()">${wonNo(r[2])}</td>
+      <td class="nr hover-tip-src" style="font-weight:600;cursor:help;text-decoration:underline dotted" data-bi="${r[0]}" data-prod="${escHtml(r[1])}" onmouseenter="showInvStockTip(event,this)" onmouseleave="hideInvStockTip()">${wonNo(r[2])}</td>
       <td class="nr" style="color:var(--green);font-weight:600">${r[3].toFixed(1)}/주</td>
       <td class="nr" style="font-weight:700;color:${rstUrgencyColor(r[4])}">${r[4].toFixed(1)}주</td>
       <td><span style="padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;background:${rstUrgencyBg(r[4])};color:${rstUrgencyColor(r[4])}">${rstUrgencyLabel(r[4])}</span></td>
@@ -6900,7 +6909,7 @@ ${multiYr?`<div class="kpi-grid" style="margin-bottom:4px">
       const avgU=d.qty>0?Math.round(d.cost/d.qty):0;
       return`<tr>
         <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
-        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;cursor:help" data-prod="${escHtml(prod)}" data-sizes="${escHtml(JSON.stringify(d.sizes||{}))}" onmouseenter="showInboundSizeTip(event,this)" onmouseleave="hideInvStockTip()">${escHtml(prod)}</td>
+        <td class="hover-tip-src" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;cursor:help" data-prod="${escHtml(prod)}" data-sizes="${escHtml(JSON.stringify(d.sizes||{}))}" data-tip-fn="inbound" onmouseenter="showInboundSizeTip(event,this)" onmouseleave="hideInvStockTip()">${escHtml(prod)}</td>
         <td>${d.bi>=0?`<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:${BBGS[d.bi]};color:${BTCS[d.bi]};font-weight:600">${BNAMES[d.bi]}</span>`:'-'}</td>
         <td class="nr" style="color:var(--green);font-weight:700">${wonNo(d.qty)}개</td>
         <td class="nr" style="color:#b45309;font-weight:600">${won(d.cost)}</td>
@@ -8400,6 +8409,23 @@ function hideOlTip(){
     const t=document.getElementById('ol-tip');if(t)t.style.display='none';
   },150);
 }
+// 터치 기기: hover가 없으므로 .ol-tip-src 탭 → 열기/닫기 토글, 그 외 영역 탭 → 닫기
+let _olTipOpenType=null;
+document.addEventListener('click',function(e){
+  const tip=document.getElementById('ol-tip');
+  const src=e.target.closest('.ol-tip-src');
+  if(src){
+    const type=src.dataset.olType;
+    clearTimeout(_olTipTimer);
+    if(_olTipOpenType===type){ if(tip)tip.style.display='none'; _olTipOpenType=null; return; }
+    _olTipOpenType=type;
+    showOlTip(src,type);
+    return;
+  }
+  if(!tip||tip.style.display==='none') return;
+  if(tip.contains(e.target)) return;
+  clearTimeout(_olTipTimer); tip.style.display='none'; _olTipOpenType=null;
+});
 
 // ── 진단 헬퍼: 콘솔에서 debugCh('하루타',2026,'무신사 (트레통/하루타)','906-BLACK') 호출 ──
 window.debugCh=function(brandName,year,ch,prod){
