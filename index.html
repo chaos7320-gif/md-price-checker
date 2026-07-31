@@ -2875,7 +2875,7 @@ function renderTop20(filtP,filtered,filteredP,f){
     });
   }
   const allProds=Object.entries(byProd).filter(([,d])=>d.s>0).sort((a,b)=>b[1].s-a[1].s);
-  const top20=(f.prods&&f.prods.length>0)?allProds:allProds.slice(0,20);
+  const top20=(f.prods&&f.prods.length>0||_db1Mode==='weekly')?allProds:allProds.slice(0,20);
   _top20LastData=top20;
   const yrTotals={};
   if(multiYr)yrs.forEach(yr=>{yrTotals[yr]=Object.values(byProdYr[yr]||{}).reduce((s,d)=>s+d.s,0);});
@@ -2912,6 +2912,7 @@ function renderTop20(filtP,filtered,filteredP,f){
   INV_DATA.forEach(r=>{if(!invStockMap[r.prod])invStockMap[r.prod]=0;invStockMap[r.prod]+=r.stock;});
   _top20InvMap=invStockMap;
   const isCustomSel=f.prods&&f.prods.length>0;
+  const top20Title=isCustomSel?`선택 상품 ${top20.length}개 상세`:(_db1Mode==='weekly'?`전체 상품 ${top20.length}개 상세`:'상품 TOP 20 상세');
   const tS=filtP.reduce((s,r)=>s+r[6],0);
   const tQ=filtP.reduce((s,r)=>s+r[5],0);
   const tR=filtP.reduce((s,r)=>s+r[7],0);
@@ -3246,7 +3247,7 @@ function renderTop20(filtP,filtered,filteredP,f){
       const grLabelW=wks.length>=2?`${wkLbl(wFirst)} → ${wkLbl(wLast)}`:wkLbl(wLast);
       return`<div class="chart-header">
         <div>
-          <div class="chart-title">${isCustomSel?`선택 상품 ${top20.length}개 상세`:'상품 TOP 20 상세'}</div>
+          <div class="chart-title">${top20Title}</div>
           <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
             ${wkChips}
             <span style="font-size:11px;color:var(--hint);margin-left:4px">최근 ${wks.length}주 실매출액 비교 · 증감/성장률은 ${grLabelW}</span>
@@ -3348,7 +3349,7 @@ function renderTop20(filtP,filtered,filteredP,f){
       }).join('');
       return`<div class="chart-header">
         <div>
-          <div class="chart-title">${isCustomSel?`선택 상품 ${top20.length}개 상세`:'상품 TOP 20 상세'}</div>
+          <div class="chart-title">${top20Title}</div>
           <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
             ${yrChips}
             <span style="font-size:11px;color:var(--hint);margin-left:4px">연도별 실매출액 기준 비교 · 증감/성장률은 ${yFirst}년 → ${yLast}년</span>
@@ -3385,7 +3386,7 @@ function renderTop20(filtP,filtered,filteredP,f){
     }
     return`<div class="chart-header">
       <div>
-        <div class="chart-title">${isCustomSel?`선택 상품 ${top20.length}개 상세`:'상품 TOP 20 상세'}</div>
+        <div class="chart-title">${top20Title}</div>
         <div class="chart-sub">${isCustomSel?`\u{1F45F} ${(f.prods||[]).join(', ').slice(0,60)}\u2026`:'실매출액 기준'} \u00b7 수량 위에 커서를 올리면 사이즈별 판매수량을 볼 수 있어요</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
