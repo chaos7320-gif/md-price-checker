@@ -1805,6 +1805,19 @@ function calcSzWkSales(){
   });
   return map;
 }
+// calcProdWkSales/calcSzWkSales는 전체 데이터셋을 스캔하므로, 상품 행마다 반복 호출되는 곳(예: invSizeGridHTML)에서는
+// 캐시된 결과를 재사용 — 원본 배열 참조가 바뀔 때(데이터 새로고침)만 재계산
+let _prodWkSalesCache=null,_prodWkSalesCacheRef=null;
+function calcProdWkSalesCached(){
+  const base=PROD_DATA.length?PROD_DATA:D_PROD;
+  if(_prodWkSalesCacheRef!==base){_prodWkSalesCache=calcProdWkSales();_prodWkSalesCacheRef=base;}
+  return _prodWkSalesCache;
+}
+let _szWkSalesCache=null,_szWkSalesCacheRef=null;
+function calcSzWkSalesCached(){
+  if(_szWkSalesCacheRef!==SZ_DATA){_szWkSalesCache=calcSzWkSales();_szWkSalesCacheRef=SZ_DATA;}
+  return _szWkSalesCache;
+}
 function pct(n){return n.toFixed(1)+'%';}
 // 차트 축 등 간략 표기용
 function short(n){const a=Math.abs(n);if(a>=1e8)return(n/1e8).toFixed(1)+'억';if(a>=1e4)return(n/1e4).toFixed(0)+'만';return wonNo(n);}
@@ -6507,41 +6520,56 @@ document.addEventListener('keydown', function(e){
 // ── 사이즈 그리드 / 패널 토글 (전역) ──
 // ── 상품 입고주차 + 주차별 입고/판매/누적 소진율 툴팁 (TOP 20 상세 상품명 hover) ──
 // INS_DATA(입고데이터)와 PROD_DATA(판매) 결합, 25년 1월 1일 이후 이력만 표시
+// 26년 1월 기초재고 기준 — 상품별 주차 누적 추이 표의 전체소진율과 동일 기준으로 집계 (BASE_YR=2026 고정)
+const _PROD_HIST_BASE_YR=2026;
+// PROD_DATA/INS_DATA/INV_DATA 전체를 상품별로 한 번만 집계 — 상품 수만큼 반복 호출되는 _prodHistoryTipHTML에서
+// 매번 전체 배열을 훑지 않도록 상품명→집계 맵을 캐싱 (데이터 새로고침 시 배열 참조가 바뀌면 재계산)
+let _prodHistAggCache=null,_prodHistAggRefs=null;
+function _buildProdHistAgg(){
+  const agg={};
+  const ensure=p=>agg[p]||(agg[p]={wkSales:{},totQ:0,wkIns:{},totIns:0,stock:0});
+  if(typeof PROD_DATA!=='undefined'&&PROD_DATA){
+    PROD_DATA.forEach(r=>{
+      if(r[1]!==_PROD_HIST_BASE_YR) return;
+      if(r[2]===12&&r[3]===1) return;
+      const a=ensure(r[4]);
+      const wkKey=`${r[1]}-W${String(r[3]).padStart(2,'0')}`;
+      a.wkSales[wkKey]=(a.wkSales[wkKey]||0)+(r[5]||0);
+      a.totQ+=(r[5]||0);
+    });
+  }
+  (typeof INS_DATA!=='undefined'?INS_DATA:[]).forEach(r=>{
+    if(r[1]!==_PROD_HIST_BASE_YR) return;
+    if(r[2]===12&&r[3]===1) return;
+    const a=ensure(r[4]);
+    const wkKey=`${r[1]}-W${String(r[3]).padStart(2,'0')}`;
+    a.wkIns[wkKey]=(a.wkIns[wkKey]||0)+(r[6]||0);
+    a.totIns+=(r[6]||0);
+  });
+  (typeof INV_DATA!=='undefined'?INV_DATA:[]).forEach(r=>{
+    ensure(r.prod).stock+=(r.stock||0);
+  });
+  return agg;
+}
+function _prodHistAggCached(){
+  if(_prodHistAggRefs&&_prodHistAggRefs[0]===PROD_DATA&&_prodHistAggRefs[1]===INS_DATA&&_prodHistAggRefs[2]===INV_DATA)
+    return _prodHistAggCache;
+  _prodHistAggCache=_buildProdHistAgg();
+  _prodHistAggRefs=[PROD_DATA,INS_DATA,INV_DATA];
+  return _prodHistAggCache;
+}
 function _prodHistoryTipHTML(prod){
   if(typeof PROD_DATA==='undefined'||!PROD_DATA)
     return '<div style="color:rgba(255,255,255,.55);font-size:11px">판매 이력 없음</div>';
-  // 판매 집계
-  // 26년 1월 기초재고 기준 — 상품별 주차 누적 추이 표의 전체소진율과 동일 기준으로 집계 (BASE_YR=2026 고정)
-  const BASE_YR_TIP=2026;
-  const wkSales={}; let totQ=0;
-  PROD_DATA.forEach(r=>{
-    if(r[4]!==prod) return;
-    if(r[1]!==BASE_YR_TIP) return;
-    if(r[2]===12&&r[3]===1) return;
-    const wkKey=`${r[1]}-W${String(r[3]).padStart(2,'0')}`;
-    wkSales[wkKey]=(wkSales[wkKey]||0)+(r[5]||0);
-    totQ+=(r[5]||0);
-  });
-  // 입고 집계 (INS_DATA: [bi,yr,mo,wk,prod,size,qty,cost])
-  const wkIns={}; let totIns=0;
-  (typeof INS_DATA!=='undefined'?INS_DATA:[]).forEach(r=>{
-    if(r[4]!==prod) return;
-    if(r[1]!==BASE_YR_TIP) return;
-    if(r[2]===12&&r[3]===1) return;
-    const wkKey=`${r[1]}-W${String(r[3]).padStart(2,'0')}`;
-    wkIns[wkKey]=(wkIns[wkKey]||0)+(r[6]||0);
-    totIns+=(r[6]||0);
-  });
+  const _agg=_prodHistAggCached()[prod]||{wkSales:{},totQ:0,wkIns:{},totIns:0,stock:0};
+  const wkSales=_agg.wkSales,totQ=_agg.totQ,wkIns=_agg.wkIns,totIns=_agg.totIns;
   // 입고 OR 판매가 있는 모든 주차
   const wkSet=new Set([...Object.keys(wkSales),...Object.keys(wkIns)]);
   const allWks=[...wkSet].filter(w=>(wkSales[w]||0)>0||(wkIns[w]||0)>0).sort();
   if(!allWks.length)
     return '<div style="color:rgba(255,255,255,.55);font-size:11px;padding:8px 0">26년 1월 이후 입고·판매 이력 없음</div>';
   // 현재 재고
-  let stock=0;
-  (typeof INV_DATA!=='undefined'?INV_DATA:[]).forEach(r=>{
-    if(r.prod===prod) stock+=(r.stock||0);
-  });
+  const stock=_agg.stock;
   // 초기재고 = 현재재고 + 전체판매 - 전체입고 (음수일 때 0으로 클램프)
   const initStock=Math.max(0, stock+totQ-totIns);
   const denomLatest=stock+totQ;
@@ -6659,8 +6687,8 @@ function _cumTrendSort(th){
 }
 
 function invSizeGridHTML(prod){
-  const szMap=calcSzWkSales();
-  const prodMap=calcProdWkSales();
+  const szMap=calcSzWkSalesCached();
+  const prodMap=calcProdWkSalesCached();
   const allSizes=INV_DATA.filter(r=>r.prod===prod&&r.stock>0);
   const numSizes=allSizes.length||1;
   const sizes=allSizes.map(r=>{
