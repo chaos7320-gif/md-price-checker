@@ -2887,12 +2887,6 @@ function renderTop20(filtP,filtered,filteredP,f){
       if(multiYr){if(!byProdYr[yr])byProdYr[yr]={};if(!byProdYr[yr][prod])byProdYr[yr][prod]={s:0,q:0,rt:0};byProdYr[yr][prod].s+=Math.round(r[6]*ratio);byProdYr[yr][prod].q+=Math.round(r[5]*ratio);byProdYr[yr][prod].rt+=Math.round(r[7]*ratio);}
     });
   }
-  const allProds=Object.entries(byProd).filter(([,d])=>d.s>0).sort((a,b)=>b[1].s-a[1].s);
-  const top20=(f.prods&&f.prods.length>0||_db1Mode==='weekly')?allProds:allProds.slice(0,20);
-  _top20LastData=top20;
-  const yrTotals={};
-  if(multiYr)yrs.forEach(yr=>{yrTotals[yr]=Object.values(byProdYr[yr]||{}).reduce((s,d)=>s+d.s,0);});
-
   // 주간 모드: 최근 2주 비교 데이터 (멀티연도보다 우선)
   const _isWkModeT20=(_db1Mode==='weekly');
   const _recentWksT20=(()=>{
@@ -2921,6 +2915,19 @@ function renderTop20(filtP,filtered,filteredP,f){
       wkTotalsT20[wkKey]=(wkTotalsT20[wkKey]||0)+r[6];
     });
   }
+  const allProds=Object.entries(byProd).filter(([,d])=>d.s>0).sort((a,b)=>b[1].s-a[1].s);
+  const top20=(f.prods&&f.prods.length>0||_db1Mode==='weekly')?allProds:allProds.slice(0,20);
+  // 주간 모드의 "전체 상품 상세" 표는 최신 주차 실매출액 기준 내림차순으로 별도 정렬 (KPI/TOP10차트는 기간 합계 순 유지)
+  const _wkLastT20=_recentWksT20.length?_recentWksT20[_recentWksT20.length-1]:null;
+  const _wkLastMapT20=_wkLastT20?(byProdWk[_wkLastT20]||{}):null;
+  const top20ByLastWk=_wkLastMapT20?top20.slice().sort((a,b)=>{
+    const sa=_wkLastMapT20[a[0]]?.s||0,sb=_wkLastMapT20[b[0]]?.s||0;
+    if(sa!==sb) return sb-sa;
+    return b[1].s-a[1].s;
+  }):top20;
+  _top20LastData=top20ByLastWk;
+  const yrTotals={};
+  if(multiYr)yrs.forEach(yr=>{yrTotals[yr]=Object.values(byProdYr[yr]||{}).reduce((s,d)=>s+d.s,0);});
   const invStockMap={};
   INV_DATA.forEach(r=>{if(!invStockMap[r.prod])invStockMap[r.prod]=0;invStockMap[r.prod]+=r.stock;});
   _top20InvMap=invStockMap;
@@ -3199,7 +3206,7 @@ function renderTop20(filtP,filtered,filteredP,f){
       const tFirstW=wkTotalsT20[wFirst]||0,tLastW=wkTotalsT20[wLast]||0;
       const totalDiffW=tLastW-tFirstW;
       const totalGrW=tFirstW>0?(totalDiffW/tFirstW*100):0;
-      const rows=top20.map(([prod,d],i)=>{
+      const rows=top20ByLastWk.map(([prod,d],i)=>{
         const wData=wks.map(wk=>(byProdWk[wk]&&byProdWk[wk][prod])||{s:0,q:0});
         const dFirst=wData[0],dLast=wData[wData.length-1];
         const diff=dLast.s-dFirst.s;
