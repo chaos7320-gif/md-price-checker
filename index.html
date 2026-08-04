@@ -4121,7 +4121,8 @@ function parseWB(wb,fname){
   yrSel.innerHTML='<option value="ALL">전체</option>';
   years.forEach(y=>{const o=document.createElement('option');o.value=y;o.textContent=y;yrSel.appendChild(o);});
   // ── 잔여재고 시트도 있으면 파싱 ──
-  const invSheet=wb.SheetNames.find(s=>s.includes('재고')||s.includes('재업'));
+  const invSheet=wb.SheetNames.find(s=>s==='잔여재고')
+    ||wb.SheetNames.find(s=>(s.includes('재고')||s.includes('재업'))&&!s.includes('기초'));
   if(invSheet){
     try{
       const invRows=XLSX.utils.sheet_to_json(wb.Sheets[invSheet],{defval:null});
@@ -4149,8 +4150,9 @@ function parseWB(wb,fname){
         }
       });
       const newInv=[];
+      let invDropCount=0;
       invRows.forEach(row=>{
-        const brand=row[im.brand];if(!brand||!BMAP.hasOwnProperty(brand))return;
+        const brand=String(row[im.brand]||'').trim();if(!brand||!BMAP.hasOwnProperty(brand)){invDropCount++;return;}
         const bi=BMAP[brand];
         const prod=String(row[im.prod]||'');
         const size=String(row[im.size]||'');
@@ -4161,6 +4163,7 @@ function parseWB(wb,fname){
         const warn=wksLeft>0&&wksLeft<=12;
         newInv.push({bi,brand,prod,size,stock,wkSales,wksLeft,warn});
       });
+      if(invDropCount>0) console.warn('[재고파싱] 브랜드 미매칭으로 제외된 행:',invDropCount,'건');
       if(newInv.length>0){
         INV_DATA=newInv;
         console.log('재고 데이터 업데이트:',newInv.length,'건');
@@ -4404,11 +4407,11 @@ let _top20InvMap={};  // renderTop20에서 계산된 invStockMap 캐시
 function exportTop20CSV(){
   if(!_top20LastData.length){alert('내보낼 데이터가 없습니다.');return;}
   const rows=[['순위','브랜드','상품명','판매수량','실매출액','정상가합계','할인율','잔여재고']];
-  _top20LastData.forEach((r,i)=>{
-    const disc=r.rt>0?((r.rt-r.s)/r.rt*100):0;
-    const stk=_top20InvMap[r.prod]??-1;
+  _top20LastData.forEach(([prod,d],i)=>{
+    const disc=d.rt>0?((d.rt-d.s)/d.rt*100):0;
+    const stk=_top20InvMap[prod]??-1;
     const stkTxt=stk<0?'-':stk===0?'품절':stk;
-    rows.push([i+1,BNAMES[r.bi],r.prod,r.q,r.s,r.rt,disc.toFixed(1)+'%',stkTxt]);
+    rows.push([i+1,BNAMES[d.bi],prod,d.q,d.s,d.rt,disc.toFixed(1)+'%',stkTxt]);
   });
   const bom='\uFEFF';
   const csv=bom+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
@@ -4449,11 +4452,14 @@ function renderInventory(f){
   // 최근 2주 PROD_DATA 기반 주당판매 동적 재계산 → INV_DATA 원본 불변
   const prodWkSalesMap=calcProdWkSales();
   const szWkSalesMap=calcSzWkSales();
+  // 상품별 사이즈 수(재고 있는 것만) 사전 집계 — INV_DATA를 매 행마다 다시 훑지 않도록 한 번만 계산
+  const prodSizeCountMap={};
+  INV_DATA.forEach(x=>{if(x.stock>0){const k=`${x.bi}|${x.prod}`;prodSizeCountMap[k]=(prodSizeCountMap[k]||0)+1;}});
   let data=INV_DATA.map(r=>{
     const prodWkSales=prodWkSalesMap[`${r.bi}|${r.prod}`]||0;
     const prodWksLeft=prodWkSales>0&&r.stock>0?Math.round(r.stock/prodWkSales*10)/10:(r.stock>0?999:0);
     // size-level: SZ_DATA → PROD_SIZE_MAP 비례 배분 → 균등 배분 순으로 fallback
-    const numSizes=INV_DATA.filter(x=>x.bi===r.bi&&x.prod===r.prod&&x.stock>0).length||1;
+    const numSizes=prodSizeCountMap[`${r.bi}|${r.prod}`]||1;
     const _szKey=`${r.bi}|${r.prod.trim().toLowerCase()}|${r.size.trim()}`;
     const _szVal=szWkSalesMap?szWkSalesMap[_szKey]:undefined;
     let szWkSales;
@@ -4749,7 +4755,8 @@ function renderCompResult(){
     const sl=SLOTS[i];
 
     // 1) PROD_DATA에서 상품 기본 집계 (yr/mo 필터 적용)
-    let prodRows=PROD_DATA.filter(r=>r[4]===sl.prod);
+    // ISO 주차 오류로 12월 1주차 태그된 행은 다른 탭과 동일하게 제외
+    let prodRows=PROD_DATA.filter(r=>r[4]===sl.prod&&!(r[2]===12&&r[3]===1));
     if(sl.bi>=0) prodRows=prodRows.filter(r=>r[0]===sl.bi);
     if(cf.yr!=='ALL') prodRows=prodRows.filter(r=>r[1]===parseInt(cf.yr));
     if(cf.mo!=='ALL') prodRows=prodRows.filter(r=>r[2]===parseInt(cf.mo));
@@ -4757,7 +4764,7 @@ function renderCompResult(){
     // 2) TOP_DATA에서 채널별 집계 (yr/mo/ch 필터 모두 적용)
     //    상품명은 TOP_DATA에 없으므로 → 브랜드 기반으로 필터
     //    채널×브랜드 매출로 근사
-    let topRows=TOP_DATA;
+    let topRows=TOP_DATA.filter(r=>!(r[2]===12&&r[3]===1));
     if(sl.bi>=0) topRows=topRows.filter(r=>r[0]===sl.bi);
     if(cf.yr!=='ALL') topRows=topRows.filter(r=>r[1]===parseInt(cf.yr));
     if(cf.mo!=='ALL') topRows=topRows.filter(r=>r[2]===parseInt(cf.mo));
@@ -4768,7 +4775,7 @@ function renderCompResult(){
     let filteredProdRows=prodRows;
     if(cf.ch!=='ALL'){
       // TOP_DATA 기준 해당 채널 비율
-      const topAll=TOP_DATA.filter(r=>(sl.bi<0||r[0]===sl.bi)&&(cf.yr==='ALL'||r[1]===parseInt(cf.yr))&&(cf.mo==='ALL'||r[2]===parseInt(cf.mo)));
+      const topAll=TOP_DATA.filter(r=>!(r[2]===12&&r[3]===1)&&(sl.bi<0||r[0]===sl.bi)&&(cf.yr==='ALL'||r[1]===parseInt(cf.yr))&&(cf.mo==='ALL'||r[2]===parseInt(cf.mo)));
       const topCh=topAll.filter(r=>r[4]===cf.ch);
       const totalAllS=topAll.reduce((s,r)=>s+r[6],0);
       const totalChS=topCh.reduce((s,r)=>s+r[6],0);
@@ -4800,7 +4807,7 @@ function renderCompResult(){
 
     // 채널별 (TOP_DATA 기반 - 채널 필터 미적용 상태에서 상위 채널 산출)
     // 채널별 집계: TOP_DATA(브랜드 전체) × 상품 비율로 보정
-    const chRowsAll=TOP_DATA.filter(r=>(sl.bi<0||r[0]===sl.bi)&&(cf.yr==='ALL'||r[1]===parseInt(cf.yr))&&(cf.mo==='ALL'||r[2]===parseInt(cf.mo))&&(cf.ch==='ALL'||r[4]===cf.ch));
+    const chRowsAll=TOP_DATA.filter(r=>!(r[2]===12&&r[3]===1)&&(sl.bi<0||r[0]===sl.bi)&&(cf.yr==='ALL'||r[1]===parseInt(cf.yr))&&(cf.mo==='ALL'||r[2]===parseInt(cf.mo))&&(cf.ch==='ALL'||r[4]===cf.ch));
     const brandTotalS=chRowsAll.reduce((s,r)=>s+r[6],0);
     const prodTotalS=filteredProdRows.reduce((s,r)=>s+r[6],0);
     // 상품 비율: 해당 상품 매출 / 브랜드 전체 매출
@@ -5879,7 +5886,7 @@ function buildRstData(){
   const wkSalesMap=calcProdWkSales();
   const map={};
   INV_DATA.filter(r=>r.stock>0).forEach(r=>{
-    const k=`${r.bi}||${r.prod}`;
+    const k=`${r.bi}|${r.prod}`;
     const wkSales=wkSalesMap[`${r.bi}|${r.prod}`]||0;
     if(!map[k])map[k]={bi:r.bi,prod:r.prod,stock:0,wkSales};
     map[k].stock+=r.stock;
@@ -5995,7 +6002,8 @@ function renderRestock(f){
 let _dsAllData=[];
 function buildDeadStockData(){
   if(!INV_DATA||!INV_DATA.length) return [];
-  const base=PROD_DATA.length?PROD_DATA:D_PROD;
+  // ISO 주차 오류로 12월 1주차 태그된 행은 다른 탭과 동일하게 제외 (최신 주차 판정이 이 행에 오염되지 않도록 wkKeys 계산 전에 걸러냄)
+  const base=(PROD_DATA.length?PROD_DATA:D_PROD).filter(r=>!(r[2]===12&&r[3]===1));
   if(!base.length) return [];
   // 모든 주차 정렬 (오래된→최신)
   const wkOf=r=>`${r[1]}-${String(r[2]).padStart(2,'0')}-${String(r[3]).padStart(2,'0')}`;
@@ -6008,7 +6016,7 @@ function buildDeadStockData(){
   const lastSale={},recentQty={};
   base.forEach(r=>{
     if((r[5]||0)<=0)return;
-    const k=`${r[0]}|${r[4]}`;
+    const k=`${r[0]}|${String(r[4]||'').trim()}`; // 시트 간 상품명 앞뒤 공백 차이로 조인 실패하지 않도록 정규화
     const pos=wkPos[wkOf(r)];
     if(lastSale[k]===undefined||pos>lastSale[k]) lastSale[k]=pos;
     if(last8.has(wkOf(r))){
@@ -6018,8 +6026,8 @@ function buildDeadStockData(){
   });
   const map={};
   INV_DATA.filter(r=>r.stock>0).forEach(r=>{
-    const k=`${r.bi}||${r.prod}`;
-    const lookup=`${r.bi}|${r.prod}`;
+    const k=`${r.bi}|${r.prod}`;
+    const lookup=`${r.bi}|${String(r.prod||'').trim()}`;
     const lastPos=lastSale[lookup];
     const wksSince=lastPos===undefined?999:Math.max(0,nowPos-lastPos);
     const wkSales=Math.round((recentQty[lookup]||0)/numWks*10)/10;
@@ -6190,16 +6198,23 @@ function renderDeadStock(f){
 let _mgAllData=[],_mgSort='marginAmt';
 function buildMarginData(){
   if(!INS_DATA||!INS_DATA.length||!PROD_DATA.length) return [];
+  // 입고 시트에 브랜드 컬럼이 없어 bi=-1인 행이 있을 수 있어 상품명 매핑으로 보정 (입고 현황 탭과 동일 로직)
+  const prodBrandMap={};
+  PROD_DATA.forEach(r=>{if(r[0]>=0&&r[4]&&!(r[4] in prodBrandMap))prodBrandMap[r[4]]=r[0];});
+  const resolveBi=r=>{let bi=r[0];if(bi<0&&r[4]){const m=prodBrandMap[r[4]];if(m!==undefined)bi=m;}return bi;};
   const inMap={};
   INS_DATA.forEach(r=>{
-    const k=`${r[0]}|${r[4]}`;
+    if(r[2]===12&&r[3]===1)return; // ISO 주차 오류로 12월 1주차 태그된 행은 다른 탭과 동일하게 제외
+    const bi=resolveBi(r);
+    const k=`${bi}|${String(r[4]||'').trim()}`; // 시트 간 상품명 앞뒤 공백 차이로 매출과 조인 실패하지 않도록 정규화
     if(!inMap[k]) inMap[k]={qty:0,cost:0};
     inMap[k].qty+=r[6]||0;
     inMap[k].cost+=r[7]||0;
   });
   const saleMap={};
   PROD_DATA.forEach(r=>{
-    const k=`${r[0]}|${r[4]}`;
+    if(r[2]===12&&r[3]===1)return;
+    const k=`${r[0]}|${String(r[4]||'').trim()}`;
     if(!saleMap[k]) saleMap[k]={qty:0,sales:0,retail:0};
     saleMap[k].qty+=r[5]||0;
     saleMap[k].sales+=r[6]||0;
@@ -7112,10 +7127,12 @@ function renderInbound(f){
   const realStockMap={};
   const realStockProds=new Set();
   YR_STOCK_DATA.forEach(r=>{
-    const[bi,yr,prod,qty]=r;
+    const[rawBi,yr,prod,qty]=r;
+    // 업로드 시점에 브랜드 미매칭(bi=-1)이었어도 최신 PROD_DATA 기준으로 재시도 (INS_DATA의 resolveBi와 동일 로직, 배열 형태만 다름)
+    const bi=(rawBi<0&&prod in prodBrandMap)?prodBrandMap[prod]:rawBi;
     if(bIdx>=0&&bi!==bIdx)return;
     if(prodsF&&!prodsF.includes(prod))return;
-    realStockMap[`${prod}|${yr}`]=(realStockMap[`${prod}|${yr}`]||0)+qty;
+    realStockMap[`${prod}|${yr}`]=Math.max(0,(realStockMap[`${prod}|${yr}`]||0)+qty);
     realStockProds.add(prod);
   });
   function _yrSellThrough(prod,yr){
@@ -7139,11 +7156,15 @@ function renderInbound(f){
     const rate=denom>0?Math.min(100,yo.q/denom*100):0;
     return{openStock,yrSales:yo.q,yrSalesAmt:yo.s,yrIns,rate,isActual};
   }
-  // 연도별 전체(필터 스코프 내 전 상품) 기초재고/입고/판매/매출/소진율 합계 — 연도 비교 카드용
-  const _allProdsForStats=new Set([...Object.keys(salesByProdYr),...Object.keys(insByProdYr),...realStockProds]);
+  // 연도별 전체(필터 스코프 내, 해당 연도에 실제로 관련 있는 상품만) 기초재고/입고/판매/매출/소진율 합계 — 연도 비교 카드용
+  // 상품 집합을 연도별로 스코핑 — 다른 연도에만 활동이 있던 상품이 이 연도 합계에 섞여 들어가는 것을 방지
   function _yrTotalStats(yr){
+    const prods=new Set();
+    Object.keys(salesByProdYr).forEach(p=>{if(salesByProdYr[p][yr])prods.add(p);});
+    Object.keys(insByProdYr).forEach(p=>{if(insByProdYr[p][yr])prods.add(p);});
+    realStockProds.forEach(p=>{if(`${p}|${yr}` in realStockMap)prods.add(p);});
     let sales=0,salesAmt=0,ins=0,stock=0,denom=0,actualCount=0,totalCount=0;
-    _allProdsForStats.forEach(p=>{
+    prods.forEach(p=>{
       const st=_yrSellThrough(p,yr);
       sales+=st.yrSales;salesAmt+=st.yrSalesAmt;ins+=st.yrIns;stock+=st.openStock;denom+=(st.openStock+st.yrIns);
       totalCount++;if(st.isActual)actualCount++;
