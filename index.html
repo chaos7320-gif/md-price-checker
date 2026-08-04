@@ -1537,6 +1537,7 @@ let PRODUCTS={...D_PRODS}, CHANNELS={...D_CHS};
 let CH_ONLINE={};   // 채널명 → 'ON'|'OFF'|'WHL'
 let _olTipData={ON:[],OFF:[],WHL:[]};
 let INS_DATA=[];    // 입고데이터: [bi, yr, mo, wk, prod, size, qty, cost]
+let YR_STOCK_DATA=[]; // 연도별기초재고: [bi, yr, prod, qty] — 해당 연도 1/1 기준 실제 기초재고
 let activeTab='goal';
 let _db1Mode='annual'; // 'annual' | 'weekly' — 매출 분석 탭 모드
 let charts={};
@@ -4231,6 +4232,48 @@ function parseWB(wb,fname){
     }catch(e){console.warn('[입고파싱] 오류:',e);}
   }
 
+  // ── 연도별기초재고 시트 파싱 ──
+  // 피벗테이블을 그대로 복사한 형태 지원: 헤더행("행 레이블"/"수량" 텍스트로 컬럼 위치 탐색) + 데이터행(A=연도/날짜, B=상품명, C=수량)
+  // 우측에 동일 데이터가 중복으로 붙어있는 경우도 있어 앞쪽 3개 컬럼만 사용
+  const yrStockSheet=wb.SheetNames.find(s=>s==='연도별기초재고')||wb.SheetNames.find(s=>s.includes('기초재고'));
+  let yrStockMsg='';
+  if(yrStockSheet){
+    try{
+      const stockRaw=XLSX.utils.sheet_to_json(wb.Sheets[yrStockSheet],{header:1,defval:null,raw:true});
+      if(stockRaw.length>1){
+        const header=stockRaw[0]||[];
+        let dateCol=header.findIndex(h=>typeof h==='string'&&(h.includes('기초재고')||h.includes('일정')||h.includes('연도')||h.includes('년도')));
+        let prodCol=header.findIndex(h=>typeof h==='string'&&(h.includes('행 레이블')||h.includes('상품명')||h.includes('품목')));
+        let qtyCol=header.findIndex(h=>typeof h==='string'&&h.includes('수량'));
+        if(dateCol<0)dateCol=0;
+        if(prodCol<0)prodCol=1;
+        if(qtyCol<0)qtyCol=2;
+        const newStock=[];
+        for(let i=1;i<stockRaw.length;i++){
+          const row=stockRaw[i];
+          if(!row)continue;
+          const dv=row[dateCol],prod=String(row[prodCol]||'').trim(),qty=parseFloat(row[qtyCol]);
+          if(!prod||prod==='null'||isNaN(qty))continue;
+          let yr=null;
+          if(typeof dv==='number'){
+            if(dv>=2000&&dv<=2099)yr=dv; // 연도 값이 직접 들어간 경우
+            else if(dv>20000){const utcD=new Date(Math.floor(dv-25569)*86400000);yr=utcD.getUTCFullYear();} // 엑셀 날짜 시리얼
+          } else if(dv instanceof Date&&!isNaN(dv)){yr=dv.getFullYear();}
+          else if(typeof dv==='string'){const m=dv.match(/(\d{4})/);if(m)yr=parseInt(m[1]);}
+          if(!yr||yr<2000||yr>2099)continue;
+          const bi=prod in prodBrandMap?prodBrandMap[prod]:-1;
+          newStock.push([bi,yr,prod,Math.round(qty)]);
+        }
+        console.log('[기초재고파싱] 시트:',yrStockSheet,'/ 컬럼 idx(date,prod,qty):',dateCol,prodCol,qtyCol,'/ 파싱결과:',newStock.length,'건');
+        if(newStock.length>0){
+          const newStockYrs=new Set(newStock.map(r=>r[1]));
+          YR_STOCK_DATA=YR_STOCK_DATA.filter(r=>!newStockYrs.has(r[1])).concat(newStock);
+          yrStockMsg=` · 기초재고 ${newStock.length.toLocaleString()}건`;
+        }
+      }
+    }catch(e){console.warn('[기초재고파싱] 오류:',e);}
+  }
+
   const ts=TOP_DATA.reduce((s,r)=>s+r[6],0);
   const invMsg=invSheet?` · 재고 ${INV_DATA.length.toLocaleString()}건`:'';
   const insMsg=INS_DATA.length>0?` · 입고 ${INS_DATA.length.toLocaleString()}건`:(insSheet?' · 입고 0건(컬럼확인요)':'');
@@ -4238,7 +4281,7 @@ function parseWB(wb,fname){
   const prevHistory=_uploadHistory||[];
   _uploadHistory=[...prevHistory,{fname,ts:Date.now()}].slice(-10); // 최근 10건만 보관
   const uploadCount=_uploadHistory.length;
-  showToast(`✅ ${fname}<br>병합 완료 · 누적 ${uploadCount}회 · ${won(ts)}${invMsg}${insMsg}`);
+  showToast(`✅ ${fname}<br>병합 완료 · 누적 ${uploadCount}회 · ${won(ts)}${invMsg}${insMsg}${yrStockMsg}`);
   document.getElementById('status-txt').textContent=`${fname} · ${won(ts)}`;
   // 서버/IDB에는 순수 업로드 데이터만 저장 (D_TOP 제외) → 페이지 로드 시 D_TOP + 업로드 데이터 실시간 합산
   const uploadedTop=Object.values(aggCh).filter(r=>r.s!==0).map(r=>[r.bi,r.yr,r.mo,r.wk,r.ch,Math.round(r.qty),Math.round(r.s),Math.round(r.rt)]);
@@ -4257,9 +4300,9 @@ function parseWB(wb,fname){
   const mergedProd=(_savedUploaded.prod||[]).filter(r=>!newByr.has(`${r[0]}|${r[1]}`)).concat(uploadedProd);
   const mergedSz=(_savedUploaded.sz||[]).filter(r=>!newByr.has(`${r[0]}|${r[1]}`)).concat(uploadedSz);
   const mergedChp=(_savedUploaded.chp||[]).filter(r=>!newByr.has(`${r[0]}|${r[1]}`)).concat(uploadedChp);
-  _savedUploaded={top:mergedTop,prod:mergedProd,sz:mergedSz,chp:mergedChp,chOnline:CH_ONLINE,ins:INS_DATA};
-  saveToIDB({top:mergedTop,prod:mergedProd,sz:mergedSz,chp:mergedChp,inv:INV_DATA,chOnline:CH_ONLINE,ins:INS_DATA,products:PRODUCTS,channels:CHANNELS,history:_uploadHistory});
-  saveToServer({top:mergedTop,prod:mergedProd,sz:mergedSz,chp:mergedChp,inv:INV_DATA,chOnline:CH_ONLINE,ins:INS_DATA,products:PRODUCTS,channels:CHANNELS,history:_uploadHistory});
+  _savedUploaded={top:mergedTop,prod:mergedProd,sz:mergedSz,chp:mergedChp,chOnline:CH_ONLINE,ins:INS_DATA,yrStock:YR_STOCK_DATA};
+  saveToIDB({top:mergedTop,prod:mergedProd,sz:mergedSz,chp:mergedChp,inv:INV_DATA,chOnline:CH_ONLINE,ins:INS_DATA,yrStock:YR_STOCK_DATA,products:PRODUCTS,channels:CHANNELS,history:_uploadHistory});
+  saveToServer({top:mergedTop,prod:mergedProd,sz:mergedSz,chp:mergedChp,inv:INV_DATA,chOnline:CH_ONLINE,ins:INS_DATA,yrStock:YR_STOCK_DATA,products:PRODUCTS,channels:CHANNELS,history:_uploadHistory});
   hideLoadingOverlay();
   onBrandChange();reset();
   document.getElementById('content').innerHTML='<div class="empty"><div class="empty-icon">✅</div>새 데이터 로드 완료! 조회 버튼을 눌러주세요</div>';
@@ -6863,6 +6906,7 @@ function applyUploadedData(saved){
   if(saved.history) _uploadHistory=saved.history;
   if(saved.chOnline) Object.assign(CH_ONLINE, saved.chOnline);
   if(saved.ins&&saved.ins.length) INS_DATA=saved.ins;
+  if(saved.yrStock&&saved.yrStock.length) YR_STOCK_DATA=saved.yrStock;
 }
 function restoreFromIDB(){
   openIDB().then(db=>{
@@ -6898,10 +6942,11 @@ function resetAllData(){
       INV_DATA=[];
       CH_ONLINE={};
       INS_DATA=[];
+      YR_STOCK_DATA=[];
       _uploadHistory=[];
       SZ_DATA=[];
       CHP_DATA=[];
-      _savedUploaded={top:[],prod:[],sz:[],chp:[],chOnline:{},ins:[]};
+      _savedUploaded={top:[],prod:[],sz:[],chp:[],chOnline:{},ins:[],yrStock:[]};
       document.getElementById('status-txt').textContent='기본 데이터 로드됨';
       hideLoadingOverlay();
       showToast('🗑️ 초기화 완료 · 업로드 데이터 삭제됨');
@@ -7063,29 +7108,48 @@ function renderInbound(f){
     if(prodsF&&!prodsF.includes(r.prod))return;
     curStockMap[r.prod]=(curStockMap[r.prod]||0)+(r.stock||0);
   });
+  // 연도별기초재고 업로드 데이터(실측치) — 있으면 역산 추정치 대신 우선 사용
+  const realStockMap={};
+  const realStockProds=new Set();
+  YR_STOCK_DATA.forEach(r=>{
+    const[bi,yr,prod,qty]=r;
+    if(bIdx>=0&&bi!==bIdx)return;
+    if(prodsF&&!prodsF.includes(prod))return;
+    realStockMap[`${prod}|${yr}`]=(realStockMap[`${prod}|${yr}`]||0)+qty;
+    realStockProds.add(prod);
+  });
   function _yrSellThrough(prod,yr){
     const sByYr=salesByProdYr[prod]||{},iByYr=insByProdYr[prod]||{};
-    let qSince=0,insSince=0;
-    Object.keys(sByYr).forEach(yk=>{if(parseInt(yk)>=yr)qSince+=sByYr[yk].q;});
-    Object.keys(iByYr).forEach(yk=>{if(parseInt(yk)>=yr)insSince+=iByYr[yk];});
-    const curStock=curStockMap[prod]||0;
-    const openStock=Math.max(0,curStock+qSince-insSince);
     const yo=sByYr[yr]||{q:0,s:0};
     const yrIns=iByYr[yr]||0;
+    const realKey=`${prod}|${yr}`;
+    let openStock,isActual;
+    if(realKey in realStockMap){
+      openStock=realStockMap[realKey];
+      isActual=true;
+    } else {
+      let qSince=0,insSince=0;
+      Object.keys(sByYr).forEach(yk=>{if(parseInt(yk)>=yr)qSince+=sByYr[yk].q;});
+      Object.keys(iByYr).forEach(yk=>{if(parseInt(yk)>=yr)insSince+=iByYr[yk];});
+      const curStock=curStockMap[prod]||0;
+      openStock=Math.max(0,curStock+qSince-insSince);
+      isActual=false;
+    }
     const denom=openStock+yrIns;
     const rate=denom>0?Math.min(100,yo.q/denom*100):0;
-    return{openStock,yrSales:yo.q,yrSalesAmt:yo.s,yrIns,rate};
+    return{openStock,yrSales:yo.q,yrSalesAmt:yo.s,yrIns,rate,isActual};
   }
-  // 연도별 전체(필터 스코프 내 전 상품) 입고/판매/매출/소진율 합계 — 연도 비교 카드용
-  const _allProdsForStats=new Set([...Object.keys(salesByProdYr),...Object.keys(insByProdYr)]);
+  // 연도별 전체(필터 스코프 내 전 상품) 기초재고/입고/판매/매출/소진율 합계 — 연도 비교 카드용
+  const _allProdsForStats=new Set([...Object.keys(salesByProdYr),...Object.keys(insByProdYr),...realStockProds]);
   function _yrTotalStats(yr){
-    let sales=0,salesAmt=0,ins=0,denom=0;
+    let sales=0,salesAmt=0,ins=0,stock=0,denom=0,actualCount=0,totalCount=0;
     _allProdsForStats.forEach(p=>{
       const st=_yrSellThrough(p,yr);
-      sales+=st.yrSales;salesAmt+=st.yrSalesAmt;ins+=st.yrIns;denom+=(st.openStock+st.yrIns);
+      sales+=st.yrSales;salesAmt+=st.yrSalesAmt;ins+=st.yrIns;stock+=st.openStock;denom+=(st.openStock+st.yrIns);
+      totalCount++;if(st.isActual)actualCount++;
     });
     const rate=denom>0?Math.min(100,sales/denom*100):0;
-    return{ins,sales,salesAmt,rate};
+    return{ins,sales,salesAmt,stock,rate,actualCount,totalCount};
   }
 
   destroyCharts();
@@ -7128,18 +7192,30 @@ ${multiYr?`
     const d=byYrTot[yr]||{qty:0,cost:0};
     const st=_yrTotalStats(yr);
     const rateColor=st.rate>=80?'#059669':st.rate>=50?'#d97706':'#dc2626';
+    const stockBadge=st.totalCount===0?'':st.actualCount===st.totalCount
+      ?`<span style="font-size:9px;padding:2px 7px;border-radius:8px;background:#dcfce7;color:#15803d;font-weight:700;white-space:nowrap">✓ 실측 기초재고</span>`
+      :st.actualCount===0
+        ?`<span style="font-size:9px;padding:2px 7px;border-radius:8px;background:#f1f5f9;color:#64748b;font-weight:700;white-space:nowrap">추정치</span>`
+        :`<span style="font-size:9px;padding:2px 7px;border-radius:8px;background:#fef9c3;color:#92400e;font-weight:700;white-space:nowrap">일부 실측(${st.actualCount}/${st.totalCount})</span>`;
     return`<div class="kpi-card" style="border-top:4px solid ${c.badge};padding:16px 18px">
-    <div style="font-size:14px;font-weight:800;color:${c.text};margin-bottom:12px">${yr}년</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-      <div style="background:${c.bg};border-radius:10px;padding:10px 12px">
-        <div style="font-size:10px;color:var(--hint);font-weight:600;margin-bottom:4px">📦 입고</div>
-        <div style="font-size:16px;font-weight:800">${wonNo(d.qty)}개</div>
-        <div style="font-size:11px;color:var(--hint);margin-top:2px">${won(d.cost)}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <span style="font-size:14px;font-weight:800;color:${c.text}">${yr}년</span>
+      ${stockBadge}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+      <div style="background:${c.bg};border-radius:10px;padding:10px 8px">
+        <div style="font-size:10px;color:var(--hint);font-weight:600;margin-bottom:4px">🏷️ 기초재고</div>
+        <div style="font-size:15px;font-weight:800">${wonNo(st.stock)}개</div>
       </div>
-      <div style="background:${c.bg};border-radius:10px;padding:10px 12px">
+      <div style="background:${c.bg};border-radius:10px;padding:10px 8px">
+        <div style="font-size:10px;color:var(--hint);font-weight:600;margin-bottom:4px">📦 입고</div>
+        <div style="font-size:15px;font-weight:800">${wonNo(d.qty)}개</div>
+        <div style="font-size:10px;color:var(--hint);margin-top:2px">${won(d.cost)}</div>
+      </div>
+      <div style="background:${c.bg};border-radius:10px;padding:10px 8px">
         <div style="font-size:10px;color:var(--hint);font-weight:600;margin-bottom:4px">💰 매출</div>
-        <div style="font-size:16px;font-weight:800;color:var(--green)">${wonNo(st.sales)}개</div>
-        <div style="font-size:11px;color:var(--hint);margin-top:2px">${won(st.salesAmt)}</div>
+        <div style="font-size:15px;font-weight:800;color:var(--green)">${wonNo(st.sales)}개</div>
+        <div style="font-size:10px;color:var(--hint);margin-top:2px">${won(st.salesAmt)}</div>
       </div>
     </div>
     <div>
@@ -7169,6 +7245,7 @@ ${multiYr?`
     const rateDiffTxt=(rateDiff>=0?'+':'')+rateDiff.toFixed(1)+'%p';
     const rateDiffCol=rateDiff>0?'#15803d':rateDiff<0?'#dc2626':'#64748b';
     const rows=[
+      {label:'🏷️ 기초재고',a:wonNo(stA.stock)+'개',b:wonNo(stB.stock)+'개',badge:grBadge(stB.stock,stA.stock)},
       {label:'📦 입고수량',a:wonNo(dA.qty)+'개',b:wonNo(dB.qty)+'개',badge:grBadge(dB.qty,dA.qty)},
       {label:'💰 매출',a:won(stA.salesAmt),b:won(stB.salesAmt),badge:grBadge(stB.salesAmt,stA.salesAmt)},
       {label:'🛒 판매수량',a:wonNo(stA.sales)+'개',b:wonNo(stB.sales)+'개',badge:grBadge(stB.sales,stA.sales)},
@@ -7209,7 +7286,7 @@ ${multiYr?`
 
 <div class="table-card" style="margin-bottom:16px">
   <div class="chart-header">
-    <div><div class="chart-title">상품별 입고 상세</div><div class="chart-sub">필터 조건 입고 상품 전체 ${wonNo(prodSorted.length)}종 · 수량 기준 정렬${yrList.length?` · 기초재고/판매수/소진율은 연간(월·주차 필터 무관) 기준 · 기초재고는 현재재고 역산 추정치`:''}</div></div>
+    <div><div class="chart-title">상품별 입고 상세</div><div class="chart-sub">필터 조건 입고 상품 전체 ${wonNo(prodSorted.length)}종 · 수량 기준 정렬${yrList.length?` · 기초재고/판매수/소진율은 연간(월·주차 필터 무관) 기준 · ✓ = 업로드된 실측 기초재고, 미표시는 현재재고 역산 추정치`:''}</div></div>
   </div>
   <div class="table-wrap"><table>
     <thead>
@@ -7234,7 +7311,8 @@ ${multiYr?`
         const c=yrPal(yr);
         const st=_yrSellThrough(prod,yr);
         const rateColor=st.rate>=80?'#059669':st.rate>=50?'#d97706':'#dc2626';
-        return`<td class="nr" style="background:${c.bg}">${wonNo(st.openStock)}개</td><td class="nr" style="background:${c.bg};color:var(--green);font-weight:600">${wonNo(st.yrSales)}개</td><td class="nr" style="background:${c.bg};font-weight:700;color:${rateColor}">${st.rate.toFixed(1)}%</td>`;
+        const stockTip=st.isActual?'실측 기초재고(업로드 데이터)':'추정 기초재고(현재재고 역산)';
+        return`<td class="nr" style="background:${c.bg}" title="${stockTip}">${wonNo(st.openStock)}개${st.isActual?'<span style="color:#15803d;font-weight:700"> ✓</span>':''}</td><td class="nr" style="background:${c.bg};color:var(--green);font-weight:600">${wonNo(st.yrSales)}개</td><td class="nr" style="background:${c.bg};font-weight:700;color:${rateColor}">${st.rate.toFixed(1)}%</td>`;
       }).join('');
       return`<tr>
         <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
@@ -8934,7 +9012,7 @@ function restoreFromServer(){
       const hasAny=(saved.top&&saved.top.length)||(saved.prod&&saved.prod.length)||(saved.chp&&saved.chp.length);
       if(!hasAny){clearIDB();return;}  // 서버 초기화 시 IDB도 동기화
       applyUploadedData(saved);
-      saveToIDB({top:_savedUploaded.top,prod:_savedUploaded.prod,sz:_savedUploaded.sz,chp:_savedUploaded.chp,inv:INV_DATA,chOnline:CH_ONLINE,ins:INS_DATA,products:PRODUCTS,channels:CHANNELS,history:_uploadHistory});
+      saveToIDB({top:_savedUploaded.top,prod:_savedUploaded.prod,sz:_savedUploaded.sz,chp:_savedUploaded.chp,inv:INV_DATA,chOnline:CH_ONLINE,ins:INS_DATA,yrStock:YR_STOCK_DATA,products:PRODUCTS,channels:CHANNELS,history:_uploadHistory});
       const ts=TOP_DATA.reduce((s,r)=>s+r[6],0);
       const lastUpload=_uploadHistory[_uploadHistory.length-1];
       const ago=lastUpload?Math.round((Date.now()-lastUpload.ts)/60000):null;
