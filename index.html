@@ -1644,12 +1644,12 @@ function showInvStockTip(event, el){
 function hideInvStockTip(){const t=document.getElementById('sz-detail-tip');if(t){t.style.display='none';t.style.pointerEvents='none';}}
 
 // ── 막대그래프 클릭 → 현재 정보 + 상품별 판매 수량/매출 팝업 (sz-detail-tip 재사용) ──
-function showBarBreakdownPopup(e,periodLabel,infoLines,prodRows){
+function showBarBreakdownPopup(e,periodLabel,infoLines,prodRows,sectionLabel){
   const tip=document.getElementById('sz-detail-tip');
   if(!tip) return;
   let html=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.12)">${escHtml(periodLabel)}</div>`;
   html+=`<div style="font-size:11px;margin-bottom:10px">${infoLines.join('')}</div>`;
-  html+=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.12)">📦 상품별 판매</div>`;
+  html+=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.12)">${sectionLabel||'📦 상품별 판매'}</div>`;
   if(prodRows&&prodRows.length){
     html+=`<div style="max-height:240px;overflow:auto">`+prodRows.map(([prod,d],i)=>
       `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:11px">
@@ -7197,13 +7197,13 @@ ${multiYr?`
     <div style="position:relative;height:200px"><canvas id="c-ins-pie"></canvas></div>
   </div>
   <div class="chart-card">
-    <div class="chart-header"><div class="chart-title">월별 입고수량 추이</div><div class="chart-sub">${multiYr?'연도별 비교':'월별 수량'}</div></div>
+    <div class="chart-header"><div class="chart-title">월별 입고수량 추이</div><div class="chart-sub">${multiYr?'연도별 비교':'월별 수량'} · 막대 클릭 시 상품별 입고 확인</div></div>
     <div style="position:relative;height:200px"><canvas id="c-ins-mo"></canvas></div>
   </div>
 </div>
 
 <div class="chart-card" style="margin-bottom:16px">
-  <div class="chart-header"><div class="chart-title">주차별 입고수량</div><div class="chart-sub">${multiYr?'연도별 비교':'주차별 수량'}</div></div>
+  <div class="chart-header"><div class="chart-title">주차별 입고수량</div><div class="chart-sub">${multiYr?'연도별 비교':'주차별 수량'} · 막대 클릭 시 상품별 입고 확인</div></div>
   <div style="position:relative;height:200px"><canvas id="c-ins-wk"></canvas></div>
 </div>
 
@@ -7267,16 +7267,41 @@ ${multiYr?`
       });
     }
 
+    // 월/주차 막대 클릭 시 상품별 입고 내역 팝업 (insF: [bi,yr,mo,wk,prod,size,qty,cost])
+    const insProdBreakdown=(periodType,key,yr)=>{
+      const map={};
+      insF.forEach(r=>{
+        const rk=periodType==='mo'?String(r[2]).padStart(2,'0'):String(r[3]).padStart(2,'0');
+        if(rk!==key)return;
+        if(yr!=null&&r[1]!==yr)return;
+        const p=r[4];
+        if(!map[p])map[p]={q:0,s:0};
+        map[p].q+=r[6];map[p].s+=r[7];
+      });
+      return Object.entries(map).sort((a,b)=>b[1].q-a[1].q).slice(0,15);
+    };
+
     if(document.getElementById('c-ins-mo')){
+      const dsMo=multiYr
+        ?yrList.map(yr=>{const c=yrPal(yr);return{label:`${yr}년`,data:moKeys.map(mk=>byMo[mk]?.[yr]?.qty||0),backgroundColor:c.badge+'CC',borderRadius:4,barPercentage:.7,categoryPercentage:.8};})
+        :[{label:'수량',data:moKeys.map(mk=>Object.values(byMo[mk]).reduce((s,d)=>s+d.qty,0)),backgroundColor:'#22c55eCC',borderRadius:4,barPercentage:.7,categoryPercentage:.8}];
       charts.insMo=new Chart(document.getElementById('c-ins-mo'),{
         type:'bar',
-        data:{
-          labels:moKeys.map(m=>parseInt(m)+'월'),
-          datasets:multiYr
-            ?yrList.map(yr=>{const c=yrPal(yr);return{label:`${yr}년`,data:moKeys.map(mk=>byMo[mk]?.[yr]?.qty||0),backgroundColor:c.badge+'CC',borderRadius:4,barPercentage:.7,categoryPercentage:.8};})
-            :[{label:'수량',data:moKeys.map(mk=>Object.values(byMo[mk]).reduce((s,d)=>s+d.qty,0)),backgroundColor:'#22c55eCC',borderRadius:4,barPercentage:.7,categoryPercentage:.8}]
-        },
+        data:{labels:moKeys.map(m=>parseInt(m)+'월'),datasets:dsMo},
         options:{responsive:true,maintainAspectRatio:false,
+          onClick:(evt,els)=>{
+            if(!els.length)return;
+            const{datasetIndex:di,index:idx}=els[0];
+            const moKey=moKeys[idx];
+            const yr=multiYr?yrList[di]:null;
+            const curr=dsMo[di]?.data[idx];
+            if(curr==null)return;
+            const prodRows=insProdBreakdown('mo',moKey,yr);
+            const totCost=prodRows.reduce((s,[,d])=>s+d.s,0);
+            showBarBreakdownPopup(evt.native,(yr!=null?yr+'년 ':'')+(parseInt(moKey)+'월'),
+              [`<div>입고수량: <b style="color:#fff">${wonNo(curr)}개</b></div>`,`<div>공급금액: <b style="color:#fff">${won(totCost)}</b></div>`],
+              prodRows,'📦 상품별 입고');
+          },
           plugins:{legend:{display:multiYr,position:'top',labels:{font:{size:10},boxWidth:10,padding:8}},
             tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${wonNo(c.raw)}개`}}},
           scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:9},callback:v=>v>=1000?Math.round(v/1000)+'K':v}}}}
@@ -7284,15 +7309,26 @@ ${multiYr?`
     }
 
     if(document.getElementById('c-ins-wk')){
+      const dsWk=multiYr
+        ?yrList.map(yr=>{const c=yrPal(yr);return{label:`${yr}년`,data:wkKeys.map(wk=>byWk[wk]?.[yr]?.qty||0),backgroundColor:c.badge+'CC',borderRadius:4,barPercentage:.7,categoryPercentage:.8};})
+        :[{label:'수량',data:wkKeys.map(wk=>Object.values(byWk[wk]).reduce((s,d)=>s+d.qty,0)),backgroundColor:'#22c55eCC',borderRadius:4,barPercentage:.7,categoryPercentage:.8}];
       charts.insWk=new Chart(document.getElementById('c-ins-wk'),{
         type:'bar',
-        data:{
-          labels:wkKeys.map(w=>wkLabel(yrList.length?yrList[yrList.length-1]:new Date().getFullYear(),w)),
-          datasets:multiYr
-            ?yrList.map(yr=>{const c=yrPal(yr);return{label:`${yr}년`,data:wkKeys.map(wk=>byWk[wk]?.[yr]?.qty||0),backgroundColor:c.badge+'CC',borderRadius:4,barPercentage:.7,categoryPercentage:.8};})
-            :[{label:'수량',data:wkKeys.map(wk=>Object.values(byWk[wk]).reduce((s,d)=>s+d.qty,0)),backgroundColor:'#22c55eCC',borderRadius:4,barPercentage:.7,categoryPercentage:.8}]
-        },
+        data:{labels:wkKeys.map(w=>wkLabel(yrList.length?yrList[yrList.length-1]:new Date().getFullYear(),w)),datasets:dsWk},
         options:{responsive:true,maintainAspectRatio:false,
+          onClick:(evt,els)=>{
+            if(!els.length)return;
+            const{datasetIndex:di,index:idx}=els[0];
+            const wkKey=wkKeys[idx];
+            const yr=multiYr?yrList[di]:null;
+            const curr=dsWk[di]?.data[idx];
+            if(curr==null)return;
+            const prodRows=insProdBreakdown('wk',wkKey,yr);
+            const totCost=prodRows.reduce((s,[,d])=>s+d.s,0);
+            showBarBreakdownPopup(evt.native,(yr!=null?yr+'년 ':'')+wkLabel(yr||(yrList.length?yrList[yrList.length-1]:new Date().getFullYear()),wkKey),
+              [`<div>입고수량: <b style="color:#fff">${wonNo(curr)}개</b></div>`,`<div>공급금액: <b style="color:#fff">${won(totCost)}</b></div>`],
+              prodRows,'📦 상품별 입고');
+          },
           plugins:{legend:{display:multiYr,position:'top',labels:{font:{size:10},boxWidth:10,padding:8}},
             tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${wonNo(c.raw)}개`}}},
           scales:{x:{ticks:{font:{size:9},maxRotation:45}},y:{ticks:{font:{size:9},callback:v=>v>=1000?Math.round(v/1000)+'K':v}}}}
