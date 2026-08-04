@@ -5177,7 +5177,15 @@ function renderChannel(filtered,filteredP,f){
     }
   });
   const chList=Object.values(byCh).sort((a,b)=>b.s-a.s);
-  _chLastData={list:chList,f,filtered,filteredP};
+  // 매출처별 상세 표는 연도 비교 시 최신 연도 실매출액 기준 내림차순으로 별도 정렬 (도넛차트/KPI는 기간 합계 순 유지)
+  const chListByLastYr=(multiYr&&yrs.length>=2)?chList.slice().sort((a,b)=>{
+    const yrLast=yrs[yrs.length-1];
+    const sa=(byChYr[yrLast]&&byChYr[yrLast][a.ch]?.s)||0;
+    const sb=(byChYr[yrLast]&&byChYr[yrLast][b.ch]?.s)||0;
+    if(sa!==sb)return sb-sa;
+    return b.s-a.s;
+  }):chList;
+  _chLastData={list:chListByLastYr,f,filtered,filteredP};
   const totalS=chList.reduce((s,r)=>s+r.s,0);
   const totalQ=chList.reduce((s,r)=>s+r.q,0);
   const avgS=chList.length?Math.round(totalS/chList.length):0;
@@ -5521,7 +5529,7 @@ function renderChannel(filtered,filteredP,f){
       const yTotalsArr=yrs.map(yr=>yrTotals[yr]||0);
       const yFirst=yrs[0],yLast=yrs[yrs.length-1];
       const tFirst=yrTotals[yFirst]||0,tLast=yrTotals[yLast]||0;
-      const rows=chList.map((d,i)=>{
+      const rows=chListByLastYr.map((d,i)=>{
         const yData=yrs.map(yr=>(byChYr[yr]&&byChYr[yr][d.ch])||{s:0});
         const dFirst=yData[0],dLast=yData[yData.length-1];
         const diff=dLast.s-dFirst.s;
