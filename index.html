@@ -7035,6 +7035,42 @@ function renderInbound(f){
   const byYrTot={};
   insF.forEach(r=>{if(!byYrTot[r[1]])byYrTot[r[1]]={qty:0,cost:0};byYrTot[r[1]].qty+=r[6];byYrTot[r[1]].cost+=r[7];});
 
+  // 연도별 기초재고/판매수/소진율 (브랜드·상품 필터만 적용, 월/주차 필터와 무관하게 연간 기준으로 계산)
+  // 기초재고(N년) = 현재재고 + N년 이후 누적판매 - N년 이후 누적입고 (실제 연초 재고 스냅샷이 없어 현재고 기준 역산)
+  const salesByProdYr={};
+  (PROD_DATA.length?PROD_DATA:D_PROD).forEach(r=>{
+    if(r[2]===12&&r[3]===1)return;
+    if(bIdx>=0&&r[0]!==bIdx)return;
+    const p=r[4];
+    if(prodsF&&!prodsF.includes(p))return;
+    if(!salesByProdYr[p])salesByProdYr[p]={};
+    salesByProdYr[p][r[1]]=(salesByProdYr[p][r[1]]||0)+(r[5]||0);
+  });
+  const insByProdYr={};
+  INS_DATA.forEach(r=>{
+    const bi=resolveBi(r);
+    if(bIdx>=0&&bi!==bIdx)return;
+    const p=r[4];
+    if(prodsF&&!prodsF.includes(p))return;
+    if(!insByProdYr[p])insByProdYr[p]={};
+    insByProdYr[p][r[1]]=(insByProdYr[p][r[1]]||0)+(r[6]||0);
+  });
+  const curStockMap={};
+  INV_DATA.forEach(r=>{curStockMap[r.prod]=(curStockMap[r.prod]||0)+(r.stock||0);});
+  function _yrSellThrough(prod,yr){
+    const sByYr=salesByProdYr[prod]||{},iByYr=insByProdYr[prod]||{};
+    let salesSince=0,insSince=0;
+    Object.keys(sByYr).forEach(yk=>{if(parseInt(yk)>=yr)salesSince+=sByYr[yk];});
+    Object.keys(iByYr).forEach(yk=>{if(parseInt(yk)>=yr)insSince+=iByYr[yk];});
+    const curStock=curStockMap[prod]||0;
+    const openStock=Math.max(0,curStock+salesSince-insSince);
+    const yrSales=sByYr[yr]||0;
+    const yrIns=iByYr[yr]||0;
+    const denom=openStock+yrIns;
+    const rate=denom>0?Math.min(100,yrSales/denom*100):0;
+    return{openStock,yrSales,yrIns,rate};
+  }
+
   destroyCharts();
   document.getElementById('content').innerHTML=`
 <div class="kpi-grid">
@@ -7091,18 +7127,33 @@ ${multiYr?`<div class="kpi-grid" style="margin-bottom:4px">
 
 <div class="table-card" style="margin-bottom:16px">
   <div class="chart-header">
-    <div><div class="chart-title">상품별 입고 상세</div><div class="chart-sub">필터 조건 입고 상품 전체 ${wonNo(prodSorted.length)}종 · 수량 기준 정렬</div></div>
+    <div><div class="chart-title">상품별 입고 상세</div><div class="chart-sub">필터 조건 입고 상품 전체 ${wonNo(prodSorted.length)}종 · 수량 기준 정렬${yrList.length?` · 기초재고/판매수/소진율은 연간(월·주차 필터 무관) 기준 · 기초재고는 현재재고 역산 추정치`:''}</div></div>
   </div>
   <div class="table-wrap"><table>
-    <thead><tr>
-      <th>순위</th><th>상품명</th><th>브랜드</th>
-      <th class="nr">입고수량</th><th class="nr">공급금액</th><th class="nr">평균단가</th>
-      <th style="min-width:90px">비중</th><th style="min-width:180px">사이즈 분포</th>
-    </tr></thead>
+    <thead>
+      <tr>
+        <th rowspan="2" style="vertical-align:middle">순위</th>
+        <th rowspan="2" style="vertical-align:middle">상품명</th>
+        <th rowspan="2" style="vertical-align:middle">브랜드</th>
+        <th rowspan="2" class="nr" style="vertical-align:middle">입고수량</th>
+        <th rowspan="2" class="nr" style="vertical-align:middle">공급금액</th>
+        <th rowspan="2" class="nr" style="vertical-align:middle">평균단가</th>
+        <th rowspan="2" style="min-width:90px;vertical-align:middle">비중</th>
+        ${yrList.map(yr=>{const c=yrPal(yr);return`<th colspan="3" style="text-align:center;background:${c.hdr};color:${c.text};border-bottom:2px solid ${c.badge}">${yr}년</th>`;}).join('')}
+        <th rowspan="2" style="min-width:180px;vertical-align:middle">사이즈 분포</th>
+      </tr>
+      <tr>${yrList.map(yr=>{const c=yrPal(yr);return`<th class="nr" style="background:${c.bg};color:${c.text}">기초재고</th><th class="nr" style="background:${c.bg};color:${c.text}">판매수</th><th class="nr" style="background:${c.bg};color:${c.text}">소진율</th>`;}).join('')}</tr>
+    </thead>
     <tbody>${prodSorted.map(([prod,d],i)=>{
       const sizeEntries=Object.entries(d.sizes).sort((a,b)=>b[1]-a[1]);
       const qPct=totQty>0?(d.qty/totQty*100):0;
       const avgU=d.qty>0?Math.round(d.cost/d.qty):0;
+      const yrCells=yrList.map(yr=>{
+        const c=yrPal(yr);
+        const st=_yrSellThrough(prod,yr);
+        const rateColor=st.rate>=80?'#059669':st.rate>=50?'#d97706':'#dc2626';
+        return`<td class="nr" style="background:${c.bg}">${wonNo(st.openStock)}개</td><td class="nr" style="background:${c.bg};color:var(--green);font-weight:600">${wonNo(st.yrSales)}개</td><td class="nr" style="background:${c.bg};font-weight:700;color:${rateColor}">${st.rate.toFixed(1)}%</td>`;
+      }).join('');
       return`<tr>
         <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
         <td class="hover-tip-src" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;cursor:help" data-prod="${escHtml(prod)}" data-sizes="${escHtml(JSON.stringify(d.sizes||{}))}" data-tip-fn="inbound" onmouseenter="showInboundSizeTip(event,this)" onmouseleave="hideInvStockTip()">${escHtml(prod)}</td>
@@ -7111,6 +7162,7 @@ ${multiYr?`<div class="kpi-grid" style="margin-bottom:4px">
         <td class="nr" style="color:#b45309;font-weight:600">${won(d.cost)}</td>
         <td class="nr" style="color:var(--hint)">${won(avgU)}</td>
         <td><div class="bar-wrap"><div class="bar-bg"><div class="bar-in" style="width:${Math.round(d.qty/maxQty*100)}%"></div></div><span style="font-size:10px;color:var(--hint)">${qPct.toFixed(1)}%</span></div></td>
+        ${yrCells}
         <td>${sizeEntries.length?`<div style="display:flex;flex-wrap:wrap;gap:3px">${sizeEntries.slice(0,10).map(([sz,q])=>`<span style="font-size:10px;padding:2px 6px;border-radius:8px;background:#f1f5f9;color:#334155;white-space:nowrap">${escHtml(sz)} <b style="color:var(--green)">${q}</b></span>`).join('')}</div>`:'-'}</td>
       </tr>`;
     }).join('')}
