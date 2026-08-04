@@ -7056,7 +7056,11 @@ function renderInbound(f){
     insByProdYr[p][r[1]]=(insByProdYr[p][r[1]]||0)+(r[6]||0);
   });
   const curStockMap={};
-  INV_DATA.forEach(r=>{curStockMap[r.prod]=(curStockMap[r.prod]||0)+(r.stock||0);});
+  INV_DATA.forEach(r=>{
+    if(bIdx>=0&&r.bi!==bIdx)return;
+    if(prodsF&&!prodsF.includes(r.prod))return;
+    curStockMap[r.prod]=(curStockMap[r.prod]||0)+(r.stock||0);
+  });
   function _yrSellThrough(prod,yr){
     const sByYr=salesByProdYr[prod]||{},iByYr=insByProdYr[prod]||{};
     let salesSince=0,insSince=0;
@@ -7069,6 +7073,17 @@ function renderInbound(f){
     const denom=openStock+yrIns;
     const rate=denom>0?Math.min(100,yrSales/denom*100):0;
     return{openStock,yrSales,yrIns,rate};
+  }
+  // 연도별 전체(필터 스코프 내 전 상품) 입고/판매/소진율 합계 — 연도 비교 카드용
+  const _allProdsForStats=new Set([...Object.keys(salesByProdYr),...Object.keys(insByProdYr)]);
+  function _yrTotalStats(yr){
+    let sales=0,ins=0,denom=0;
+    _allProdsForStats.forEach(p=>{
+      const st=_yrSellThrough(p,yr);
+      sales+=st.yrSales;ins+=st.yrIns;denom+=(st.openStock+st.yrIns);
+    });
+    const rate=denom>0?Math.min(100,sales/denom*100):0;
+    return{ins,sales,rate};
   }
 
   destroyCharts();
@@ -7102,11 +7117,59 @@ function renderInbound(f){
 </div>
 
 ${multiYr?`<div class="kpi-grid" style="margin-bottom:4px">
-  ${yrList.map(yr=>{const c=yrPal(yr);const d=byYrTot[yr]||{qty:0,cost:0};return`<div class="kpi-card" style="border-top:3px solid ${c.badge}">
+  ${yrList.map(yr=>{
+    const c=yrPal(yr);
+    const d=byYrTot[yr]||{qty:0,cost:0};
+    const st=_yrTotalStats(yr);
+    const rateColor=st.rate>=80?'#059669':st.rate>=50?'#d97706':'#dc2626';
+    return`<div class="kpi-card" style="border-top:3px solid ${c.badge}">
     <div class="kpi-label" style="color:${c.text}">${yr}년</div>
     <div class="kpi-val">${wonNo(d.qty)}개</div>
     <div class="kpi-badge" style="background:${c.hdr};color:${c.text}">${won(d.cost)}</div>
+    <div style="display:flex;gap:14px;margin-top:10px;padding-top:10px;border-top:1px dashed ${c.hdr}">
+      <div style="flex:1">
+        <div style="font-size:10px;color:var(--hint)">판매수량</div>
+        <div style="font-size:15px;font-weight:700;color:var(--green)">${wonNo(st.sales)}개</div>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:10px;color:var(--hint)">소진율</div>
+        <div style="font-size:15px;font-weight:700;color:${rateColor}">${st.rate.toFixed(1)}%</div>
+      </div>
+    </div>
   </div>`;}).join('')}
+  ${yrList.length>=2?(()=>{
+    const yA=yrList[0],yB=yrList[yrList.length-1];
+    const dA=byYrTot[yA]||{qty:0,cost:0},dB=byYrTot[yB]||{qty:0,cost:0};
+    const stA=_yrTotalStats(yA),stB=_yrTotalStats(yB);
+    const growth=(curr,prev)=>prev>0?((curr-prev)/prev*100):(curr>0?999:0);
+    const grBadge=(curr,prev)=>{
+      const g=growth(curr,prev);
+      const txt=g===999?'NEW':(g>=0?'+':'')+g.toFixed(1)+'%';
+      const bg=g>0?'#dcfce7':g<0?'#fef2f2':'#f1f5f9';
+      const col=g>0?'#15803d':g<0?'#dc2626':'#64748b';
+      return`<span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${bg};color:${col}">${txt}</span>`;
+    };
+    const rateDiff=stB.rate-stA.rate;
+    const rateDiffTxt=(rateDiff>=0?'+':'')+rateDiff.toFixed(1)+'%p';
+    const rateDiffCol=rateDiff>0?'#15803d':rateDiff<0?'#dc2626':'#64748b';
+    return`<div class="kpi-card" style="grid-column:1/-1;background:linear-gradient(135deg,#fafafa,#f8fafc)">
+      <div class="kpi-label">${yA}년 → ${yB}년 비교</div>
+      <div style="display:flex;gap:24px;margin-top:8px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">입고수량</div>
+          <div style="display:flex;align-items:center;gap:6px"><span style="font-size:14px;font-weight:700">${wonNo(dA.qty)} → ${wonNo(dB.qty)}개</span>${grBadge(dB.qty,dA.qty)}</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">판매수량</div>
+          <div style="display:flex;align-items:center;gap:6px"><span style="font-size:14px;font-weight:700">${wonNo(stA.sales)} → ${wonNo(stB.sales)}개</span>${grBadge(stB.sales,stA.sales)}</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">소진율</div>
+          <div style="display:flex;align-items:center;gap:6px"><span style="font-size:14px;font-weight:700">${stA.rate.toFixed(1)}% → ${stB.rate.toFixed(1)}%</span><span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${rateDiff>0?'#dcfce7':rateDiff<0?'#fef2f2':'#f1f5f9'};color:${rateDiffCol}">${rateDiffTxt}</span></div>
+        </div>
+      </div>
+    </div>`;
+  })():''}
 </div>`:''}
 
 <div class="charts-grid" style="grid-template-columns:1fr 2fr;margin-bottom:16px">
