@@ -7035,7 +7035,7 @@ function renderInbound(f){
   const byYrTot={};
   insF.forEach(r=>{if(!byYrTot[r[1]])byYrTot[r[1]]={qty:0,cost:0};byYrTot[r[1]].qty+=r[6];byYrTot[r[1]].cost+=r[7];});
 
-  // 연도별 기초재고/판매수/소진율 (브랜드·상품 필터만 적용, 월/주차 필터와 무관하게 연간 기준으로 계산)
+  // 연도별 기초재고/판매수·매출/소진율 (브랜드·상품 필터만 적용, 월/주차 필터와 무관하게 연간 기준으로 계산)
   // 기초재고(N년) = 현재재고 + N년 이후 누적판매 - N년 이후 누적입고 (실제 연초 재고 스냅샷이 없어 현재고 기준 역산)
   const salesByProdYr={};
   (PROD_DATA.length?PROD_DATA:D_PROD).forEach(r=>{
@@ -7044,7 +7044,9 @@ function renderInbound(f){
     const p=r[4];
     if(prodsF&&!prodsF.includes(p))return;
     if(!salesByProdYr[p])salesByProdYr[p]={};
-    salesByProdYr[p][r[1]]=(salesByProdYr[p][r[1]]||0)+(r[5]||0);
+    if(!salesByProdYr[p][r[1]])salesByProdYr[p][r[1]]={q:0,s:0};
+    salesByProdYr[p][r[1]].q+=(r[5]||0);
+    salesByProdYr[p][r[1]].s+=(r[6]||0);
   });
   const insByProdYr={};
   INS_DATA.forEach(r=>{
@@ -7063,27 +7065,27 @@ function renderInbound(f){
   });
   function _yrSellThrough(prod,yr){
     const sByYr=salesByProdYr[prod]||{},iByYr=insByProdYr[prod]||{};
-    let salesSince=0,insSince=0;
-    Object.keys(sByYr).forEach(yk=>{if(parseInt(yk)>=yr)salesSince+=sByYr[yk];});
+    let qSince=0,insSince=0;
+    Object.keys(sByYr).forEach(yk=>{if(parseInt(yk)>=yr)qSince+=sByYr[yk].q;});
     Object.keys(iByYr).forEach(yk=>{if(parseInt(yk)>=yr)insSince+=iByYr[yk];});
     const curStock=curStockMap[prod]||0;
-    const openStock=Math.max(0,curStock+salesSince-insSince);
-    const yrSales=sByYr[yr]||0;
+    const openStock=Math.max(0,curStock+qSince-insSince);
+    const yo=sByYr[yr]||{q:0,s:0};
     const yrIns=iByYr[yr]||0;
     const denom=openStock+yrIns;
-    const rate=denom>0?Math.min(100,yrSales/denom*100):0;
-    return{openStock,yrSales,yrIns,rate};
+    const rate=denom>0?Math.min(100,yo.q/denom*100):0;
+    return{openStock,yrSales:yo.q,yrSalesAmt:yo.s,yrIns,rate};
   }
-  // 연도별 전체(필터 스코프 내 전 상품) 입고/판매/소진율 합계 — 연도 비교 카드용
+  // 연도별 전체(필터 스코프 내 전 상품) 입고/판매/매출/소진율 합계 — 연도 비교 카드용
   const _allProdsForStats=new Set([...Object.keys(salesByProdYr),...Object.keys(insByProdYr)]);
   function _yrTotalStats(yr){
-    let sales=0,ins=0,denom=0;
+    let sales=0,salesAmt=0,ins=0,denom=0;
     _allProdsForStats.forEach(p=>{
       const st=_yrSellThrough(p,yr);
-      sales+=st.yrSales;ins+=st.yrIns;denom+=(st.openStock+st.yrIns);
+      sales+=st.yrSales;salesAmt+=st.yrSalesAmt;ins+=st.yrIns;denom+=(st.openStock+st.yrIns);
     });
     const rate=denom>0?Math.min(100,sales/denom*100):0;
-    return{ins,sales,rate};
+    return{ins,sales,salesAmt,rate};
   }
 
   destroyCharts();
@@ -7116,29 +7118,43 @@ function renderInbound(f){
   </div>
 </div>
 
-${multiYr?`<div class="kpi-grid" style="margin-bottom:4px">
+${multiYr?`
+<div class="chart-header" style="margin-bottom:10px">
+  <div><div class="chart-title">📦 입고재고 현황</div><div class="chart-sub">연도별 입고 · 매출 · 소진율 비교</div></div>
+</div>
+<div class="kpi-grid" style="margin-bottom:16px">
   ${yrList.map(yr=>{
     const c=yrPal(yr);
     const d=byYrTot[yr]||{qty:0,cost:0};
     const st=_yrTotalStats(yr);
     const rateColor=st.rate>=80?'#059669':st.rate>=50?'#d97706':'#dc2626';
-    return`<div class="kpi-card" style="border-top:3px solid ${c.badge}">
-    <div class="kpi-label" style="color:${c.text}">${yr}년</div>
-    <div class="kpi-val">${wonNo(d.qty)}개</div>
-    <div class="kpi-badge" style="background:${c.hdr};color:${c.text}">${won(d.cost)}</div>
-    <div style="display:flex;gap:14px;margin-top:10px;padding-top:10px;border-top:1px dashed ${c.hdr}">
-      <div style="flex:1">
-        <div style="font-size:10px;color:var(--hint)">판매수량</div>
-        <div style="font-size:15px;font-weight:700;color:var(--green)">${wonNo(st.sales)}개</div>
+    return`<div class="kpi-card" style="border-top:4px solid ${c.badge};padding:16px 18px">
+    <div style="font-size:14px;font-weight:800;color:${c.text};margin-bottom:12px">${yr}년</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div style="background:${c.bg};border-radius:10px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--hint);font-weight:600;margin-bottom:4px">📦 입고</div>
+        <div style="font-size:16px;font-weight:800">${wonNo(d.qty)}개</div>
+        <div style="font-size:11px;color:var(--hint);margin-top:2px">${won(d.cost)}</div>
       </div>
-      <div style="flex:1">
-        <div style="font-size:10px;color:var(--hint)">소진율</div>
-        <div style="font-size:15px;font-weight:700;color:${rateColor}">${st.rate.toFixed(1)}%</div>
+      <div style="background:${c.bg};border-radius:10px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--hint);font-weight:600;margin-bottom:4px">💰 매출</div>
+        <div style="font-size:16px;font-weight:800;color:var(--green)">${wonNo(st.sales)}개</div>
+        <div style="font-size:11px;color:var(--hint);margin-top:2px">${won(st.salesAmt)}</div>
+      </div>
+    </div>
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
+        <span style="font-size:11px;color:var(--hint);font-weight:600">소진율</span>
+        <span style="font-size:15px;font-weight:800;color:${rateColor}">${st.rate.toFixed(1)}%</span>
+      </div>
+      <div style="height:8px;background:#e2e8f0;border-radius:5px;overflow:hidden">
+        <div style="width:${Math.min(100,st.rate)}%;height:100%;background:${rateColor};border-radius:5px"></div>
       </div>
     </div>
   </div>`;}).join('')}
   ${yrList.length>=2?(()=>{
     const yA=yrList[0],yB=yrList[yrList.length-1];
+    const cA=yrPal(yA),cB=yrPal(yB);
     const dA=byYrTot[yA]||{qty:0,cost:0},dB=byYrTot[yB]||{qty:0,cost:0};
     const stA=_yrTotalStats(yA),stB=_yrTotalStats(yB);
     const growth=(curr,prev)=>prev>0?((curr-prev)/prev*100):(curr>0?999:0);
@@ -7147,27 +7163,30 @@ ${multiYr?`<div class="kpi-grid" style="margin-bottom:4px">
       const txt=g===999?'NEW':(g>=0?'+':'')+g.toFixed(1)+'%';
       const bg=g>0?'#dcfce7':g<0?'#fef2f2':'#f1f5f9';
       const col=g>0?'#15803d':g<0?'#dc2626':'#64748b';
-      return`<span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${bg};color:${col}">${txt}</span>`;
+      return`<span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${bg};color:${col};white-space:nowrap">${txt}</span>`;
     };
     const rateDiff=stB.rate-stA.rate;
     const rateDiffTxt=(rateDiff>=0?'+':'')+rateDiff.toFixed(1)+'%p';
     const rateDiffCol=rateDiff>0?'#15803d':rateDiff<0?'#dc2626':'#64748b';
-    return`<div class="kpi-card" style="grid-column:1/-1;background:linear-gradient(135deg,#fafafa,#f8fafc)">
-      <div class="kpi-label">${yA}년 → ${yB}년 비교</div>
-      <div style="display:flex;gap:24px;margin-top:8px;flex-wrap:wrap">
-        <div>
-          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">입고수량</div>
-          <div style="display:flex;align-items:center;gap:6px"><span style="font-size:14px;font-weight:700">${wonNo(dA.qty)} → ${wonNo(dB.qty)}개</span>${grBadge(dB.qty,dA.qty)}</div>
-        </div>
-        <div>
-          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">판매수량</div>
-          <div style="display:flex;align-items:center;gap:6px"><span style="font-size:14px;font-weight:700">${wonNo(stA.sales)} → ${wonNo(stB.sales)}개</span>${grBadge(stB.sales,stA.sales)}</div>
-        </div>
-        <div>
-          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">소진율</div>
-          <div style="display:flex;align-items:center;gap:6px"><span style="font-size:14px;font-weight:700">${stA.rate.toFixed(1)}% → ${stB.rate.toFixed(1)}%</span><span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${rateDiff>0?'#dcfce7':rateDiff<0?'#fef2f2':'#f1f5f9'};color:${rateDiffCol}">${rateDiffTxt}</span></div>
-        </div>
-      </div>
+    const rows=[
+      {label:'📦 입고수량',a:wonNo(dA.qty)+'개',b:wonNo(dB.qty)+'개',badge:grBadge(dB.qty,dA.qty)},
+      {label:'💰 매출',a:won(stA.salesAmt),b:won(stB.salesAmt),badge:grBadge(stB.salesAmt,stA.salesAmt)},
+      {label:'🛒 판매수량',a:wonNo(stA.sales)+'개',b:wonNo(stB.sales)+'개',badge:grBadge(stB.sales,stA.sales)},
+      {label:'✅ 소진율',a:stA.rate.toFixed(1)+'%',b:stB.rate.toFixed(1)+'%',badge:`<span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${rateDiff>0?'#dcfce7':rateDiff<0?'#fef2f2':'#f1f5f9'};color:${rateDiffCol};white-space:nowrap">${rateDiffTxt}</span>`},
+    ];
+    return`<div class="kpi-card" style="grid-column:1/-1;padding:18px">
+      <div style="font-size:13px;font-weight:800;margin-bottom:12px">${yA}년 → ${yB}년 비교</div>
+      <div class="table-wrap"><table style="width:100%">
+        <thead><tr>
+          <th style="text-align:left">지표</th>
+          <th class="nr" style="color:${cA.text}">${yA}년</th>
+          <th class="nr" style="color:${cB.text}">${yB}년</th>
+          <th class="nr">증감</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(r=>`<tr><td style="font-weight:600">${r.label}</td><td class="nr" style="font-weight:700">${r.a}</td><td class="nr" style="font-weight:700">${r.b}</td><td class="nr">${r.badge}</td></tr>`).join('')}
+        </tbody>
+      </table></div>
     </div>`;
   })():''}
 </div>`:''}
@@ -7508,6 +7527,45 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
 <div class="chart-card" data-period="monthly" style="margin-bottom:14px">
   <div class="chart-header"><div><div class="chart-title">📅 월별 실매출 추이</div><div class="chart-sub">${cmpYrs.length>=2?cmpYrs.map(y=>y+'년').join(' vs '):cmpYrs.length===1?cmpYrs[0]+'년 월별 추이':'전체 기간 합산'} · 막대 클릭 시 상품별 매출 확인</div></div></div>
   <div style="position:relative;height:220px"><canvas id="d1-mo"></canvas></div>
+  ${cmpYrs.length>=2?(()=>{
+    const yA=cmpYrs[0],yB=cmpYrs[cmpYrs.length-1];
+    const moA=moByYr[yA]||{},moB=moByYr[yB]||{};
+    const growth=(curr,prev)=>prev>0?((curr-prev)/prev*100):(curr>0?999:0);
+    const grCell=(curr,prev)=>{
+      if(curr===0)return`<td class="nr" style="font-size:11px;color:var(--hint)">-</td>`;
+      if(prev===0)return`<td class="nr" style="font-size:11px;font-weight:700;color:#059669">NEW</td>`;
+      const g=growth(curr,prev);
+      const txt=(g>=0?'+':'')+g.toFixed(0)+'%';
+      const col=g>0?'#059669':g<0?'#dc2626':'var(--muted)';
+      return`<td class="nr" style="font-size:11px;font-weight:700;color:${col}">${txt}</td>`;
+    };
+    return`<div class="table-wrap" style="margin-top:14px">
+    <table>
+      <thead><tr>
+        <th>연도</th>
+        ${allMos.map(mk=>`<th class="nr">${parseInt(mk)}월</th>`).join('')}
+        <th class="nr">합계</th>
+      </tr></thead>
+      <tbody>
+        ${cmpYrs.map(yr=>{
+          const c=yrPalD1(yr);
+          const moMap=moByYr[yr]||{};
+          const total=allMos.reduce((s,mk)=>s+(moMap[mk]||0),0);
+          return`<tr>
+            <td style="font-weight:700;color:${c.text};white-space:nowrap">${yr}년</td>
+            ${allMos.map(mk=>`<td class="nr">${moMap[mk]?won(moMap[mk]):'-'}</td>`).join('')}
+            <td class="nr" style="font-weight:700">${won(total)}</td>
+          </tr>`;
+        }).join('')}
+        <tr style="background:#f8fafc">
+          <td style="font-weight:700;color:var(--muted);white-space:nowrap">${yA}→${yB} 증감률</td>
+          ${allMos.map(mk=>grCell(moB[mk]||0,moA[mk]||0)).join('')}
+          ${grCell(allMos.reduce((s,mk)=>s+(moB[mk]||0),0),allMos.reduce((s,mk)=>s+(moA[mk]||0),0))}
+        </tr>
+      </tbody>
+    </table>
+    </div>`;
+  })():''}
 </div>
 <div class="chart-card" data-period="weekly" style="margin-bottom:14px">
   <div class="chart-header"><div><div class="chart-title">${cmpYrs.length>=2?`📅 ${cmpYrs.map(y=>y+'년').join(' vs ')} 주간 매출 비교`:cmpYrs.length===1?`📅 ${cmpYrs[0]}년 주간 매출 추이`:'📅 전체 기간 주간 매출'}</div><div class="chart-sub">주차별 실매출액 · 막대 위에 마우스를 올리면 매출+수량 확인 · 클릭 시 상품별 매출 확인</div></div></div>
@@ -8423,6 +8481,9 @@ function renderGoalSales(){
   // ISO 주차 오류로 12월 1주차 태그된 행은 다른 탭과 동일하게 제외
   const actual=Array.from({length:4},()=>Array(12).fill(0));
   TOP_DATA.forEach(r=>{if(r[1]===2026&&!(r[2]===12&&r[3]===1))actual[r[0]][r[2]-1]+=r[6];});
+  // 월별 목표 vs 실매출 그래프 아래 2025 vs 2026 실매출 비교표용 전년 데이터
+  const actual2025=Array.from({length:4},()=>Array(12).fill(0));
+  TOP_DATA.forEach(r=>{if(r[1]===2025&&!(r[2]===12&&r[3]===1))actual2025[r[0]][r[2]-1]+=r[6];});
 
   const brands=bIdx<0?[0,1,2,3]:[bIdx];
   const MONTHS=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
@@ -8525,6 +8586,46 @@ ${brands.map(bi=>{
     </div>
   </div>
   <div style="position:relative;height:260px"><canvas id="c-goal-main"></canvas></div>
+  ${(()=>{
+    const mo2025=Array.from({length:12},(_,i)=>brands.reduce((s,bi)=>s+actual2025[bi][i],0));
+    const mo2026=Array.from({length:12},(_,i)=>brands.reduce((s,bi)=>s+actual[bi][i],0));
+    const total2025=mo2025.reduce((a,b)=>a+b,0),total2026=mo2026.reduce((a,b)=>a+b,0);
+    const growth=(curr,prev)=>prev>0?((curr-prev)/prev*100):(curr>0?999:0);
+    const grCell=(curr,prev)=>{
+      if(curr===0)return`<td class="nr" style="font-size:11px;color:var(--hint)">-</td>`;
+      if(prev===0)return`<td class="nr" style="font-size:11px;font-weight:700;color:#059669">NEW</td>`;
+      const g=growth(curr,prev);
+      const txt=(g>=0?'+':'')+g.toFixed(0)+'%';
+      const col=g>0?'#059669':g<0?'#dc2626':'var(--muted)';
+      return`<td class="nr" style="font-size:11px;font-weight:700;color:${col}">${txt}</td>`;
+    };
+    return`<div class="table-wrap" style="margin-top:14px">
+    <table>
+      <thead><tr>
+        <th>연도</th>
+        ${MONTHS.map((m,i)=>`<th class="nr" style="${i===nowMo?'background:#e0f2fe;color:#0284c7':''}">${m}</th>`).join('')}
+        <th class="nr">합계</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td style="font-weight:700;color:#64748b;white-space:nowrap">2025년</td>
+          ${mo2025.map((v,i)=>`<td class="nr" style="${i===nowMo?'background:#f8fafc':''}">${v?won(v):'-'}</td>`).join('')}
+          <td class="nr" style="font-weight:700">${won(total2025)}</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700;color:#15803d;white-space:nowrap">2026년</td>
+          ${mo2026.map((v,i)=>`<td class="nr" style="${i===nowMo?'background:#f0fdf4':''}">${v?won(v):'-'}</td>`).join('')}
+          <td class="nr" style="font-weight:700">${won(total2026)}</td>
+        </tr>
+        <tr style="background:#f8fafc">
+          <td style="font-weight:700;color:var(--muted);white-space:nowrap">증감률</td>
+          ${mo2026.map((v,i)=>grCell(v,mo2025[i])).join('')}
+          ${grCell(total2026,total2025)}
+        </tr>
+      </tbody>
+    </table>
+    </div>`;
+  })()}
 </div>
 
 <!-- 주간 매출 비교 (2025 vs 2026) — 전체/단일 브랜드 모두 지원 -->
