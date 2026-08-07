@@ -1723,6 +1723,46 @@ function showInboundSizeTip(event, el){
   tip.style.top=top+'px';tip.style.left=left+'px';
 }
 
+// ── 입고현황 연도별 매출 클릭 → 온라인/오프라인/홀세일 비중 팝업 (sz-detail-tip 재사용, 클릭형) ──
+function showInboundChannelPopup(event,el){
+  let d;
+  try{ d=JSON.parse(el.dataset.chBreakdown||'{}'); }catch(e){ return; }
+  const yr=el.dataset.chYr||'';
+  const on=d.ON||0,off=d.OFF||0,whl=d.WHL||0,unk=d.UNK||0;
+  const total=on+off+whl+unk;
+  const tip=document.getElementById('sz-detail-tip');
+  if(!tip) return;
+  const rows=[
+    {label:'🟦 온라인',v:on,color:'#38bdf8'},
+    {label:'🟩 오프라인',v:off,color:'#86efac'},
+    {label:'🟪 홀세일',v:whl,color:'#c084fc'},
+  ];
+  if(unk>0) rows.push({label:'⬜ 미분류',v:unk,color:'#94a3b8'});
+  let html=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.12)">💰 ${escHtml(yr)}년 매출처별 비중</div>`;
+  if(total>0){
+    html+=rows.map(r=>{
+      const pct=(r.v/total*100).toFixed(1);
+      const barW=Math.round(r.v/total*100);
+      return`<div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;gap:10px">
+          <span style="color:#fff;font-weight:600;white-space:nowrap">${r.label}</span>
+          <span style="color:#fff;font-weight:700;white-space:nowrap">${won(r.v)} <span style="color:${r.color}">(${pct}%)</span></span>
+        </div>
+        <div style="height:6px;border-radius:3px;background:rgba(255,255,255,.1)"><div style="height:100%;width:${barW}%;background:${r.color};border-radius:3px"></div></div>
+      </div>`;
+    }).join('');
+    html+=`<div style="padding-top:6px;margin-top:2px;border-top:1px solid rgba(255,255,255,.12);font-size:10px;color:rgba(255,255,255,.55)">합계 ${won(total)}</div>`;
+  } else {
+    html+=`<div style="font-size:11px;color:rgba(255,255,255,.4)">채널 매출 데이터 없음</div>`;
+  }
+  tip.innerHTML=html; tip.style.display='block'; tip.style.pointerEvents='auto';
+  const tw=tip.offsetWidth||280;
+  let lx=event.clientX+14; if(lx+tw>window.innerWidth-10)lx=event.clientX-tw-14;
+  let ty=event.clientY+10; if(ty+tip.offsetHeight>window.innerHeight-10)ty=event.clientY-tip.offsetHeight-10; if(ty<0)ty=4;
+  tip.style.left=lx+'px'; tip.style.top=ty+'px';
+  event.stopPropagation();
+}
+
 // ── 입고재고 숫자 클릭 → 주차별 입고일정 팝업 (sz-detail-tip 재사용, 클릭형) ──
 function showInboundSchedPopup(event,el){
   let sched;
@@ -7103,6 +7143,19 @@ function renderInbound(f){
   const byYrTot={};
   insF.forEach(r=>{if(!byYrTot[r[1]])byYrTot[r[1]]={qty:0,cost:0};byYrTot[r[1]].qty+=r[6];byYrTot[r[1]].cost+=r[7];});
 
+  // 연도별 매출처(온라인/오프라인/홀세일) 분해 — 채널 매핑 데이터 있을 때만 (상품 필터 시 CHP_DATA로 채널×상품 정합)
+  const hasChData=Object.keys(CH_ONLINE).length>0;
+  const chByYr={};
+  if(hasChData){
+    const chData=_buildProdAwareChannelData(filterArr(TOP_DATA,f,false),filterArr(PROD_DATA,f,true),f);
+    chData.forEach(r=>{
+      const yr=r[1];
+      const ol=CH_ONLINE[r[4]]||'UNK';
+      if(!chByYr[yr])chByYr[yr]={ON:0,OFF:0,WHL:0,UNK:0};
+      chByYr[yr][ol]=(chByYr[yr][ol]||0)+r[6];
+    });
+  }
+
   // 연도별 기초재고/판매수·매출/소진율 (브랜드·상품 필터만 적용, 월/주차 필터와 무관하게 연간 기준으로 계산)
   // 기초재고(N년) = 현재재고 + N년 이후 누적판매 - N년 이후 누적입고 (실제 연초 재고 스냅샷이 없어 현재고 기준 역산)
   const salesByProdYr={};
@@ -7241,8 +7294,8 @@ ${multiYr?`
         <div style="font-size:15px;font-weight:800">${wonNo(d.qty)}개</div>
         <div style="font-size:10px;color:var(--hint);margin-top:2px">${won(d.cost)}</div>
       </div>
-      <div style="background:${c.bg};border-radius:10px;padding:10px 8px">
-        <div style="font-size:10px;color:var(--hint);font-weight:600;margin-bottom:4px">💰 매출</div>
+      <div style="background:${c.bg};border-radius:10px;padding:10px 8px${hasChData&&chByYr[yr]?';cursor:pointer' : ''}"${hasChData&&chByYr[yr]?` data-ch-yr="${yr}" data-ch-breakdown="${escHtml(JSON.stringify(chByYr[yr]))}" onclick="showInboundChannelPopup(event,this)" title="클릭 시 온라인/오프라인/홀세일 매출 비중 보기"`:''}>
+        <div style="font-size:10px;color:var(--hint);font-weight:600;margin-bottom:4px">💰 매출${hasChData&&chByYr[yr]?' <span style="text-decoration:underline dotted">🔍</span>':''}</div>
         <div style="font-size:15px;font-weight:800;color:var(--green)">${wonNo(st.sales)}개</div>
         <div style="font-size:10px;color:var(--hint);margin-top:2px">${won(st.salesAmt)}</div>
       </div>
