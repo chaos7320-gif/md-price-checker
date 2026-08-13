@@ -4088,7 +4088,7 @@ function parseWB(wb,fname){
       if(mo===12&&wk===1){yr++;mo=1;}  // 12월 말이 다음해 1주차 → 연·월 모두 조정
       if(mo===1&&wk>=52){yr--;mo=12;} // 1월 초가 전년 52주차 → 연·월 모두 조정
     }
-    const ch=String(row[cm.ch]||''),prod=String(row[cm.prod]||''),size=String(row[cm.size]||'');
+    const ch=String(row[cm.ch]||''),prod=String(row[cm.prod]||'').trim(),size=String(row[cm.size]||'').trim();
     if(cm.online&&ch){const ol=String(row[cm.online]||'').toUpperCase();if(ol==='ON'||ol==='OFF'||ol==='WHL')newChOnline[ch]=ol;}
     const qty=parseFloat(row[cm.qty])||0,sales=parseFloat(row[cm.sales])||0,retail=parseFloat(row[cm.retail])||0;
     if(sales===0)return;
@@ -4194,8 +4194,8 @@ function parseWB(wb,fname){
       invRows.forEach(row=>{
         const brand=String(row[im.brand]||'').trim();if(!brand||!BMAP.hasOwnProperty(brand)){invDropCount++;return;}
         const bi=BMAP[brand];
-        const prod=String(row[im.prod]||'');
-        const size=String(row[im.size]||'');
+        const prod=String(row[im.prod]||'').trim();
+        const size=String(row[im.size]||'').trim();
         const stock=parseInt(row[im.stock])||0;
         const key=`${bi}|${prod}`;
         const wkSales=Math.round((recentSales[key]||0)/4*10)/10;
