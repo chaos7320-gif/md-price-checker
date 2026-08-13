@@ -5442,7 +5442,6 @@ function renderChannel(filtered,filteredP,f){
     if(sa!==sb)return sb-sa;
     return b.s-a.s;
   }):chList;
-  _chLastData={list:chListByLastYr,f,filtered,filteredP};
   const totalS=chList.reduce((s,r)=>s+r.s,0);
   const totalQ=chList.reduce((s,r)=>s+r.q,0);
   const avgS=chList.length?Math.round(totalS/chList.length):0;
@@ -5477,6 +5476,15 @@ function renderChannel(filtered,filteredP,f){
       wkTotalsCh[wkKey]=(wkTotalsCh[wkKey]||0)+r[6];
     });
   }
+  // 매출처별 상세 표는 주간 모드에서 최근 주차 실매출액 기준 내림차순으로 별도 정렬
+  const _wkLastCh2=_recentWksCh2.length?_recentWksCh2[_recentWksCh2.length-1]:null;
+  const chListByLastWk=(_isWkModeCh2&&_wkLastCh2)?chList.slice().sort((a,b)=>{
+    const sa=(byChWk[_wkLastCh2]&&byChWk[_wkLastCh2][a.ch]?.s)||0;
+    const sb=(byChWk[_wkLastCh2]&&byChWk[_wkLastCh2][b.ch]?.s)||0;
+    if(sa!==sb)return sb-sa;
+    return b.s-a.s;
+  }):chList;
+  _chLastData={list:_isWkModeCh2?chListByLastWk:chListByLastYr,f,filtered,filteredP};
 
   // 기간 단위 (매출 분석 탭 모드 우선, 다음으로 필터)
   const useWk=(_db1Mode==='weekly')||(f.mo!=='ALL'||f.wk!=='ALL');
@@ -5699,7 +5707,7 @@ function renderChannel(filtered,filteredP,f){
       const wTotalsArr=wks.map(wk=>wkTotalsCh[wk]||0);
       const wFirst=wks[0],wLast=wks[wks.length-1];
       const tFirstW=wkTotalsCh[wFirst]||0,tLastW=wkTotalsCh[wLast]||0;
-      const rows=chList.map((d,i)=>{
+      const rows=chListByLastWk.map((d,i)=>{
         const wData=wks.map(wk=>(byChWk[wk]&&byChWk[wk][d.ch])||{s:0});
         const dFirst=wData[0],dLast=wData[wData.length-1];
         const diff=dLast.s-dFirst.s;
