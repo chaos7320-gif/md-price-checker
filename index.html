@@ -1770,18 +1770,26 @@ function showInboundSchedPopup(event,el){
   const prodName=el.dataset.prod||'';
   const entries=Object.entries(sched).filter(([,q])=>q>0).sort((a,b)=>a[0]<b[0]?-1:1);
   const total=entries.reduce((s,[,q])=>s+q,0);
+  const isMo=entries.length>0&&entries[0][0].includes('-M');
   const tip=document.getElementById('sz-detail-tip');
   if(!tip) return;
   let html=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.12)">📦 입고일정</div>`;
   if(prodName) html+=`<div style="font-size:11px;color:#fff;margin-bottom:8px;font-weight:600;line-height:1.4;word-break:break-word">${escHtml(prodName)}</div>`;
   if(entries.length){
     html+=`<div style="max-height:260px;overflow:auto"><div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;align-items:center">`
-      +`<span style="font-size:10px;color:rgba(255,255,255,.4)">주차</span>`
+      +`<span style="font-size:10px;color:rgba(255,255,255,.4)">${isMo?'월':'주차'}</span>`
       +`<span style="font-size:10px;color:rgba(255,255,255,.4);text-align:right">입고수량</span>`
-      +entries.map(([wk,q])=>{
-        const[y,w]=wk.split('-W');
-        const rng=WK_RANGE_MAP[wk]||'';
-        return `<span style="font-size:11px;color:#fff;font-weight:600">${String(y).slice(2)}년 W${parseInt(w)}${rng?` <span style="color:rgba(255,255,255,.4);font-weight:400">(${rng})</span>`:''}</span>`
+      +entries.map(([k,q])=>{
+        let lbl;
+        if(isMo){
+          const[y,m]=k.split('-M');
+          lbl=`${String(y).slice(2)}년 ${parseInt(m)}월`;
+        } else {
+          const[y,w]=k.split('-W');
+          const rng=WK_RANGE_MAP[k]||'';
+          lbl=`${String(y).slice(2)}년 W${parseInt(w)}${rng?` <span style="color:rgba(255,255,255,.4);font-weight:400">(${rng})</span>`:''}`;
+        }
+        return `<span style="font-size:11px;color:#fff;font-weight:600">${lbl}</span>`
           +`<span style="font-size:11px;font-weight:700;color:#fbbf24;text-align:right">${wonNo(Math.round(q))}개</span>`;
       }).join('')
       +`</div></div>`;
@@ -3566,7 +3574,7 @@ function renderTop20(filtP,filtered,filteredP,f){
       totInsByProd[prod]=(totInsByProd[prod]||0)+q;
     });
     // 최근 N주차
-    const N=6;
+    const N=8;
     const allWksSet=new Set();
     Object.values(wkQtyByProd).forEach(o=>Object.keys(o).forEach(w=>allWksSet.add(w)));
     const allWks=[...allWksSet].sort();
@@ -3711,6 +3719,202 @@ function renderTop20(filtP,filtered,filteredP,f){
     </div>`;
   })();
 
+  // ── 상품별 월별 누적 추이 (주간 모드 전용) ──
+  const monTrendCard=(()=>{
+    if(!_isWkModeT20) return '';
+    const bI=f.b==='ALL'?-1:parseInt(f.b);
+    const BASE_YR=2026;
+    const chFilterCum=f.chs&&f.chs.length>0;
+    const useChp=chFilterCum&&CHP_DATA&&CHP_DATA.length;
+    let cumChRatio=1;
+    if(chFilterCum&&!useChp){
+      const tAll=TOP_DATA.filter(r=>(bI<0||r[0]===bI)&&r[1]===BASE_YR&&!(r[2]===12&&r[3]===1));
+      const tCh=tAll.filter(r=>chOk(r,f));
+      const qAll=tAll.reduce((s,r)=>s+r[5],0);
+      const qCh=tCh.reduce((s,r)=>s+r[5],0);
+      cumChRatio=qAll>0?qCh/qAll:0;
+    }
+    const prodSetCum=(f.prods&&f.prods.length)?new Set(f.prods):null;
+    const chsSetCum=useChp?new Set(f.chs):null;
+    // 상품×월 판매수량 (26년 기준 · 월/주 필터 무시 — 추이 보기 위함)
+    const moQtyByProd={};
+    const totQtyByProd={};
+    const _srcCum=useChp?CHP_DATA:PROD_DATA;
+    const _idxProd=useChp?5:4, _idxQty=useChp?6:5;
+    _srcCum.forEach(r=>{
+      if(bI>=0&&r[0]!==bI) return;
+      if(r[1]!==BASE_YR) return;
+      if(r[2]===12&&r[3]===1) return;
+      if(useChp&&!chsSetCum.has(r[4])) return;
+      const prod=r[_idxProd];
+      if(prodSetCum&&!prodSetCum.has(prod)) return;
+      const q=cumChRatio===1?r[_idxQty]:r[_idxQty]*cumChRatio;
+      if(q<=0) return;
+      const moKey=`${r[1]}-M${String(r[2]).padStart(2,'0')}`;
+      if(!moQtyByProd[prod]) moQtyByProd[prod]={};
+      moQtyByProd[prod][moKey]=(moQtyByProd[prod][moKey]||0)+q;
+      totQtyByProd[prod]=(totQtyByProd[prod]||0)+q;
+    });
+    // 현재 재고
+    const stockByProd={};
+    (typeof INV_DATA!=='undefined'?INV_DATA:[]).forEach(r=>{
+      if(bI>=0&&r.bi!==bI) return;
+      if(prodSetCum&&!prodSetCum.has(r.prod)) return;
+      stockByProd[r.prod]=(stockByProd[r.prod]||0)+(r.stock||0);
+    });
+    // 입고 데이터 (INS_DATA: [bi,yr,mo,wk,prod,size,qty,cost]) — 26년 기준
+    const prodBrandMapCum={};
+    (PROD_DATA.length?PROD_DATA:D_PROD).forEach(r=>{if(r[0]>=0&&r[4]&&!(r[4] in prodBrandMapCum))prodBrandMapCum[r[4]]=r[0];});
+    const resolveInsBi=r=>{let bi=r[0];if(bi<0&&r[4]){const m=prodBrandMapCum[r[4]];if(m!==undefined)bi=m;}return bi;};
+    const insMoByProd={};
+    const totInsByProd={};
+    (typeof INS_DATA!=='undefined'?INS_DATA:[]).forEach(r=>{
+      if(bI>=0&&resolveInsBi(r)!==bI) return;
+      if(r[1]!==BASE_YR) return;
+      if(r[2]===12&&r[3]===1) return;
+      const prod=r[4];
+      if(prodSetCum&&!prodSetCum.has(prod)) return;
+      const q=cumChRatio===1?(r[6]||0):(r[6]||0)*cumChRatio;
+      if(q<=0) return;
+      const moKey=`${r[1]}-M${String(r[2]).padStart(2,'0')}`;
+      if(!insMoByProd[prod]) insMoByProd[prod]={};
+      insMoByProd[prod][moKey]=(insMoByProd[prod][moKey]||0)+q;
+      totInsByProd[prod]=(totInsByProd[prod]||0)+q;
+    });
+    // 26년 1월 ~ 데이터가 존재하는 마지막 달까지 전체 월 표시 (연 단위라 슬라이싱 불필요)
+    const allMosSet=new Set();
+    Object.values(moQtyByProd).forEach(o=>Object.keys(o).forEach(m=>allMosSet.add(m)));
+    const allMos=[...allMosSet].sort();
+    if(!allMos.length) return '';
+    const moLbl=mo=>`${parseInt(mo.split('-M')[1])}월`;
+    const headCells=allMos.map(mo=>
+      `<th class="nr" style="min-width:100px;padding:8px 10px;background:#eff6ff;color:#1d4ed8;font-size:11px;letter-spacing:.2px;line-height:1.35">${moLbl(mo)}</th>`
+    ).join('');
+    // 브랜드 선택 시(bI>=0) 전체 상품, 미선택(전체 브랜드) 시 TOP20만 표시 · 상품명 오름차순 정렬
+    const cumList=(bI>=0?allProds:top20).slice().sort((a,b)=>a[0].localeCompare(b[0],'ko'));
+    const rows=cumList.map(([prod,d],i)=>{
+      const moData=moQtyByProd[prod]||{};
+      const insData=insMoByProd[prod]||{};
+      const stock=stockByProd[prod]||0;
+      const totQ=Math.round(totQtyByProd[prod]||0);
+      const totIns=Math.round(totInsByProd[prod]||0);
+      // 초기재고 = 현재재고 + 전체판매 - 전체입고 (음수일 때 0으로 클램프)
+      const initStock=Math.max(0, stock+totQ-totIns);
+      let cum=0, cumIns=0;
+      const moCells=allMos.map(mo=>{
+        const q=Math.round(moData[mo]||0);
+        const insQ=Math.round(insData[mo]||0);
+        cum+=q;
+        cumIns+=insQ;
+        // 소진율 = 누적판매 / (초기재고 + 누적입고) — 입고 시 분모 증가
+        const denomM=initStock+cumIns;
+        const sellRate=denomM>0?Math.min(100, cum/denomM*100):0;
+        const qColor=q>0?'#1d4ed8':'var(--hint)';
+        const sellBg=sellRate>=80?'#dcfce7':sellRate>=50?'#fef9c3':sellRate>=20?'#dbeafe':'#fef2f2';
+        const sellCol=sellRate>=80?'#15803d':sellRate>=50?'#a16207':sellRate>=20?'#1d4ed8':'#dc2626';
+        return `<td class="nr" style="padding:6px 8px;background:${q>0?'#eff6ff':'transparent'};line-height:1.45;vertical-align:middle">
+          <div style="font-size:11.5px;font-weight:700;color:${qColor}">${q>0?wonNo(q)+'건':'-'}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">누적 ${wonNo(Math.round(cum))}</div>
+          <div style="font-size:10px;font-weight:700;color:${sellCol};background:${sellBg};border-radius:8px;padding:1px 6px;margin-top:3px;display:inline-block">${sellRate.toFixed(1)}%</div>
+        </td>`;
+      }).join('');
+      const denom=stock+totQ;
+      const totSellRate=denom>0?(totQ/denom*100):0;
+      const totSellBg=totSellRate>=80?'#dcfce7':totSellRate>=50?'#fef9c3':totSellRate>=20?'#dbeafe':'#fef2f2';
+      const totSellCol=totSellRate>=80?'#15803d':totSellRate>=50?'#a16207':totSellRate>=20?'#1d4ed8':'#dc2626';
+      // 판매가능개월 = 현재재고 / 최근 2개월 평균 판매량
+      const last2Mos=allMos.slice(-2);
+      const avgMo2=last2Mos.length?last2Mos.reduce((s,mo)=>s+Math.round(moData[mo]||0),0)/last2Mos.length:0;
+      const sellableMos=stock>0&&avgMo2>0?stock/avgMo2:null;
+      const swTxt=stock<=0?'-':(avgMo2<=0?'판매없음':`${sellableMos.toFixed(1)}개월`);
+      const swBg=sellableMos===null?'#f1f5f9':sellableMos<1?'#fef2f2':sellableMos<2?'#fef9c3':'#dcfce7';
+      const swCol=sellableMos===null?'var(--hint)':sellableMos<1?'#dc2626':sellableMos<2?'#a16207':'#15803d';
+      const swSortV=stock<=0?-1:(sellableMos===null?9999:sellableMos);
+      const stkHtml=stock<=0
+        ?'<span style="color:var(--red);font-weight:700">품절</span>'
+        :`<span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)">${wonNo(stock)}개<div class="sz-tooltip-box"><div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${prod.length>24?prod.slice(0,24)+'…':prod} 사이즈별 판매·재고</div>${invSizeGridHTML(prod)}</div></span>`;
+      return `<tr data-t20-prod="${escHtml(prod)}" data-cum-row="1">
+        <td><span class="rank">${i+1}</span></td>
+        <td data-v="${escHtml(prod)}" style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
+        ${moCells}
+        <td class="nr" style="font-weight:600">${wonNo(initStock)}개</td>
+        <td class="nr" data-v="${totIns}" style="font-weight:600"><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" data-prod="${escHtml(prod)}" data-sched="${escHtml(JSON.stringify(Object.fromEntries(Object.entries(insData).map(([k,v])=>[k,Math.round(v)]))))}" onclick="showInboundSchedPopup(event,this)">${wonNo(totIns)}개</span></td>
+        <td class="nr" data-v="${stock}" style="font-weight:600">${stkHtml}</td>
+        <td class="nr" data-v="${swSortV}"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${swBg};color:${swCol}">${swTxt}</span></td>
+        <td class="nr" data-v="${totSellRate}"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${totSellBg};color:${totSellCol}">${totSellRate.toFixed(1)}%</span></td>
+      </tr>`;
+    }).join('');
+    // 합계 행
+    const totalsByMo={};
+    const insTotalsByMo={};
+    allMos.forEach(mo=>{ totalsByMo[mo]=0; insTotalsByMo[mo]=0; });
+    Object.entries(moQtyByProd).forEach(([prod,o])=>{
+      if(!cumList.some(([p])=>p===prod)) return;
+      Object.entries(o).forEach(([mo,q])=>{ if(totalsByMo[mo]!==undefined) totalsByMo[mo]+=q; });
+    });
+    Object.entries(insMoByProd).forEach(([prod,o])=>{
+      if(!cumList.some(([p])=>p===prod)) return;
+      Object.entries(o).forEach(([mo,q])=>{ if(insTotalsByMo[mo]!==undefined) insTotalsByMo[mo]+=q; });
+    });
+    const totalStockAll=cumList.reduce((s,[p])=>s+(stockByProd[p]||0),0);
+    const totalQAll=cumList.reduce((s,[p])=>s+Math.round(totQtyByProd[p]||0),0);
+    const totalInsAll=cumList.reduce((s,[p])=>s+Math.round(totInsByProd[p]||0),0);
+    const totalInitStockAll=cumList.reduce((s,[p])=>s+Math.max(0,(stockByProd[p]||0)+Math.round(totQtyByProd[p]||0)-Math.round(totInsByProd[p]||0)),0);
+    const insSchedAll={};
+    cumList.forEach(([p])=>{ const o=insMoByProd[p]; if(o) Object.entries(o).forEach(([mo,q])=>{ insSchedAll[mo]=(insSchedAll[mo]||0)+q; }); });
+    let cumAll=0, cumInsAll=0;
+    const totMoCells=allMos.map(mo=>{
+      const q=Math.round(totalsByMo[mo]||0);
+      const insQ=Math.round(insTotalsByMo[mo]||0);
+      cumAll+=q;
+      cumInsAll+=insQ;
+      const denomM=totalInitStockAll+cumInsAll;
+      const sr=denomM>0?Math.min(100, cumAll/denomM*100):0;
+      return `<td class="nr" style="padding:6px 8px;background:var(--sky-light);line-height:1.45;color:var(--sky);font-weight:700">
+        <div style="font-size:11.5px">${wonNo(q)}건</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;font-weight:600">누적 ${wonNo(Math.round(cumAll))}</div>
+        <div style="font-size:10px;margin-top:3px">${sr.toFixed(1)}%</div>
+      </td>`;
+    }).join('');
+    const denomAll=totalStockAll+totalQAll;
+    const totalAllRate=denomAll>0?(totalQAll/denomAll*100):0;
+    const totalLast2Mos=allMos.slice(-2);
+    const totalAvgMo2=totalLast2Mos.length?totalLast2Mos.reduce((s,mo)=>s+Math.round(totalsByMo[mo]||0),0)/totalLast2Mos.length:0;
+    const totalSellableMos=totalStockAll>0&&totalAvgMo2>0?totalStockAll/totalAvgMo2:null;
+    const totalSwTxt=totalStockAll<=0?'-':(totalAvgMo2<=0?'판매없음':`${totalSellableMos.toFixed(1)}개월`);
+    const totalRow=`<tr data-cum-total="1" style="font-weight:700;border-top:2px solid var(--border);background:var(--sky-light)">
+      <td colspan="2" style="color:var(--sky)">합계 (${cumList.length}개)</td>
+      ${totMoCells}
+      <td class="nr" style="color:var(--sky)">${wonNo(totalInitStockAll)}개</td>
+      <td class="nr" style="color:var(--sky)"><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" data-prod="합계 (${cumList.length}개)" data-sched="${escHtml(JSON.stringify(insSchedAll))}" onclick="showInboundSchedPopup(event,this)">${wonNo(totalInsAll)}개</span></td>
+      <td class="nr" style="color:var(--sky)">${wonNo(totalStockAll)}개</td>
+      <td class="nr" style="color:var(--sky)">${totalSwTxt}</td>
+      <td class="nr" style="color:var(--sky)">${totalAllRate.toFixed(1)}%</td>
+    </tr>`;
+    return `<div class="table-card" style="margin-bottom:16px">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">📅 상품별 월별 누적 추이 <span style="font-size:11px;font-weight:600;color:var(--muted)">(${bI>=0?`전체 ${cumList.length}개`:'TOP 20'} · 상품명 오름차순)</span></div>
+          <div class="chart-sub">${BASE_YR}년 1월~${moLbl(allMos[allMos.length-1])} · ${BASE_YR}년 1월 기초재고 → ${BASE_YR}년 입고재고 → 현재재고 → 판매가능월(최근 2개월 평균 판매 기준) → 전체소진율 순 · 셀: 월간 판매 / 누적 판매 / 누적 소진율(%) · 월별 소진율 = 누적판매 / (초기재고 + 누적입고) · 입고 시 분모 증가로 희석</div>
+        </div>
+        <input type="text" class="t20-search" oninput="filterT20Rows(this)" placeholder="\u{1F50D} 상품명 검색" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;width:160px;background:#fff;color:var(--text);outline:none;flex-shrink:0">
+      </div>
+      <div class="table-wrap" style="max-height:720px"><table style="font-size:12px">
+        <thead><tr>
+          <th style="min-width:38px">순위</th>
+          <th class="sortable" onclick="_cumTrendSort(this)" style="min-width:160px">상품명</th>
+          ${headCells}
+          <th class="nr" style="min-width:90px">${BASE_YR}년 1월<br>기초재고</th>
+          <th class="nr sortable" onclick="_cumTrendSort(this)" style="min-width:90px">${BASE_YR}년<br>입고재고</th>
+          <th class="nr sortable" onclick="_cumTrendSort(this)" style="min-width:80px">현재 재고</th>
+          <th class="nr sortable" onclick="_cumTrendSort(this)" style="min-width:100px">판매가능월<br>(2개월판매기준)</th>
+          <th class="nr sortable" onclick="_cumTrendSort(this)" style="min-width:90px">전체 소진율</th>
+        </tr></thead>
+        <tbody>${rows}${totalRow}</tbody>
+      </table></div>
+    </div>`;
+  })();
+
   destroyCharts();
   document.getElementById(_RENDER_TGT).innerHTML=`
 <div class="kpi-grid">
@@ -3748,6 +3952,7 @@ function renderTop20(filtP,filtered,filteredP,f){
   ${top20DetailHtml}
 </div>
 ${cumTrendCard}
+${monTrendCard}
 
 ${f.b==='ALL'?`<div class="chart-card" style="margin-bottom:16px"><div class="chart-header"><div class="chart-title">🏷️ 브랜드별 실매출액</div></div><div style="position:relative;height:140px"><canvas id="c-br"></canvas></div></div>`:''}
 `;
