@@ -1763,6 +1763,29 @@ function showInboundChannelPopup(event,el){
   event.stopPropagation();
 }
 
+// ── 목표매출 탭 소진율 클릭 → 계산식 상세 팝업 (sz-detail-tip 재사용, 클릭형) ──
+function showGoalSellThroughPopup(event,el){
+  let st;
+  try{ st=JSON.parse(el.dataset.st||'{}'); }catch(e){ return; }
+  const brand=el.dataset.brand||'';
+  const denom=(st.openStock||0)+(st.ins||0);
+  const tip=document.getElementById('sz-detail-tip');
+  if(!tip) return;
+  let html=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.12)">📦 ${escHtml(brand)} 2026 소진율 계산</div>`;
+  html+=`<div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:11px;margin-bottom:8px">
+    <span style="color:rgba(255,255,255,.6)">기초재고</span><span style="color:#fff;font-weight:700;text-align:right">${wonNo(Math.round(st.openStock||0))}개</span>
+    <span style="color:rgba(255,255,255,.6)">입고재고</span><span style="color:#fff;font-weight:700;text-align:right">${wonNo(Math.round(st.ins||0))}개</span>
+    <span style="color:rgba(255,255,255,.6);border-top:1px solid rgba(255,255,255,.12);padding-top:4px">판매재고</span><span style="color:#7dd3fc;font-weight:700;text-align:right;border-top:1px solid rgba(255,255,255,.12);padding-top:4px">${wonNo(Math.round(st.sales||0))}개</span>
+  </div>`;
+  html+=`<div style="font-size:10px;color:rgba(255,255,255,.45);margin-bottom:8px">소진율 = 판매재고 ÷ (기초재고 + 입고재고) = ${wonNo(Math.round(st.sales||0))} ÷ ${wonNo(Math.round(denom))}</div>`;
+  html+=`<div style="padding-top:6px;border-top:1px solid rgba(255,255,255,.12);font-size:13px;font-weight:800;color:#7dd3fc;text-align:center">현재 소진율 ${st.rate.toFixed(1)}%</div>`;
+  tip.innerHTML=html; tip.style.display='block'; tip.style.pointerEvents='auto';
+  const tw=tip.offsetWidth||280;
+  let lx=event.clientX+14; if(lx+tw>window.innerWidth-10)lx=event.clientX-tw-14;
+  let ty=event.clientY+10; if(ty+tip.offsetHeight>window.innerHeight-10)ty=event.clientY-tip.offsetHeight-10; if(ty<0)ty=4;
+  tip.style.left=lx+'px'; tip.style.top=ty+'px';
+  event.stopPropagation();
+}
 // ── 입고재고 숫자 클릭 → 주차별 입고일정 팝업 (sz-detail-tip 재사용, 클릭형) ──
 function showInboundSchedPopup(event,el){
   let sched;
@@ -8930,7 +8953,7 @@ function calcBrandSellThrough(bi,yr){
   Object.keys(insByProdYr).forEach(p=>{if(insByProdYr[p][yr])prods.add(p);});
   Object.keys(realStockMap).forEach(k=>{if(k.endsWith('|'+yr))prods.add(k.slice(0,k.lastIndexOf('|')));});
 
-  let sales=0,ins=0,denom=0;
+  let sales=0,ins=0,stock=0;
   prods.forEach(p=>{
     const sByYr=salesByProdYr[p]||{},iByYr=insByProdYr[p]||{};
     const yo=sByYr[yr]||{q:0};
@@ -8946,9 +8969,11 @@ function calcBrandSellThrough(bi,yr){
       const curStock=curStockMap[p]||0;
       openStock=Math.max(0,curStock+qSince-insSince);
     }
-    sales+=yo.q;ins+=yrIns;denom+=(openStock+yrIns);
+    sales+=yo.q;ins+=yrIns;stock+=openStock;
   });
-  return denom>0?Math.min(100,sales/denom*100):0;
+  const denom=stock+ins;
+  const rate=denom>0?Math.min(100,sales/denom*100):0;
+  return{openStock:stock,ins,sales,rate};
 }
 function renderGoalSales(){
   destroyCharts();
@@ -9020,7 +9045,7 @@ ${brands.map(bi=>{
   const cumT=g.monthly_target.slice(0,nowMo+1).reduce((a,b)=>a+b,0);
   const pace=cumT>0?act/cumT*100:0;
   const barW=Math.min(100,rate).toFixed(1);
-  const sellThrough=calcBrandSellThrough(bi,2026);
+  const st=calcBrandSellThrough(bi,2026);
   return`<div class="chart-card">
     <div class="chart-header">
       <div>
@@ -9049,9 +9074,9 @@ ${brands.map(bi=>{
         <div style="font-size:10px;color:var(--muted);margin-bottom:2px">페이스</div>
         <div style="font-size:12px;font-weight:700;color:${rateColor(pace)}">${pace.toFixed(1)}%</div>
       </div>
-      <div style="text-align:center;padding:8px;background:#f8fafc;border-radius:8px">
+      <div data-st="${escHtml(JSON.stringify(st))}" data-brand="${escHtml(BNAMES[bi])}" onclick="showGoalSellThroughPopup(event,this)" title="클릭 시 소진율 계산 상세 보기" style="text-align:center;padding:8px;background:#f8fafc;border-radius:8px;cursor:pointer">
         <div style="font-size:10px;color:var(--muted);margin-bottom:2px">2026 소진율</div>
-        <div style="font-size:12px;font-weight:700;color:${rateColor(sellThrough)}">${sellThrough.toFixed(1)}%</div>
+        <div style="font-size:12px;font-weight:700;color:${rateColor(st.rate)}">${st.rate.toFixed(1)}%</div>
       </div>
     </div>
     <!-- 월별 미니 차트 캔버스 -->
