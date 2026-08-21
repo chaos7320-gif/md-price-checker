@@ -8893,6 +8893,63 @@ function renderMatrix(f){
 }
 
 // ── 목표매출 탭 렌더 ──
+// 브랜드별 연간 소진율 = 누적판매 / (기초재고 + 누적입고) — 입고 현황 탭과 동일 산식 (BASE_YR 고정)
+function calcBrandSellThrough(bi,yr){
+  const prodBrandMap={};
+  (PROD_DATA.length?PROD_DATA:D_PROD).forEach(r=>{if(r[0]>=0&&r[4]&&!(r[4] in prodBrandMap))prodBrandMap[r[4]]=r[0];});
+  const resolveBi=r=>{let b=r[0];if(b<0&&r[4]){const m=prodBrandMap[r[4]];if(m!==undefined)b=m;}return b;};
+
+  const salesByProdYr={};
+  (PROD_DATA.length?PROD_DATA:D_PROD).forEach(r=>{
+    if(r[2]===12&&r[3]===1)return;
+    if(r[0]!==bi)return;
+    const p=r[4];
+    if(!salesByProdYr[p])salesByProdYr[p]={};
+    if(!salesByProdYr[p][r[1]])salesByProdYr[p][r[1]]={q:0};
+    salesByProdYr[p][r[1]].q+=(r[5]||0);
+  });
+  const insByProdYr={};
+  INS_DATA.forEach(r=>{
+    if(resolveBi(r)!==bi)return;
+    const p=r[4];
+    if(!insByProdYr[p])insByProdYr[p]={};
+    insByProdYr[p][r[1]]=(insByProdYr[p][r[1]]||0)+(r[6]||0);
+  });
+  const curStockMap={};
+  INV_DATA.forEach(r=>{if(r.bi!==bi)return;curStockMap[r.prod]=(curStockMap[r.prod]||0)+(r.stock||0);});
+  const realStockMap={};
+  YR_STOCK_DATA.forEach(r=>{
+    const[rawBi,ry,prod,qty]=r;
+    const b=(rawBi<0&&prod in prodBrandMap)?prodBrandMap[prod]:rawBi;
+    if(b!==bi)return;
+    realStockMap[`${prod}|${ry}`]=Math.max(0,(realStockMap[`${prod}|${ry}`]||0)+qty);
+  });
+
+  const prods=new Set();
+  Object.keys(salesByProdYr).forEach(p=>{if(salesByProdYr[p][yr])prods.add(p);});
+  Object.keys(insByProdYr).forEach(p=>{if(insByProdYr[p][yr])prods.add(p);});
+  Object.keys(realStockMap).forEach(k=>{if(k.endsWith('|'+yr))prods.add(k.slice(0,k.lastIndexOf('|')));});
+
+  let sales=0,ins=0,denom=0;
+  prods.forEach(p=>{
+    const sByYr=salesByProdYr[p]||{},iByYr=insByProdYr[p]||{};
+    const yo=sByYr[yr]||{q:0};
+    const yrIns=iByYr[yr]||0;
+    const realKey=`${p}|${yr}`;
+    let openStock;
+    if(realKey in realStockMap){
+      openStock=realStockMap[realKey];
+    } else {
+      let qSince=0,insSince=0;
+      Object.keys(sByYr).forEach(yk=>{if(parseInt(yk)>=yr)qSince+=sByYr[yk].q;});
+      Object.keys(iByYr).forEach(yk=>{if(parseInt(yk)>=yr)insSince+=iByYr[yk];});
+      const curStock=curStockMap[p]||0;
+      openStock=Math.max(0,curStock+qSince-insSince);
+    }
+    sales+=yo.q;ins+=yrIns;denom+=(openStock+yrIns);
+  });
+  return denom>0?Math.min(100,sales/denom*100):0;
+}
 function renderGoalSales(){
   destroyCharts();
   const bSel=document.getElementById('f-brand').value;
@@ -8963,6 +9020,7 @@ ${brands.map(bi=>{
   const cumT=g.monthly_target.slice(0,nowMo+1).reduce((a,b)=>a+b,0);
   const pace=cumT>0?act/cumT*100:0;
   const barW=Math.min(100,rate).toFixed(1);
+  const sellThrough=calcBrandSellThrough(bi,2026);
   return`<div class="chart-card">
     <div class="chart-header">
       <div>
@@ -8978,7 +9036,7 @@ ${brands.map(bi=>{
     <div style="background:#f0f9ff;border-radius:8px;height:14px;margin-bottom:12px;overflow:hidden">
       <div style="height:100%;width:${barW}%;background:linear-gradient(90deg,${BCOLORS[bi]},${BCOLORS[bi]}88);border-radius:8px;transition:width .4s"></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px">
       <div style="text-align:center;padding:8px;background:#f8fafc;border-radius:8px">
         <div style="font-size:10px;color:var(--muted);margin-bottom:2px">실매출(YTD)</div>
         <div style="font-size:12px;font-weight:700;color:var(--sky)">${won(act)}</div>
@@ -8990,6 +9048,10 @@ ${brands.map(bi=>{
       <div style="text-align:center;padding:8px;background:#f8fafc;border-radius:8px">
         <div style="font-size:10px;color:var(--muted);margin-bottom:2px">페이스</div>
         <div style="font-size:12px;font-weight:700;color:${rateColor(pace)}">${pace.toFixed(1)}%</div>
+      </div>
+      <div style="text-align:center;padding:8px;background:#f8fafc;border-radius:8px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:2px">2026 소진율</div>
+        <div style="font-size:12px;font-weight:700;color:${rateColor(sellThrough)}">${sellThrough.toFixed(1)}%</div>
       </div>
     </div>
     <!-- 월별 미니 차트 캔버스 -->
