@@ -3969,7 +3969,10 @@ function renderTop20(filtP,filtered,filteredP,f){
 </div>
 <div class="chart-card" style="margin-bottom:16px">
   <div class="chart-header"><div class="chart-title">${_isWkModeT20?`👟 전체상품 실매출액 (${top20.length}개)`:'👟 상품 TOP 10 실매출액'}</div></div>
-  <div style="position:relative;height:${_isWkModeT20?Math.max(230,top20.length*24+40):230}px"><canvas id="c-prod10"></canvas></div>
+  ${_isWkModeT20&&top20.length>10?`<div class="chart-sub">아래로 스크롤하면 전체 상품을 확인할 수 있어요</div>`:''}
+  <div style="max-height:340px;overflow-y:${_isWkModeT20?'auto':'hidden'};overflow-x:hidden">
+    <div style="position:relative;height:${_isWkModeT20?Math.max(230,top20.length*24+40):230}px"><canvas id="c-prod10"></canvas></div>
+  </div>
 </div>
 <div class="table-card" style="margin-bottom:16px">
   ${top20DetailHtml}
