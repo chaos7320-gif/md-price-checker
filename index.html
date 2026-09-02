@@ -3968,8 +3968,8 @@ function renderTop20(filtP,filtered,filteredP,f){
   </div>
 </div>
 <div class="chart-card" style="margin-bottom:16px">
-  <div class="chart-header"><div class="chart-title">👟 상품 TOP 10 실매출액</div></div>
-  <div style="position:relative;height:230px"><canvas id="c-prod10"></canvas></div>
+  <div class="chart-header"><div class="chart-title">${_isWkModeT20?`👟 전체상품 실매출액 (${top20.length}개)`:'👟 상품 TOP 10 실매출액'}</div></div>
+  <div style="position:relative;height:${_isWkModeT20?Math.max(230,top20.length*24+40):230}px"><canvas id="c-prod10"></canvas></div>
 </div>
 <div class="table-card" style="margin-bottom:16px">
   ${top20DetailHtml}
@@ -3982,11 +3982,11 @@ ${f.b==='ALL'?`<div class="chart-card" style="margin-bottom:16px"><div class="ch
 
   setTimeout(()=>{
     if(!document.getElementById('c-prod10')) return;
-    // ── 상품 TOP10 가로 바차트 ──
-    const t10=top20.slice(0,10);
+    // ── 상품 TOP10 가로 바차트 (주간 모드에서는 전체 상품) ──
+    const t10=_isWkModeT20?top20:top20.slice(0,10);
     charts.p=new Chart(document.getElementById('c-prod10'),{type:'bar',data:{
       labels:t10.map(([p])=>p.length>14?p.slice(0,14)+'…':p),
-      datasets:[{data:t10.map(([,d])=>d.s),backgroundColor:Array(10).fill(0).map((_,i)=>`rgba(26,158,107,${1-i*0.07})`),borderRadius:5}]
+      datasets:[{data:t10.map(([,d])=>d.s),backgroundColor:t10.map((_,i)=>`rgba(26,158,107,${Math.max(1-i*0.07,0.35)})`),borderRadius:5}]
     },options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{
         const idx=c.dataIndex;
