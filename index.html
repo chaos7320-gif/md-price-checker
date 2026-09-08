@@ -9150,6 +9150,21 @@ ${brands.map(bi=>{
   <div style="position:relative;height:280px"><canvas id="c-goal-weekly"></canvas></div>
 </div>
 
+<!-- 주간 누적 소진율 -->
+<div class="chart-card" style="margin-bottom:16px">
+  <div class="chart-header">
+    <div>
+      <div class="chart-title">주간 누적 소진율</div>
+      <div class="chart-sub">${bIdx>=0?BNAMES[bIdx]:'전체 브랜드'} | 2026년 주차별 재고 소진 추이</div>
+    </div>
+    <div class="seg">
+      <button class="seg-btn st-seg-btn active" data-mode="cum" onclick="renderGoalSTChart('cum')">누적</button>
+      <button class="seg-btn st-seg-btn" data-mode="weekly" onclick="renderGoalSTChart('weekly')">주간</button>
+    </div>
+  </div>
+  <div style="position:relative;height:260px"><canvas id="c-goal-st"></canvas></div>
+</div>
+
 
 <!-- 브랜드별 월별 상세 테이블 -->
 <div class="table-card">
@@ -9290,7 +9305,78 @@ ${brands.map(bi=>{
         });
       }
     }
+
+    // 주간 누적 소진율 차트 — 선택 브랜드(들) 합산, 2026년 기준
+    {
+      const stEl=document.getElementById('c-goal-st');
+      if(stEl){
+        // 연간 소진율 카드와 동일 로직으로 분모(기초재고+입고) 산출 → 최종 누적치가 카드의 "2026 소진율"과 일치
+        let denomTotal=0;
+        brands.forEach(bi=>{const s=calcBrandSellThrough(bi,2026);denomTotal+=(s.openStock+s.ins);});
+        // 주차별 판매수량 집계 (12월 1주차는 ISO 주차 오류로 다른 탭과 동일하게 제외)
+        const brSet2=new Set(brands);
+        const wkQty={};
+        (PROD_DATA.length?PROD_DATA:D_PROD).forEach(r=>{
+          if(!brSet2.has(r[0])||r[1]!==2026)return;
+          if(r[2]===12&&r[3]===1)return;
+          const k=String(r[3]).padStart(2,'0');
+          wkQty[k]=(wkQty[k]||0)+(r[5]||0);
+        });
+        const stWeeks=Object.keys(wkQty).sort();
+        let running=0;
+        window._goalST={
+          labels:stWeeks.map(w=>wkLabel(2026,w)),
+          weekly:stWeeks.map(k=>denomTotal>0?wkQty[k]/denomTotal*100:0),
+          cum:stWeeks.map(k=>{running+=denomTotal>0?wkQty[k]/denomTotal*100:0;return Math.min(100,running);}),
+          color:bIdx>=0?BCOLORS[bIdx]:'#0ea5e9'
+        };
+        renderGoalSTChart(_goalSTMode);
+      }
+    }
   },0);
+}
+
+// ── 주간 소진율 차트: 누적/주간 토글 렌더 ──
+let _goalSTMode='cum';
+function renderGoalSTChart(mode){
+  const d=window._goalST;
+  if(!d)return;
+  _goalSTMode=mode;
+  document.querySelectorAll('.st-seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+  const el=document.getElementById('c-goal-st');
+  if(!el)return;
+  if(charts.goalST){try{charts.goalST.destroy();}catch(e){}}
+  const isCum=mode==='cum';
+  charts.goalST=new Chart(el,{
+    type:isCum?'line':'bar',
+    data:{
+      labels:d.labels,
+      datasets:[{
+        label:isCum?'누적 소진율':'주간 소진율',
+        data:isCum?d.cum:d.weekly,
+        borderColor:d.color,
+        backgroundColor:isCum?d.color+'22':d.color+'bb',
+        borderWidth:isCum?2:1,
+        borderRadius:isCum?0:3,
+        fill:isCum,
+        tension:.3,
+        pointRadius:isCum?2:0,
+        pointHoverRadius:4,
+        pointBackgroundColor:d.color
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`}}
+      },
+      scales:{
+        y:{min:0,max:isCum?100:undefined,ticks:{callback:v=>v+'%'},grid:{color:'rgba(0,0,0,.04)'}},
+        x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true,autoSkipPadding:6},grid:{display:false}}
+      }
+    }
+  });
 }
 
 // ── 온/오프 툴팁 ──
