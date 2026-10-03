@@ -7994,7 +7994,7 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   <div class="kpi-card"><div class="kpi-label">평균 단가</div><div class="kpi-val">${won(avg)}</div><div class="kpi-sub">건당 평균</div></div>
 </div>
 <div class="chart-card" data-period="monthly" style="margin-bottom:14px">
-  <div class="chart-header"><div><div class="chart-title">📅 월별 실매출 추이</div><div class="chart-sub">${cmpYrs.length>=2?cmpYrs.map(y=>y+'년').join(' vs '):cmpYrs.length===1?cmpYrs[0]+'년 월별 추이':'전체 기간 합산'} · 막대 클릭 시 상품별 매출 확인</div></div></div>
+  <div class="chart-header"><div><div class="chart-title">📅 월별 실매출 추이</div><div class="chart-sub">${cmpYrs.length>=2?cmpYrs.map(y=>y+'년').join(' vs '):cmpYrs.length===1?cmpYrs[0]+'년 월별 추이':'전체 기간 합산'} · 막대 클릭 시 상품별/매출처별 매출 확인</div></div></div>
   <div style="position:relative;height:220px"><canvas id="d1-mo"></canvas></div>
   ${cmpYrs.length>=2?(()=>{
     const yA=cmpYrs[0],yB=cmpYrs[cmpYrs.length-1];
@@ -8106,10 +8106,12 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
             else if(prev>0){const gr=(curr-prev)/prev*100;g=` <span style="color:${gr>=0?'#ff7b7b':'#7bb8ff'}">· 전월대비 ${gr>=0?'▲ +':'▼ '}${Math.abs(gr).toFixed(1)}%</span>`;}
           }
           const prodRows=prodBreakdownByPeriod('mo',moKey,yr);
-          const totQ=prodRows.reduce((s,[,d])=>s+d.q,0);
+          const chRows=chBreakdownByPeriod('mo',moKey,yr);
+          // 수량은 상위 15개 상품이 아닌 해당 월 전체 상품 기준
+          const totQ=filteredP.reduce((s,r)=>(r[2]===12&&r[3]===1)||(yr!=null&&r[1]!==yr)||String(r[2]).padStart(2,'0')!==moKey?s:s+r[5],0);
           showBarBreakdownPopup(evt.native,(yr!=null?yr+'년 ':'')+moLabels[idx],
             [`<div>매출: <b style="color:#fff">${won(curr)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(totQ)}건</b></div>`],
-            prodRows);
+            prodRows,null,chRows);
         },plugins:{legend:{display:true,position:'top',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>{
           const isLine=c.dataset.type==='line';
           const curr=c.raw;
