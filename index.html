@@ -3111,7 +3111,7 @@ function renderTop20(filtP,filtered,filteredP,f){
   const _yrHueP=yr=>_YR_HUE_P[yr]||'#cbd5e1';
   const _YR_BG_P={2024:{base:'rgba(148,163,184,.07)',focus:'rgba(148,163,184,.20)'},2025:{base:'rgba(96,165,250,.09)',focus:'rgba(96,165,250,.22)'},2026:{base:'rgba(134,239,172,.10)',focus:'rgba(134,239,172,.22)'},2027:{base:'rgba(251,146,60,.09)',focus:'rgba(251,146,60,.22)'}};
   const _yrBgP=(yr,isFocus)=>{const e=_YR_BG_P[yr]||{base:'rgba(203,213,225,.06)',focus:'rgba(203,213,225,.18)'};return isFocus?e.focus:e.base;};
-  // 주간 모드용 상품×채널×주차 집계 (연/주 필터 무시, 다른 필터 적용) — 최근 3개 주차 비교
+  // 주간 모드용 상품×채널×주차 집계 (연/주 필터 무시, 다른 필터 적용) — 최근 6개 주차 비교
   const _prodChWkAgg={};
   const _recentWeeksProd=(()=>{
     if(!CHP_DATA||!CHP_DATA.length||_db1Mode!=='weekly')return [];
@@ -3132,11 +3132,16 @@ function renderTop20(filtP,filtered,filteredP,f){
       _prodChWkAgg[r[5]][r[4]][wkKey].q+=r[6];
       _prodChWkAgg[r[5]][r[4]][wkKey].s+=r[7];
     });
-    return [...wkSet].sort().slice(-3);
+    return [...wkSet].sort().slice(-6);
   })();
-  const _WK_HUE_P=['#94a3b8','#60a5fa','#86efac','#fb923c'];
-  const _WK_BG_BASE_P=['rgba(148,163,184,.07)','rgba(96,165,250,.09)','rgba(134,239,172,.10)','rgba(251,146,60,.09)'];
-  const _WK_BG_FOCUS_P=['rgba(148,163,184,.20)','rgba(96,165,250,.22)','rgba(134,239,172,.22)','rgba(251,146,60,.22)'];
+  // 주차 인덱스 기반 팔레트 (오래된→최근, 최근 주차가 초록) — 표시 주차 수에 맞춰 뒤에서부터 사용
+  const _WK_HUE_P_ALL=['#94a3b8','#a78bfa','#f472b6','#fb923c','#60a5fa','#86efac'];
+  const _WK_BG_BASE_P_ALL=['rgba(148,163,184,.07)','rgba(167,139,250,.08)','rgba(244,114,182,.08)','rgba(251,146,60,.09)','rgba(96,165,250,.09)','rgba(134,239,172,.10)'];
+  const _WK_BG_FOCUS_P_ALL=['rgba(148,163,184,.20)','rgba(167,139,250,.20)','rgba(244,114,182,.20)','rgba(251,146,60,.22)','rgba(96,165,250,.22)','rgba(134,239,172,.22)'];
+  const _WK_OFF_P=_WK_HUE_P_ALL.length-_recentWeeksProd.length;
+  const _WK_HUE_P=_WK_HUE_P_ALL.slice(_WK_OFF_P);
+  const _WK_BG_BASE_P=_WK_BG_BASE_P_ALL.slice(_WK_OFF_P);
+  const _WK_BG_FOCUS_P=_WK_BG_FOCUS_P_ALL.slice(_WK_OFF_P);
   const _wkLabelP=wk=>`W${parseInt(wk.split('-W')[1])}`;
   const _wkSubLabelP=wk=>wk.split('-W')[0]+'년';
   function _growthBadgeP(curr,prev){
@@ -3169,7 +3174,7 @@ function renderTop20(filtP,filtered,filteredP,f){
       :(isWk?'단일 주차':'단일 연도');
     const titleSfx=isWk?' · 판매 채널 (최근 주차 비교)':' · 판매 채널 (연도별 비교)';
     const title=`👟 ${escHtml(prod)}${titleSfx}`;
-    const wrap=(inner)=>`<div class="sz-tooltip-box" style="width:980px;max-width:96vw;padding:18px 20px;background:#0f1e36 !important;color:#fff !important">
+    const wrap=(inner)=>`<div class="sz-tooltip-box" style="width:${isWk&&periods.length>3?1320:980}px;max-width:96vw;padding:18px 20px;background:#0f1e36 !important;color:#fff !important">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:10px;border-bottom:1.5px solid rgba(134,239,172,.25);gap:14px">
         <div style="font-size:15px;font-weight:800;color:#86efac;letter-spacing:.2px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${title}">${title}</div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${periodChips}</div>
@@ -5564,7 +5569,7 @@ function renderChannel(filtered,filteredP,f){
   // 연도별 배경 (cell tint) — 가시성 향상용. isFocus면 더 진하게.
   const _YR_BG={2024:{base:'rgba(148,163,184,.07)',focus:'rgba(148,163,184,.20)'},2025:{base:'rgba(96,165,250,.09)',focus:'rgba(96,165,250,.22)'},2026:{base:'rgba(134,239,172,.10)',focus:'rgba(134,239,172,.22)'},2027:{base:'rgba(251,146,60,.09)',focus:'rgba(251,146,60,.22)'}};
   const _yrBg=(yr,isFocus)=>{const e=_YR_BG[yr]||{base:'rgba(203,213,225,.06)',focus:'rgba(203,213,225,.18)'};return isFocus?e.focus:e.base;};
-  // 주간 모드용 채널×상품×주차 집계 (연/주 필터 무시, 다른 필터 적용) — 최근 3개 주차 비교
+  // 주간 모드용 채널×상품×주차 집계 (연/주 필터 무시, 다른 필터 적용) — 최근 6개 주차 비교
   const _chProdWkAgg={};
   const _recentWeeksCh=(()=>{
     if(!CHP_DATA||!CHP_DATA.length||_db1Mode!=='weekly')return [];
@@ -5585,12 +5590,16 @@ function renderChannel(filtered,filteredP,f){
       _chProdWkAgg[r[4]][r[5]][wkKey].q+=r[6];
       _chProdWkAgg[r[4]][r[5]][wkKey].s+=r[7];
     });
-    return [...wkSet].sort().slice(-3);
+    return [...wkSet].sort().slice(-6);
   })();
-  // 주차 인덱스 기반 팔레트 (오래된→최근)
-  const _WK_HUE=['#94a3b8','#60a5fa','#86efac','#fb923c'];
-  const _WK_BG_BASE=['rgba(148,163,184,.07)','rgba(96,165,250,.09)','rgba(134,239,172,.10)','rgba(251,146,60,.09)'];
-  const _WK_BG_FOCUS=['rgba(148,163,184,.20)','rgba(96,165,250,.22)','rgba(134,239,172,.22)','rgba(251,146,60,.22)'];
+  // 주차 인덱스 기반 팔레트 (오래된→최근, 최근 주차가 초록) — 표시 주차 수에 맞춰 뒤에서부터 사용
+  const _WK_HUE_ALL=['#94a3b8','#a78bfa','#f472b6','#fb923c','#60a5fa','#86efac'];
+  const _WK_BG_BASE_ALL=['rgba(148,163,184,.07)','rgba(167,139,250,.08)','rgba(244,114,182,.08)','rgba(251,146,60,.09)','rgba(96,165,250,.09)','rgba(134,239,172,.10)'];
+  const _WK_BG_FOCUS_ALL=['rgba(148,163,184,.20)','rgba(167,139,250,.20)','rgba(244,114,182,.20)','rgba(251,146,60,.22)','rgba(96,165,250,.22)','rgba(134,239,172,.22)'];
+  const _WK_OFF=_WK_HUE_ALL.length-_recentWeeksCh.length;
+  const _WK_HUE=_WK_HUE_ALL.slice(_WK_OFF);
+  const _WK_BG_BASE=_WK_BG_BASE_ALL.slice(_WK_OFF);
+  const _WK_BG_FOCUS=_WK_BG_FOCUS_ALL.slice(_WK_OFF);
   const _wkLabel=wk=>`W${parseInt(wk.split('-W')[1])}`;
   const _wkSubLabel=wk=>wk.split('-W')[0]+'년';
   // 성장률 배지
@@ -5625,7 +5634,7 @@ function renderChannel(filtered,filteredP,f){
       :(isWk?'단일 주차':'단일 연도');
     const titleSfx=isWk?' · 판매 상품 (최근 주차 비교)':' · 판매 상품 (연도별 비교)';
     const title=`🏪 ${escHtml(ch)}${titleSfx}`;
-    const wrap=(inner)=>`<div class="sz-tooltip-box" style="width:980px;max-width:96vw;padding:18px 20px;background:#0f1e36 !important;color:#fff !important">
+    const wrap=(inner)=>`<div class="sz-tooltip-box" style="width:${isWk&&periods.length>3?1320:980}px;max-width:96vw;padding:18px 20px;background:#0f1e36 !important;color:#fff !important">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:10px;border-bottom:1.5px solid rgba(134,239,172,.25);gap:14px">
         <div style="font-size:15px;font-weight:800;color:#86efac;letter-spacing:.2px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${title}">${title}</div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${periodChips}</div>
