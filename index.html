@@ -9134,7 +9134,7 @@ ${brands.map(bi=>{
   <div class="chart-header">
     <div>
       <div class="chart-title">월별 목표 vs 실매출 비교</div>
-      <div class="chart-sub">${bIdx<0?'전체 브랜드 합산':BNAMES[bIdx]} | 2026년 월별</div>
+      <div class="chart-sub">${bIdx<0?'전체 브랜드 합산':BNAMES[bIdx]} | 2026년 월별 · 막대 클릭 시 상품별/매출처별 판매 확인</div>
     </div>
   </div>
   <div style="position:relative;height:260px"><canvas id="c-goal-main"></canvas></div>
@@ -9185,7 +9185,7 @@ ${brands.map(bi=>{
   <div class="chart-header">
     <div>
       <div class="chart-title">주간 매출 비교 (2025 vs 2026)</div>
-      <div class="chart-sub">${bIdx>=0?BNAMES[bIdx]:'전체 브랜드'} | 동일 주차 매출 추이</div>
+      <div class="chart-sub">${bIdx>=0?BNAMES[bIdx]:'전체 브랜드'} | 동일 주차 매출 추이 · 막대 클릭 시 상품별/매출처별 판매 확인</div>
     </div>
   </div>
   <div style="position:relative;height:280px"><canvas id="c-goal-weekly"></canvas></div>
@@ -9246,6 +9246,23 @@ ${brands.map(bi=>{
   </table></div>
 </div>`;
 
+  // ── 막대 클릭 → 상품별/매출처별 판매 팝업 (brSet: 브랜드 인덱스 Set, periodType: 'mo'(1~12) | 'wk'(ISO 주차)) ──
+  const goalBreakdown=(brSet,yr,periodType,key)=>{
+    const hit=r=>brSet.has(r[0])&&r[1]===yr&&!(r[2]===12&&r[3]===1)&&(periodType==='mo'?r[2]===key:r[3]===key);
+    const agg=(rows,ki)=>{const m={};rows.forEach(r=>{if(!hit(r))return;const k=r[ki];if(!m[k])m[k]={s:0,q:0};m[k].s+=r[6];m[k].q+=r[5];});return Object.entries(m).filter(([,d])=>d.s!==0||d.q!==0).sort((a,b)=>b[1].s-a[1].s);};
+    const prodAll=agg(PROD_DATA.length?PROD_DATA:D_PROD,4);
+    return {prodRows:prodAll.slice(0,15),chRows:agg(TOP_DATA,4),q:prodAll.reduce((s,[,d])=>s+d.q,0)};
+  };
+  const goalBarPopup=(evt,title,brSet,yr,periodType,key,extraLines)=>{
+    const {prodRows,chRows,q}=goalBreakdown(brSet,yr,periodType,key);
+    const s=chRows.reduce((a,[,d])=>a+d.s,0);
+    showBarBreakdownPopup(evt.native,title,
+      [`<div>${yr}년 실매출: <b style="color:#fff">${won(s)}</b></div>`,`<div>수량: <b style="color:#fff">${wonNo(q)}건</b></div>`,...(extraLines||[])],
+      prodRows,null,chRows);
+  };
+  const goalMoLines=(tgtV,actV)=>tgtV>0?[`<div>목표: <b style="color:#fff">${won(tgtV)}</b> <span style="color:${actV>=tgtV?'#86efac':'#fca5a5'}">· 달성률 ${(actV/tgtV*100).toFixed(1)}%</span></div>`]:[];
+  const brTitle=brands.length===1?BNAMES[brands[0]]+' ':(bIdx<0?'전체 브랜드 ':'');
+
   // ── 차트 렌더 ──
   setTimeout(()=>{
     // 메인 차트
@@ -9267,6 +9284,11 @@ ${brands.map(bi=>{
         },
         options:{
           responsive:true,maintainAspectRatio:false,
+          onClick:(evt,els)=>{
+            if(!els.length)return;
+            const i=els[0].index;
+            goalBarPopup(evt,`${brTitle}2026년 ${MONTHS[i]}`,new Set(brands),2026,'mo',i+1,goalMoLines(tgt[i],act2[i]));
+          },
           plugins:{legend:{position:'top',labels:{font:{size:12}}},tooltip:{callbacks:{
             label:ctx=>`${ctx.dataset.label}: ${wonNo(ctx.parsed.y)}원`,
             afterBody:ctx=>diffRateLines(tgt[ctx[0].dataIndex],act2[ctx[0].dataIndex])
@@ -9291,6 +9313,11 @@ ${brands.map(bi=>{
         },
         options:{
           responsive:true,maintainAspectRatio:false,
+          onClick:(evt,els)=>{
+            if(!els.length)return;
+            const i=els[0].index;
+            goalBarPopup(evt,`${BNAMES[bi]} 2026년 ${MONTHS[i]}`,new Set([bi]),2026,'mo',i+1,goalMoLines(g.monthly_target[i],actual[bi][i]));
+          },
           plugins:{legend:{display:false},tooltip:{callbacks:{
             label:ctx=>`${ctx.dataset.label}: ${wonNo(ctx.parsed.y)}원`,
             afterBody:ctx=>diffRateLines(g.monthly_target[ctx[0].dataIndex],actual[bi][ctx[0].dataIndex])
@@ -9331,6 +9358,13 @@ ${brands.map(bi=>{
           },
           options:{
             responsive:true,maintainAspectRatio:false,
+            onClick:(evt,els)=>{
+              if(!els.length)return;
+              const {datasetIndex:di,index:i}=els[0];
+              const yr=di===0?2025:2026;
+              const lbl=wkLabels[i];
+              goalBarPopup(evt,`${brTitle}${yr}년 ${Array.isArray(lbl)?lbl.join(' '):lbl}`,brSet,yr,'wk',parseInt(allKeys[i]));
+            },
             plugins:{
               legend:{position:'top',labels:{font:{size:12}}},
               tooltip:{callbacks:{
