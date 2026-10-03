@@ -1645,28 +1645,41 @@ function showInvStockTip(event, el){
 function hideInvStockTip(){const t=document.getElementById('sz-detail-tip');if(t){t.style.display='none';t.style.pointerEvents='none';}}
 
 // ── 막대그래프 클릭 → 현재 정보 + 상품별 판매 수량/매출 팝업 (sz-detail-tip 재사용) ──
-function showBarBreakdownPopup(e,periodLabel,infoLines,prodRows,sectionLabel){
+// chRows를 넘기면 '상품별 판매' / '매출처별 판매' 탭으로 전환하며 확인
+function showBarBreakdownPopup(e,periodLabel,infoLines,prodRows,sectionLabel,chRows){
   const tip=document.getElementById('sz-detail-tip');
   if(!tip) return;
-  let html=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.12)">${escHtml(periodLabel)}</div>`;
-  html+=`<div style="font-size:11px;margin-bottom:10px">${infoLines.join('')}</div>`;
-  html+=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.12)">${sectionLabel||'📦 상품별 판매'}</div>`;
-  if(prodRows&&prodRows.length){
-    html+=`<div style="max-height:240px;overflow:auto">`+prodRows.map(([prod,d],i)=>
+  const listHtml=(rows,emptyMsg)=>(rows&&rows.length)
+    ?`<div style="max-height:240px;overflow:auto">`+rows.map(([name,d],i)=>
       `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:11px">
         <span style="color:rgba(255,255,255,.5);flex-shrink:0">${i+1}</span>
-        <span style="color:#fff;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}">${escHtml(prod)}</span>
+        <span style="color:#fff;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(name)}">${escHtml(name)}</span>
         <span style="color:#7dd3fc;flex-shrink:0">${wonNo(d.q)}건</span>
         <span style="color:#fff;font-weight:700;flex-shrink:0;min-width:72px;text-align:right">${won(d.s)}</span>
-      </div>`).join('')+`</div>`;
+      </div>`).join('')+`</div>`
+    :`<div style="font-size:11px;color:rgba(255,255,255,.4)">${emptyMsg}</div>`;
+  let html=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.12)">${escHtml(periodLabel)}</div>`;
+  html+=`<div style="font-size:11px;margin-bottom:10px">${infoLines.join('')}</div>`;
+  if(chRows){
+    const tabBtn=(i,label,on)=>`<button type="button" class="bar-tip-tab" data-tab="${i}" onclick="_barTipTab(this)" style="flex:1;padding:5px 8px;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;background:${on?'rgba(125,211,252,.22)':'transparent'};color:${on?'#7dd3fc':'rgba(255,255,255,.55)'}">${label}</button>`;
+    html+=`<div style="display:flex;gap:4px;padding:3px;margin:6px 0 8px;border-radius:8px;background:rgba(255,255,255,.07)">${tabBtn(0,sectionLabel||'📦 상품별 판매',true)}${tabBtn(1,'🏪 매출처별 판매',false)}</div>`;
+    html+=`<div class="bar-tip-pane" data-pane="0">${listHtml(prodRows,'상품별 데이터 없음')}</div>`;
+    html+=`<div class="bar-tip-pane" data-pane="1" hidden>${listHtml(chRows,'매출처별 데이터 없음')}</div>`;
   } else {
-    html+=`<div style="font-size:11px;color:rgba(255,255,255,.4)">상품별 데이터 없음</div>`;
+    html+=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.12)">${sectionLabel||'📦 상품별 판매'}</div>`;
+    html+=listHtml(prodRows,'상품별 데이터 없음');
   }
   tip.innerHTML=html; tip.style.display='block'; tip.style.pointerEvents='auto';
   const tw=tip.offsetWidth||280;
   let lx=e.clientX+14; if(lx+tw>window.innerWidth-10)lx=e.clientX-tw-14;
   let ty=e.clientY+10; if(ty+tip.offsetHeight>window.innerHeight-10)ty=e.clientY-tip.offsetHeight-10; if(ty<0)ty=4;
   tip.style.left=lx+'px'; tip.style.top=ty+'px';
+}
+function _barTipTab(btn){
+  const tip=btn.closest('#sz-detail-tip');if(!tip)return;
+  const idx=btn.dataset.tab;
+  tip.querySelectorAll('.bar-tip-tab').forEach(b=>{const on=b.dataset.tab===idx;b.style.background=on?'rgba(125,211,252,.22)':'transparent';b.style.color=on?'#7dd3fc':'rgba(255,255,255,.55)';});
+  tip.querySelectorAll('.bar-tip-pane').forEach(p=>{p.hidden=p.dataset.pane!==idx;});
 }
 // 터치 기기: hover가 없으므로 .hover-tip-src 탭 → 열기/닫기 토글, 그 외 영역 탭 → 닫기
 let _hoverTipOpenEl=null;
@@ -8024,7 +8037,7 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   })():''}
 </div>
 <div class="chart-card" data-period="weekly" style="margin-bottom:14px">
-  <div class="chart-header"><div><div class="chart-title">${cmpYrs.length>=2?`📅 ${cmpYrs.map(y=>y+'년').join(' vs ')} 주간 매출 비교`:cmpYrs.length===1?`📅 ${cmpYrs[0]}년 주간 매출 추이`:'📅 전체 기간 주간 매출'}</div><div class="chart-sub">주차별 실매출액 · 막대 위에 마우스를 올리면 매출+수량 확인 · 클릭 시 상품별 매출 확인</div></div></div>
+  <div class="chart-header"><div><div class="chart-title">${cmpYrs.length>=2?`📅 ${cmpYrs.map(y=>y+'년').join(' vs ')} 주간 매출 비교`:cmpYrs.length===1?`📅 ${cmpYrs[0]}년 주간 매출 추이`:'📅 전체 기간 주간 매출'}</div><div class="chart-sub">주차별 실매출액 · 막대 위에 마우스를 올리면 매출+수량 확인 · 클릭 시 상품별/매출처별 매출 확인</div></div></div>
   <div style="position:relative;height:220px"><canvas id="d1-wk"></canvas></div>
 </div>
 <div class="chart-card" data-period="weekly" style="margin-bottom:14px">
@@ -8048,6 +8061,22 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
         map[p].s+=r[6];map[p].q+=r[5];
       });
       return Object.entries(map).sort((a,b)=>b[1].s-a[1].s).slice(0,15);
+    };
+    // 막대 클릭 시 매출처별 매출/수량 집계 — 상품 필터 반영 채널 데이터 [bi,yr,mo,wk,ch,qty,s,rt]
+    let _chDataD=null;
+    const chBreakdownByPeriod=(periodType,key,yr)=>{
+      if(!_chDataD)_chDataD=_buildProdAwareChannelData(filtered,filteredP,f);
+      const map={};
+      _chDataD.forEach(r=>{
+        if(r[2]===12&&r[3]===1)return;
+        if(yr!=null&&r[1]!==yr)return;
+        const rk=periodType==='mo'?String(r[2]).padStart(2,'0'):String(r[3]).padStart(2,'0');
+        if(rk!==key)return;
+        const c=r[4];
+        if(!map[c])map[c]={s:0,q:0};
+        map[c].s+=r[6];map[c].q+=r[5];
+      });
+      return Object.entries(map).filter(([,d])=>d.s!==0||d.q!==0).sort((a,b)=>b[1].s-a[1].s);
     };
     if(document.getElementById('d1-mo')){
       const ds=cmpYrs.length===0?[{label:'전체',data:allMos.map(m=>moAll[m]||0),backgroundColor:'#0284c7CC',borderRadius:4,barPercentage:.75}]:
@@ -8129,11 +8158,12 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
               else if(prev>0){const gr=(curr-prev)/prev*100;g=` <span style="color:${gr>=0?'#ff7b7b':'#7bb8ff'}">· 전주대비 ${gr>=0?'▲ +':'▼ '}${Math.abs(gr).toFixed(1)}%</span>`;}
             }
             const prodRows=prodBreakdownByPeriod('wk',wkNum,yr);
+            const chRows=chBreakdownByPeriod('wk',wkNum,yr);
             const lbl=wkLabelsD[idx];
             const lblStr=Array.isArray(lbl)?lbl.join(' '):lbl;
             showBarBreakdownPopup(evt.native,(yr!=null?yr+'년 ':'')+lblStr,
               [`<div>매출: <b style="color:#fff">${won(curr)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(qv)}건</b></div>`],
-              prodRows);
+              prodRows,null,chRows);
           },
           plugins:{
             legend:{display:cmpYrs.length>=1,position:'top',labels:{font:{size:11,weight:'600'},boxWidth:12,padding:12}},
