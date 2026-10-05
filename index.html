@@ -1777,6 +1777,23 @@ function showInboundChannelPopup(event,el){
 }
 
 // ── 목표매출 탭 소진율 클릭 → 계산식 상세 팝업 (sz-detail-tip 재사용, 클릭형) ──
+// 목표매출 탭: 상품별/매출처별 판매 집계 (periodType: 'yr'(연간 전체) | 'mo'(1~12) | 'wk'(ISO 주차))
+function _goalBreakdown(brSet,yr,periodType,key){
+  const hit=r=>brSet.has(r[0])&&r[1]===yr&&!(r[2]===12&&r[3]===1)&&(periodType==='yr'||(periodType==='mo'?r[2]===key:r[3]===key));
+  const agg=(rows,ki)=>{const m={};rows.forEach(r=>{if(!hit(r))return;const k=r[ki];if(!m[k])m[k]={s:0,q:0};m[k].s+=r[6];m[k].q+=r[5];});return Object.entries(m).filter(([,d])=>d.s!==0||d.q!==0).sort((a,b)=>b[1].s-a[1].s);};
+  const prodAll=agg(PROD_DATA.length?PROD_DATA:D_PROD,4);
+  return {prodRows:prodAll.slice(0,15),chRows:agg(TOP_DATA,4),q:prodAll.reduce((s,[,d])=>s+d.q,0)};
+}
+// 목표매출 탭 '실매출(YTD)' 클릭 → 2026 누적 상품별/매출처별 판매 팝업 (brCsv: 브랜드 인덱스 콤마 구분)
+function showGoalActualPopup(event,brCsv,title){
+  event.stopPropagation();
+  const brSet=new Set(String(brCsv).split(',').map(Number));
+  const {prodRows,chRows,q}=_goalBreakdown(brSet,2026,'yr');
+  const s=chRows.reduce((a,[,d])=>a+d.s,0);
+  showBarBreakdownPopup(event,title,
+    [`<div>2026 실매출 (YTD): <b style="color:#fff">${won(s)}</b></div>`,`<div>수량: <b style="color:#fff">${wonNo(q)}건</b></div>`],
+    prodRows,null,chRows);
+}
 function showGoalSellThroughPopup(event,el){
   let st;
   try{ st=JSON.parse(el.dataset.st||'{}'); }catch(e){ return; }
@@ -9057,7 +9074,7 @@ function renderGoalSales(){
     <div class="kpi-val">${won(totalTarget)}</div>
     <div class="kpi-sub">2026년 브랜드 합산 목표</div>
   </div>
-  <div class="kpi-card">
+  <div class="kpi-card" onclick="showGoalActualPopup(event,'${brands.join(',')}','${bIdx<0?'전체 브랜드':escHtml(BNAMES[bIdx])} 2026 실매출 (YTD)')" title="클릭 시 상품별/매출처별 판매 보기" style="cursor:pointer">
     <div class="kpi-label">2026 실매출 (YTD)</div>
     <div class="kpi-val" style="color:var(--sky)">${won(totalActual)}</div>
     <div class="kpi-sub">업로드 데이터 기준</div>
@@ -9106,7 +9123,7 @@ ${brands.map(bi=>{
       <div style="height:100%;width:${barW}%;background:linear-gradient(90deg,${BCOLORS[bi]},${BCOLORS[bi]}88);border-radius:8px;transition:width .4s"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px">
-      <div style="text-align:center;padding:8px;background:#f8fafc;border-radius:8px">
+      <div onclick="showGoalActualPopup(event,'${bi}','${escHtml(BNAMES[bi])} 2026 실매출 (YTD)')" title="클릭 시 상품별/매출처별 판매 보기" style="text-align:center;padding:8px;background:#f8fafc;border-radius:8px;cursor:pointer">
         <div style="font-size:10px;color:var(--muted);margin-bottom:2px">실매출(YTD)</div>
         <div style="font-size:12px;font-weight:700;color:var(--sky)">${won(act)}</div>
       </div>
@@ -9247,12 +9264,7 @@ ${brands.map(bi=>{
 </div>`;
 
   // ── 막대 클릭 → 상품별/매출처별 판매 팝업 (brSet: 브랜드 인덱스 Set, periodType: 'mo'(1~12) | 'wk'(ISO 주차)) ──
-  const goalBreakdown=(brSet,yr,periodType,key)=>{
-    const hit=r=>brSet.has(r[0])&&r[1]===yr&&!(r[2]===12&&r[3]===1)&&(periodType==='mo'?r[2]===key:r[3]===key);
-    const agg=(rows,ki)=>{const m={};rows.forEach(r=>{if(!hit(r))return;const k=r[ki];if(!m[k])m[k]={s:0,q:0};m[k].s+=r[6];m[k].q+=r[5];});return Object.entries(m).filter(([,d])=>d.s!==0||d.q!==0).sort((a,b)=>b[1].s-a[1].s);};
-    const prodAll=agg(PROD_DATA.length?PROD_DATA:D_PROD,4);
-    return {prodRows:prodAll.slice(0,15),chRows:agg(TOP_DATA,4),q:prodAll.reduce((s,[,d])=>s+d.q,0)};
-  };
+  const goalBreakdown=_goalBreakdown;
   const goalBarPopup=(evt,title,brSet,yr,periodType,key,extraLines)=>{
     const {prodRows,chRows,q}=goalBreakdown(brSet,yr,periodType,key);
     const s=chRows.reduce((a,[,d])=>a+d.s,0);
