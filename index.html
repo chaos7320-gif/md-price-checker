@@ -1784,15 +1784,18 @@ function _goalBreakdown(brSet,yr,periodType,key){
   const prodAll=agg(PROD_DATA.length?PROD_DATA:D_PROD,4);
   return {prodRows:prodAll.slice(0,15),chRows:agg(TOP_DATA,4),q:prodAll.reduce((s,[,d])=>s+d.q,0)};
 }
-// 목표매출 탭 '실매출(YTD)' 클릭 → 2026 누적 상품별/매출처별 판매 팝업 (brCsv: 브랜드 인덱스 콤마 구분)
-function showGoalActualPopup(event,brCsv,title){
+// 목표매출 탭 실매출 클릭 → 2026 상품별/매출처별 판매 팝업 (brCsv: 브랜드 인덱스 콤마 구분, mo: 1~12 지정 시 해당 월, 생략 시 YTD 누적)
+function showGoalActualPopup(event,brCsv,title,mo){
   event.stopPropagation();
-  const brSet=new Set(String(brCsv).split(',').map(Number));
-  const {prodRows,chRows,q}=_goalBreakdown(brSet,2026,'yr');
+  const brIdxs=String(brCsv).split(',').map(Number);
+  const {prodRows,chRows,q}=_goalBreakdown(new Set(brIdxs),2026,mo?'mo':'yr',mo);
   const s=chRows.reduce((a,[,d])=>a+d.s,0);
-  showBarBreakdownPopup(event,title,
-    [`<div>2026 실매출 (YTD): <b style="color:#fff">${won(s)}</b></div>`,`<div>수량: <b style="color:#fff">${wonNo(q)}건</b></div>`],
-    prodRows,null,chRows);
+  const lines=[`<div>${mo?`2026년 ${mo}월 실매출`:'2026 실매출 (YTD)'}: <b style="color:#fff">${won(s)}</b></div>`,`<div>수량: <b style="color:#fff">${wonNo(q)}건</b></div>`];
+  if(mo){
+    const tgt=brIdxs.reduce((a,bi)=>a+(GOAL_DATA[bi].monthly_target[mo-1]||0),0);
+    if(tgt>0)lines.push(`<div>목표: <b style="color:#fff">${won(tgt)}</b> <span style="color:${s>=tgt?'#86efac':'#fca5a5'}">· 달성률 ${(s/tgt*100).toFixed(1)}%</span></div>`);
+  }
+  showBarBreakdownPopup(event,title,lines,prodRows,null,chRows);
 }
 function showGoalSellThroughPopup(event,el){
   let st;
@@ -9228,7 +9231,7 @@ ${brands.map(bi=>{
 <div class="table-card">
   <div class="chart-header">
     <div class="chart-title">월별 목표 달성 현황</div>
-    <div class="chart-sub">2026 기준 | 회색=목표, 파랑=실매출, () = 달성률</div>
+    <div class="chart-sub">2026 기준 | 회색=목표, 파랑=실매출, () = 달성률 · 실매출 클릭 시 상품별/매출처별 판매 확인</div>
   </div>
   <div class="table-wrap"><table>
     <thead><tr>
@@ -9250,12 +9253,12 @@ ${brands.map(bi=>{
         `<tr>
           ${act2026.map((v,i)=>{
             const rate=g.monthly_target[i]>0?v/g.monthly_target[i]*100:0;
-            return`<td class="nr" style="font-weight:600;font-size:11px;color:${rateColor(rate)};${i===nowMo?'background:#e0f2fe':''}">
+            return`<td class="nr"${v>0?` onclick="showGoalActualPopup(event,'${bi}','${escHtml(BNAMES[bi])} 2026년 ${i+1}월',${i+1})" title="클릭 시 상품별/매출처별 판매 보기"`:''} style="font-weight:600;font-size:11px;color:${rateColor(rate)};${i===nowMo?'background:#e0f2fe':''}${v>0?';cursor:pointer':''}">
               ${v>0?wonNo(v):'-'}<br>
               <span style="font-size:9px;font-weight:400">${v>0?'('+rate.toFixed(0)+'%)':''}</span>
             </td>`;
           }).join('')}
-          <td class="nr" style="font-weight:700;color:${rateColor(g.target>0?totalAct/g.target*100:0)}">${wonNo(totalAct)}</td>
+          <td class="nr"${totalAct>0?` onclick="showGoalActualPopup(event,'${bi}','${escHtml(BNAMES[bi])} 2026 실매출 (YTD)')" title="클릭 시 상품별/매출처별 판매 보기"`:''} style="font-weight:700;color:${rateColor(g.target>0?totalAct/g.target*100:0)}${totalAct>0?';cursor:pointer':''}">${wonNo(totalAct)}</td>
         </tr>`
       ];
     }).join('')}
