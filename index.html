@@ -9512,12 +9512,9 @@ function _ofTableHtml(isAll){
     </tr>
     <tr>${W.map(z=>`<th ${th2.replace('style="','style="background:'+wBg+';')}>${z}</th>`).join('')}${M.map(z=>`<th ${th2.replace('style="','style="background:'+mBg+';')}>${z}</th>`).join('')}</tr>
   </thead>`;
-  const VIEWS=[['order','오더 수량'],['stock','현재 재고'],['wk','주당 판매'],['arr','입고시점 재고'],['out','소진 예상']];
-  const seg=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-    <span style="font-size:12px;font-weight:600;color:var(--muted)">사이즈별 보기</span>
-    <div class="seg">${VIEWS.map(([k,l])=>`<button class="seg-btn${_of.szView===k?' active':''}" onclick="_ofSet('szView','${k}')">${l}</button>`).join('')}</div>
-    <span style="font-size:11px;color:var(--muted)">빨간 칸 = 입고 전 해당 사이즈 소진 (영업 로스)</span>
-  </div>`;
+  // 사이즈 칸은 오더 수량만 표시 (재고·소진 정보는 앞쪽 열·비고·빨간 칸 툴팁으로 확인)
+  _of.szView='order';
+  const seg=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">빨간 칸 = 입고 전 해당 사이즈 소진 (영업 로스) · 마우스를 올리면 상세 확인</div>`;
   const body=_ofRows.map((r,i)=>`<tr data-of-key="${escHtml(r.key)}">${_ofRowCells(r,i,isAll)}</tr>`).join('');
   return `${seg}<div class="table-wrap" style="max-height:620px"><table style="font-size:12px">${head}<tbody>${body}</tbody><tfoot id="of-foot">${_ofFootHtml(isAll)}</tfoot></table></div>`;
 }
