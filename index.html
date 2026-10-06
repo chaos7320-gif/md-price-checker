@@ -9082,6 +9082,14 @@ function _ofInitState(){
   const tTo=Math.min(52,tFrom+11);
   return {b:bSel,gB:bSel,unit:'wk',tYr,tFrom,tTo,auto:true,bYr:tYr-1,bFrom:tFrom,bTo:tTo,growth:100,bulk:110,q:''};
 }
+// 상품 검색: 쉼표(,)로 여러 상품 OR 검색, 공백은 AND · 대소문자/하이픈/공백 무시 ("906 black" → 906-BLACK)
+const _ofNorm=v=>String(v).toLowerCase().replace(/[\s\-_/().]+/g,'');
+function _ofMatch(r,q){
+  if(!q||!q.trim())return true;
+  const name=_ofNorm(r.prod),br=_ofNorm(BNAMES[r.bi]||'');
+  return q.split(',').map(g=>g.trim()).filter(Boolean).some(g=>g.split(/\s+/).every(t=>{const n=_ofNorm(t);return !n||name.includes(n)||br.includes(n);}));
+}
+const _ofVisible=()=>_ofRows.filter(r=>_ofMatch(r,_of.q));
 function _ofSyncBase(){
   if(!_of.auto)return;
   _of.bYr=_of.tYr-1;_of.bFrom=_of.tFrom;_of.bTo=_of.tTo;
@@ -9094,8 +9102,10 @@ function _ofCompute(){
   const K=bLen>0?tLen/bLen:0,G=s.growth/100;
   // 기준 기간 상품별 판매수량
   const base={};
+  const selP=(typeof SELECTED_PRODS!=='undefined'&&SELECTED_PRODS.length)?new Set(SELECTED_PRODS):null;
   PROD_DATA.forEach(r=>{
     if(!brOk(r)||!_ofInPeriod(r,s.bYr,s.unit,s.bFrom,s.bTo))return;
+    if(selP&&!selP.has(r[4]))return;
     const k=r[0]+'|'+r[4];
     if(!base[k])base[k]={bi:r[0],prod:r[4],q:0};
     base[k].q+=r[5];
@@ -9171,7 +9181,7 @@ function renderForecast(){
   <div class="kpi-card accent"><div class="kpi-label">기준 기간 판매수량</div><div class="kpi-val" id="of-kpi-base">${wonNo(totBase)}개</div><div class="kpi-sub">${_ofPeriodText(s.bYr,s.unit,s.bFrom,s.bTo)}</div></div>
   <div class="kpi-card"><div class="kpi-label">예측 판매수량</div><div class="kpi-val" id="of-kpi-fc" style="color:var(--sky)">${wonNo(totFc)}개</div><div class="kpi-sub">기간 계수 ${res.K.toFixed(2)} × 성장률 ${s.growth}%</div></div>
   <div class="kpi-card"><div class="kpi-label">최종 오더수량</div><div class="kpi-val" id="of-kpi-ord" style="color:#059669">${wonNo(totOrd)}개</div><div class="kpi-sub">상품별 추가 오더 % 반영</div></div>
-  <div class="kpi-card"><div class="kpi-label">대상 상품</div><div class="kpi-val">${wonNo(res.rows.length)}개</div><div class="kpi-sub">기준 기간 판매 실적 보유</div></div>
+  <div class="kpi-card"><div class="kpi-label">대상 상품</div><div class="kpi-val" id="of-kpi-cnt">${wonNo(res.rows.length)}개</div><div class="kpi-sub">기준 기간 판매 실적 보유</div></div>
   <div class="kpi-card"><div class="kpi-label">판매 목표 기간</div><div class="kpi-val" style="font-size:18px">${res.tLen}${unitTxt}</div><div class="kpi-sub">${_ofPeriodText(s.tYr,s.unit,s.tFrom,s.tTo)}</div></div>
 </div>
 
@@ -9225,15 +9235,20 @@ function renderForecast(){
 
 <div class="table-card">
   <div class="chart-header" style="flex-wrap:wrap;gap:10px">
-    <div><div class="chart-title">📦 상품별 · 사이즈별 오더 예측</div><div class="chart-sub">기준 판매수량 내림차순 · 추가 오더 % 칸을 직접 수정하세요 · 셀에 마우스를 올리면 계산식 확인</div></div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <input type="text" placeholder="상품 검색" value="${escHtml(s.q)}" oninput="_ofFilter(this.value)" style="width:180px">
+    <div><div class="chart-title">📦 상품별 · 사이즈별 오더 예측</div><div class="chart-sub">기준 판매수량 내림차순 · 추가 오더 % 칸을 직접 수정하세요 · 셀에 마우스를 올리면 계산식 확인${(typeof SELECTED_PRODS!=='undefined'&&SELECTED_PRODS.length)?` · <b style="color:var(--sky)">상단 상품 필터 ${SELECTED_PRODS.length}개 적용 중</b>`:''}</div></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div style="position:relative;display:flex;align-items:center">
+        <span style="position:absolute;left:11px;color:var(--muted);font-size:13px;pointer-events:none">🔍</span>
+        <input type="text" id="of-q" placeholder="상품 검색 (여러 개는 쉼표로 구분)" value="${escHtml(s.q)}" oninput="_ofFilter(this.value)" onkeydown="if(event.key==='Escape'){this.value='';_ofFilter('');}" style="width:260px;padding-left:32px;padding-right:30px">
+        <button id="of-q-clear" onclick="const i=document.getElementById('of-q');i.value='';_ofFilter('');i.focus();" title="검색어 지우기" style="position:absolute;right:6px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;padding:4px;${s.q?'':'display:none'}">✕</button>
+      </div>
+      <span id="of-q-cnt" style="font-size:12px;color:var(--muted);white-space:nowrap"></span>
       <button onclick="exportForecastXlsx()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">📥 엑셀 (수식 포함)</button>
     </div>
   </div>
   ${res.rows.length?_ofTableHtml(isAll):`<div class="empty"><div class="empty-icon">🔍</div>기준 기간(${_ofPeriodText(s.bYr,s.unit,s.bFrom,s.bTo)})에 판매 데이터가 없습니다</div>`}
 </div>`;
-  if(s.q)_ofFilter(s.q);
+  _ofFilter(s.q);
 }
 function _ofTableHtml(isAll){
   const W=_ofSizes.w,M=_ofSizes.m;
@@ -9249,7 +9264,7 @@ function _ofTableHtml(isAll){
     </tr>
     <tr>${W.map(z=>`<th ${th2.replace('style="','style="background:'+wBg+';')}>${z}</th>`).join('')}${M.map(z=>`<th ${th2.replace('style="','style="background:'+mBg+';')}>${z}</th>`).join('')}</tr>
   </thead>`;
-  const body=_ofRows.map((r,i)=>`<tr data-of-key="${escHtml(r.key)}" data-of-name="${escHtml(String(r.prod).toLowerCase())}">${_ofRowCells(r,i,isAll)}</tr>`).join('');
+  const body=_ofRows.map((r,i)=>`<tr data-of-key="${escHtml(r.key)}">${_ofRowCells(r,i,isAll)}</tr>`).join('');
   return `<div class="table-wrap" style="max-height:620px"><table style="font-size:12px">${head}<tbody>${body}</tbody><tfoot id="of-foot">${_ofFootHtml(isAll)}</tfoot></table></div>`;
 }
 function _ofRowCells(r,i,isAll){
@@ -9269,7 +9284,7 @@ function _ofRowCells(r,i,isAll){
     ${_ofSizes.w.map(z=>zc(z,'rgba(236,72,153,.04)')).join('')}${_ofSizes.m.map(z=>zc(z,'rgba(37,99,235,.04)')).join('')}`;
 }
 function _ofFootHtml(isAll){
-  const R=_ofRows.filter(r=>!_of.q||String(r.prod).toLowerCase().includes(_of.q.toLowerCase()));
+  const R=_ofVisible();
   const sum=fn=>wonNo(R.reduce((a,r)=>a+fn(r),0));
   const st='position:sticky;bottom:0;background:var(--card);font-weight:800;border-top:2px solid var(--hairline)';
   return `<tr><td style="${st}" colspan="${isAll?3:2}">합계 · ${R.length}개 상품</td>
@@ -9297,8 +9312,13 @@ function _ofSet(k,v){
 function _ofRefreshTotals(){
   const isAll=_of.b==='ALL';
   const foot=document.getElementById('of-foot');if(foot)foot.innerHTML=_ofFootHtml(isAll);
-  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=wonNo(v)+'개';};
-  set('of-kpi-ord',_ofRows.reduce((a,r)=>a+r.order,0));
+  _ofRefreshKpi();
+}
+function _ofRefreshKpi(){
+  const R=_ofVisible();
+  const set=(id,v,u)=>{const el=document.getElementById(id);if(el)el.textContent=wonNo(v)+u;};
+  set('of-kpi-base',R.reduce((a,r)=>a+r.base,0),'개');set('of-kpi-fc',R.reduce((a,r)=>a+r.fc,0),'개');
+  set('of-kpi-ord',R.reduce((a,r)=>a+r.order,0),'개');set('of-kpi-cnt',R.length,'개');
 }
 function _ofSetPct(inp){
   const tr=inp.closest('tr');const key=tr.dataset.ofKey;
@@ -9315,22 +9335,26 @@ function _ofSetPct(inp){
 function _ofBulk(v){
   if(v==null){v=parseFloat((document.getElementById('of-bulk')||{}).value);if(isNaN(v)||v<0)return;_of.bulk=v;}
   // 검색 중이면 검색된 상품에만 적용
-  const q=(_of.q||'').toLowerCase();
-  _ofRows.forEach(r=>{if(q&&!String(r.prod).toLowerCase().includes(q))return;if(v===100)delete _ofPct[r.key];else _ofPct[r.key]=v;});
+  const q=(_of.q||'').trim();
+  _ofVisible().forEach(r=>{if(v===100)delete _ofPct[r.key];else _ofPct[r.key]=v;});
   _ofSavePct();
   renderForecast();
   if(typeof showToast==='function')showToast(`추가 오더 ${v}% ${q?'검색된 상품에':'전체 상품에'} 적용`);
 }
 function _ofFilter(q){
-  _of.q=q;const ql=q.trim().toLowerCase();
-  document.querySelectorAll('tr[data-of-key]').forEach(tr=>{tr.hidden=!!ql&&!tr.dataset.ofName.includes(ql);});
+  _of.q=q;
+  const vis=new Set(_ofVisible().map(r=>r.key));
+  document.querySelectorAll('tr[data-of-key]').forEach(tr=>{tr.hidden=!vis.has(tr.dataset.ofKey);});
+  const cnt=document.getElementById('of-q-cnt');if(cnt)cnt.textContent=q.trim()?`${vis.size}개 / ${_ofRows.length}개`:'';
+  const clr=document.getElementById('of-q-clear');if(clr)clr.style.display=q?'':'none';
+  _ofRefreshKpi();
   const foot=document.getElementById('of-foot');if(foot)foot.innerHTML=_ofFootHtml(_of.b==='ALL');
 }
 // 엑셀 출력: 결과값과 함께 수식(기간 계수·예측·최종 오더·사이즈 분배)을 셀 수식으로 저장
 function exportForecastXlsx(){
   if(typeof XLSX==='undefined'){showToast&&showToast('⚠️ 엑셀 라이브러리를 불러오지 못했습니다');return;}
   const s=_of,K=_ofK(),isAll=s.b==='ALL';
-  const R=_ofRows.filter(r=>!s.q||String(r.prod).toLowerCase().includes(s.q.toLowerCase()));
+  const R=_ofVisible();
   if(!R.length){showToast&&showToast('출력할 상품이 없습니다');return;}
   const enc=XLSX.utils.encode_col,SZ=[..._ofSizes.w,..._ofSizes.m];
   const RS="'사이즈비율'";
