@@ -9220,6 +9220,28 @@ function _ofCalcStock(r,arrIdx){
     r.szSt[z]=_ofStockCalc({stock:Math.max(0,(r.invSz[z]||0)),wk2:Math.max(0,r.recSz[z]||0),wkSales:Math.max(0,r.recSz[z]||0)/2},r.curIdx,arrIdx);
   });
   r.szLoss=Object.entries(r.szSt).filter(([,o])=>o.loss).map(([z,o])=>({z,txt:_ofLossTxt(o.loss).replace(' 영업 로스',''),o}));
+  r.szLossQty=r.szLoss.reduce((a,x)=>a+x.o.loss.qty,0);
+  // 사이즈 데이터가 있으면 상품 합계 = 사이즈별 계산의 합 (이미 소진된 사이즈의 판매 속도가 남은 사이즈 재고에 섞이지 않도록)
+  const S=Object.values(r.szSt);
+  r.bySize=S.some(o=>o.stock>0||o.wkSales>0);
+  if(!r.bySize)return;
+  r.wk2=S.reduce((a,o)=>a+o.wk2,0);
+  r.wkSales=r.wk2/2;
+  r.arrStock=S.reduce((a,o)=>a+o.arrStock,0);
+  // 상품 소진 = 판매 중인 사이즈가 모두 소진되는 주 (판매 없는 사이즈 재고는 제외)
+  const sell=S.filter(o=>o.stock>0&&o.wkSales>0);
+  r.deadStock=S.filter(o=>o.stock>0&&!(o.wkSales>0)).reduce((a,o)=>a+o.stock,0);
+  if(r.stock<=0){r.outIdx=r.curIdx;r.wksLeft=0;}
+  else if(!sell.length){r.outIdx=null;r.wksLeft=Infinity;}
+  else{r.outIdx=Math.max(...sell.map(o=>o.outIdx));r.wksLeft=Math.max(...sell.map(o=>o.wksLeft));}
+  // 상품 영업 로스 = 판매 중인 사이즈가 모두 입고 전 소진될 때 (마지막 사이즈 소진 이후 ~ 입고 전 주)
+  r.loss=null;
+  const selling=S.filter(o=>o.wkSales>0);
+  if(selling.length&&selling.every(o=>o.loss)){
+    const from=Math.max(...selling.map(o=>o.loss.from)),to=arrIdx-1;
+    if(to>=from)r.loss={from,to,weeks:to-from+1,qty:r.szLossQty};
+  }
+  r.note=r.loss?_ofLossTxt(r.loss):'';
 }
 const _ofSzName=z=>z==='etc'?'기타':String(z);
 function _ofLossTxt(l){
@@ -9361,9 +9383,9 @@ function renderForecast(){
     <div><b>최종 오더</b> = ROUND(예측 수량 × 추가 오더 %)</div>
     <div><b>사이즈별 오더</b> = ROUND(최종 오더 × 사이즈 비율) · 여성 220~245 / 남성 250~300</div>
     <div><b>주당 판매</b> = 최근 2주 판매수량 ÷ 2 (최신 데이터 ${_ofWkTxt(Math.max(...Object.values(res.latest)))} 기준)</div>
-    <div><b>재고 소진 예상</b> = 현재 재고 ÷ 주당 판매 (소진까지 주수)</div>
-    <div><b>입고시점 예상재고</b> = MAX(0, ROUND(현재 재고 − 주당 판매 × 입고까지 주수))</div>
-    <div><b>비고</b> = 소진까지 주수 &lt; 입고까지 주수 → "○○주차 영업 로스" (소진 ~ 입고 전 주) · 사이즈별도 같은 방식 (사이즈 재고 ÷ 사이즈 최근 2주 판매)</div>
+    <div><b>재고 소진 예상</b> = 판매 중인 사이즈가 모두 소진되는 주 (사이즈 재고 ÷ 사이즈 주당 판매)</div>
+    <div><b>입고시점 예상재고</b> = 사이즈별 MAX(0, ROUND(사이즈 재고 − 사이즈 주당 판매 × 입고까지 주수))의 합계 (사이즈 데이터가 없는 상품은 상품 단위로 계산)</div>
+    <div><b>비고</b> = 판매 중인 모든 사이즈가 입고 전 소진 → "○○주차 영업 로스" · 일부 사이즈만 소진 → "사이즈 로스"</div>
     <div style="grid-column:1/-1;color:var(--muted);font-size:11px">사이즈 비율 = 기준 기간 해당 상품 사이즈별 판매 ÷ 전체 사이즈 판매 (없으면 전체 기간 → 브랜드 평균 순으로 대체) · 범위 밖·의류·키즈 사이즈는 '기타'로 분리 · 사이즈별 반올림으로 합계가 최종 오더와 1~2개 다를 수 있음</div>
   </div>
 </div>
@@ -9417,10 +9439,10 @@ function _ofRowCells(r,i,isAll){
   return `<td style="color:var(--muted)">${i+1}</td>${isAll?`<td style="white-space:nowrap;color:${BCOLORS[r.bi]};font-weight:600">${BNAMES[r.bi]}</td>`:''}
     <td style="min-width:180px"><div style="font-weight:600">${escHtml(r.prod)}</div><div style="font-size:10px;color:var(--muted)">사이즈 비율: ${r.src}</div></td>
     <td class="nr" style="font-weight:600">${f(r.stock)}</td>
-    <td class="nr" title="최근 2주 ${f(r.wk2)}개 ÷ 2">${r.wkSales?(Math.round(r.wkSales*10)/10).toLocaleString():'-'}</td>
+    <td class="nr" title="${r.bySize?'사이즈별 합계 · ':''}최근 2주 ${f(r.wk2)}개 ÷ 2">${r.wkSales?(Math.round(r.wkSales*10)/10).toLocaleString():'-'}</td>
     <td style="white-space:nowrap;font-size:11px">${_ofOutCell(r)}</td>
-    <td class="nr" style="font-weight:700;color:${r.arrStock>0?'var(--ink)':'var(--red)'}" title="MAX(0, ROUND(${f(r.stock)} − ${Math.round(r.wkSales*10)/10} × ${r.wksToArr}주)) = ${f(r.arrStock)}">${f(r.arrStock)}</td>
-    <td style="font-size:11px;font-weight:700;color:var(--red);min-width:150px;max-width:240px">${r.loss?`<div style="white-space:nowrap">${escHtml(r.note)}</div><div style="font-weight:500;color:var(--muted);font-size:10px">${r.loss.weeks}주 · 약 ${f(r.loss.qty)}개 판매 기회 손실</div>`:''}${r.szLoss.length?`<div style="font-weight:600;font-size:10.5px;color:#ea580c;margin-top:${r.loss?4:0}px;line-height:1.45" title="${escHtml(r.szLoss.map(x=>_ofSzName(x.z)+': '+x.txt+' 영업 로스 (약 '+x.o.loss.qty+'개)').join('\n'))}">사이즈 로스 ${r.szLoss.length}개: ${r.szLoss.map(x=>_ofSzName(x.z)).join(' · ')}</div>`:''}</td>
+    <td class="nr" style="font-weight:700;color:${r.arrStock>0?'var(--ink)':'var(--red)'}" title="${r.bySize?`사이즈별 입고시점 재고 합계 = ${f(r.arrStock)}${r.deadStock?` (판매 없는 사이즈 재고 ${f(r.deadStock)}개 포함)`:''}`:`MAX(0, ROUND(${f(r.stock)} − ${Math.round(r.wkSales*10)/10} × ${r.wksToArr}주)) = ${f(r.arrStock)}`}">${f(r.arrStock)}</td>
+    <td style="font-size:11px;font-weight:700;color:var(--red);min-width:150px;max-width:240px">${r.loss?`<div style="white-space:nowrap">${escHtml(r.note)}</div><div style="font-weight:500;color:var(--muted);font-size:10px">${r.loss.weeks}주 · 약 ${f(r.loss.qty)}개 판매 기회 손실${r.bySize?' (사이즈 합계)':''}</div>`:''}${r.szLoss.length?`<div style="font-weight:600;font-size:10.5px;color:#ea580c;margin-top:${r.loss?4:0}px;line-height:1.45" title="${escHtml(r.szLoss.map(x=>_ofSzName(x.z)+': '+x.txt+' 영업 로스 (약 '+x.o.loss.qty+'개)').join('\n'))}">사이즈 로스 ${r.szLoss.length}개: ${r.szLoss.map(x=>_ofSzName(x.z)).join(' · ')}${r.loss?'':` <span style="font-weight:500;color:var(--muted)">(약 ${f(r.szLossQty)}개)</span>`}</div>`:''}</td>
     <td class="nr">${f(r.base)}</td>
     <td class="nr" style="color:var(--sky);font-weight:600" title="ROUND(${f(r.base)} × ${K.toFixed(4)} × ${s.growth}%) = ${f(r.fc)}">${f(r.fc)}</td>
     <td class="nr"><input type="number" min="0" step="5" value="${r.pct}" onchange="_ofSetPct(this)" style="width:70px;padding:5px 6px;font-size:12px;border:1px solid ${r.pct!==100?'#059669':'var(--hairline)'};border-radius:6px;background:var(--canvas);color:var(--ink);text-align:right;font-family:inherit">%</td>
@@ -9544,11 +9566,12 @@ function exportForecastXlsx(){
     const n=R0+i,c=k=>C[k]+n;
     put(ws,c('rank'),num(i+1));put(ws,c('brand'),txt(BNAMES[r.bi]));put(ws,c('prod'),txt(r.prod));
     put(ws,c('stock'),num(r.stock));
-    put(ws,c('wk'),num(r.wkSales,'0.0'));
-    put(ws,c('left'),fx(`IF(${c('wk')}>0,${c('stock')}/${c('wk')},"판매 없음")`,r.wkSales>0?r.wksLeft:'판매 없음','0.0'));
+    const ZS="'사이즈별재고'";
+    put(ws,c('wk'),r.bySize?fx(`SUMIF(${ZS}!$A:$A,${c('rank')},${ZS}!$G:$G)`,r.wkSales,'0.0'):num(r.wkSales,'0.0'));
+    put(ws,c('left'),r.bySize?(isFinite(r.wksLeft)?num(r.wksLeft,'0.0'):txt('판매 없음')):fx(`IF(${c('wk')}>0,${c('stock')}/${c('wk')},"판매 없음")`,r.wkSales>0?r.wksLeft:'판매 없음','0.0'));
     put(ws,c('out'),txt(r.stock<=0?'재고 없음':(r.outIdx==null?'판매 없음':(r.wksLeft>104?'2년 이상':_ofWkTxt(r.outIdx)))));
     put(ws,c('toArr'),num(r.wksToArr));
-    put(ws,c('arrStock'),fx(`MAX(0,ROUND(${c('stock')}-${c('wk')}*${c('toArr')},0))`,r.arrStock));
+    put(ws,c('arrStock'),r.bySize?fx(`SUMIF(${ZS}!$A:$A,${c('rank')},${ZS}!$K:$K)`,r.arrStock):fx(`MAX(0,ROUND(${c('stock')}-${c('wk')}*${c('toArr')},0))`,r.arrStock));
     put(ws,c('note'),txt([r.loss?`${r.note} (${r.loss.weeks}주, 약 ${r.loss.qty}개)`:'',r.szLoss.length?'사이즈 로스: '+r.szLoss.map(x=>`${_ofSzName(x.z)}(${x.txt})`).join(', '):''].filter(Boolean).join(' / ')));
     put(ws,c('base'),num(r.base));
     put(ws,c('fc'),fx(`ROUND(${c('base')}*$B$7*$B$8,0)`,r.fc));
@@ -9587,8 +9610,9 @@ function exportForecastXlsx(){
     ['기타','=ROUND(최종오더 × 기타비율, 0)','범위 밖(키즈 등)·의류·범위 표기 사이즈'],
     ['주당 판매','최근 2주 판매수량 ÷ 2','브랜드별 최신 업로드 데이터 주 기준'],
     ['소진까지 주수','=현재재고 ÷ 주당판매','주당 판매가 0이면 "판매 없음"'],
-    ['입고시점 예상재고','=MAX(0, ROUND(현재재고 − 주당판매 × 입고까지주수, 0))','입고까지 주수 = 최신 데이터 다음 주 ~ 입고 전 주'],
-    ['비고','소진까지 주수 < 입고까지 주수','재고 소진 ~ 입고 전 주를 "○○주차 영업 로스"로 표기 (예상 손실 수량 = 주당판매 × 부족 주수)'],
+    ['입고시점 예상재고','=SUMIF(사이즈별재고!A:A, 순위, 사이즈별재고!K:K)','사이즈별 MAX(0, ROUND(사이즈재고 − 사이즈 주당판매 × 입고까지주수, 0))의 합계 (사이즈 데이터 없는 상품은 상품 단위 수식)'],
+    ['주당 판매','=SUMIF(사이즈별재고!A:A, 순위, 사이즈별재고!G:G)','사이즈별 최근 2주 판매 ÷ 2의 합계'],
+    ['비고','판매 중인 모든 사이즈 소진 < 입고','마지막 사이즈 소진 ~ 입고 전 주를 "○○주차 영업 로스"로 표기 · 일부 사이즈만 소진되면 "사이즈 로스" (예상 손실 수량 = 사이즈별 주당판매 × 부족 주수 합계)'],
     [],
     ['사이즈 비율 출처','','기준 기간 → (없으면) 전체 기간 → (없으면) 브랜드 평균'],
     ['참고','','사이즈별 반올림으로 사이즈 합계가 최종 오더수량과 1~2개 다를 수 있음'],
@@ -9601,7 +9625,7 @@ function exportForecastXlsx(){
   R.forEach((r,i)=>{
     [..._ofSizes.w,..._ofSizes.m,'etc'].forEach(z=>{
       const o=r.szSt[z],q=z==='etc'?r.etc:r.sz[z];
-      if(!o||(!o.stock&&!o.wkSales&&!q))return;
+      if(!o||(!o.stock&&!o.wkSales&&!q))return; // 재고·판매 없는 사이즈는 합계에 영향 없음
       const n=zn++,ordCell=z==='etc'?C.etc:C['z'+z];
       put(wz,'A'+n,num(i+1));put(wz,'B'+n,txt(BNAMES[r.bi]));put(wz,'C'+n,txt(r.prod));put(wz,'D'+n,txt(_ofSzName(z)));
       put(wz,'E'+n,txt(z==='etc'?'기타':(z<=245?'여성':'남성')));
