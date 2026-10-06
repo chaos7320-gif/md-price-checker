@@ -9104,7 +9104,7 @@ function _ofInitState(){
   let tYr=maxYr,tFrom=maxWk+1;
   if(tFrom>52){tYr++;tFrom=1;}
   const tTo=Math.min(52,tFrom+11);
-  return {b:bSel,gB:bSel,unit:'wk',tYr,tFrom,tTo,auto:true,bYr:tYr-1,bFrom:tFrom,bTo:tTo,growth:100,bulk:110,q:'',arrAuto:true,arrYr:tYr,arrWk:tFrom};
+  return {szView:'order',b:bSel,gB:bSel,unit:'wk',tYr,tFrom,tTo,auto:true,bYr:tYr-1,bFrom:tFrom,bTo:tTo,growth:100,bulk:110,q:'',arrAuto:true,arrYr:tYr,arrWk:tFrom};
 }
 // 상품 검색: 쉼표(,)로 여러 상품 OR 검색, 공백은 AND · 대소문자/하이픈/공백 무시 ("906 black" → 906-BLACK)
 const _ofNorm=v=>String(v).toLowerCase().replace(/[\s\-_/().]+/g,'');
@@ -9164,7 +9164,6 @@ function _ofCompute(){
   }).sort((a,b)=>b.base-a.base);
   // 표시할 사이즈 컬럼: 범위 내에서 데이터가 있는 사이즈만
   const used=new Set();rows.forEach(r=>Object.keys(r.ratio).forEach(k=>{if(k!=='etc')used.add(+k);}));
-  _ofSizes={w:_OF_WOMEN.filter(z=>used.has(z)),m:_OF_MEN.filter(z=>used.has(z))};
   // 현재 재고 (INV_DATA 사이즈 합산) · 최근 2주 판매 (브랜드별 최신 데이터 주 기준)
   const inv={};
   INV_DATA.forEach(x=>{if(bIdx>=0&&x.bi!==bIdx)return;const k=x.bi+'|'+String(x.prod).trim().toLowerCase();inv[k]=(inv[k]||0)+(+x.stock||0);});
@@ -9174,9 +9173,21 @@ function _ofCompute(){
     const i=_ofRowIdx(r);if(i<latest[r[0]]-1||i>latest[r[0]])return;
     const k=r[0]+'|'+String(r[4]).trim().toLowerCase();recent[k]=(recent[k]||0)+r[5];
   });
+  // 사이즈별 재고 (INV_DATA) · 사이즈별 최근 2주 판매 (SZ_DATA) — mm 표기 통일, 범위 밖은 기타
+  const invSz={},recSz={};
+  const addSz=(o,k,z,q)=>{if(!o[k])o[k]={};o[k][z]=(o[k][z]||0)+q;};
+  INV_DATA.forEach(x=>{if(bIdx>=0&&x.bi!==bIdx)return;const mm=_ofSizeMm(x.size);addSz(invSz,x.bi+'|'+String(x.prod).trim().toLowerCase(),mm==null?'etc':mm,+x.stock||0);});
+  SZ_DATA.forEach(r=>{
+    if(!brOk(r)||_ofExcl(r)||latest[r[0]]==null)return;
+    const i=_ofRowIdx(r);if(i<latest[r[0]]-1||i>latest[r[0]])return;
+    const mm=_ofSizeMm(r[5]);addSz(recSz,r[0]+'|'+String(r[4]).trim().toLowerCase(),mm==null?'etc':mm,r[6]);
+  });
+  rows.forEach(r=>{const nk=r.bi+'|'+String(r.prod).trim().toLowerCase();[invSz[nk],recSz[nk]].forEach(o=>o&&Object.entries(o).forEach(([z,v])=>{if(z!=='etc'&&v>0)used.add(+z);}));});
+  _ofSizes={w:_OF_WOMEN.filter(z=>used.has(z)),m:_OF_MEN.filter(z=>used.has(z))};
   const arrIdx=_ofWIdx(s.arrYr,s.arrWk);
   rows.forEach(r=>{
     const nk=r.bi+'|'+String(r.prod).trim().toLowerCase();
+    r.invSz=invSz[nk]||{};r.recSz=recSz[nk]||{};
     r.stock=Math.max(0,inv[nk]||0);
     r.wk2=Math.max(0,recent[nk]||0);
     r.wkSales=r.wk2/2;
@@ -9186,24 +9197,64 @@ function _ofCompute(){
   });
   return {rows,K,G,tLen,bLen,arrIdx,latest};
 }
-// 재고 소진 / 입고시점 예상재고 / 영업 로스
-function _ofCalcStock(r,arrIdx){
-  r.arrIdx=arrIdx;
-  r.wksToArr=Math.max(0,arrIdx-r.curIdx-1);           // 입고 전 판매 주수 (최신 데이터 다음 주 ~ 입고 전 주)
-  r.wksLeft=r.wkSales>0?r.stock/r.wkSales:(r.stock>0?Infinity:0);
-  r.outIdx=r.stock<=0?r.curIdx:(r.wkSales>0?r.curIdx+Math.max(1,Math.ceil(r.wksLeft)):null); // 재고가 0이 되는 주
-  r.arrStock=Math.max(0,Math.round(r.stock-r.wkSales*r.wksToArr));
-  r.loss=null;
-  if(r.wkSales>0&&r.wksLeft<r.wksToArr){
-    const from=r.curIdx+Math.floor(r.wksLeft)+1,to=arrIdx-1;
-    if(to>=from)r.loss={from,to,weeks:to-from+1,qty:Math.round(r.wkSales*(r.wksToArr-r.wksLeft))};
+// 재고 소진 / 입고시점 예상재고 / 영업 로스 (o: {stock, wkSales} → 결과 필드 채움, 상품·사이즈 공용)
+function _ofStockCalc(o,curIdx,arrIdx){
+  o.curIdx=curIdx;o.arrIdx=arrIdx;
+  o.wksToArr=Math.max(0,arrIdx-curIdx-1);           // 입고 전 판매 주수 (최신 데이터 다음 주 ~ 입고 전 주)
+  o.wksLeft=o.wkSales>0?o.stock/o.wkSales:(o.stock>0?Infinity:0);
+  o.outIdx=o.stock<=0?curIdx:(o.wkSales>0?curIdx+Math.max(1,Math.ceil(o.wksLeft)):null); // 재고가 0이 되는 주
+  o.arrStock=Math.max(0,Math.round(o.stock-o.wkSales*o.wksToArr));
+  o.loss=null;
+  if(o.wkSales>0&&o.wksLeft<o.wksToArr){
+    const from=curIdx+Math.floor(o.wksLeft)+1,to=arrIdx-1;
+    if(to>=from)o.loss={from,to,weeks:to-from+1,qty:Math.round(o.wkSales*(o.wksToArr-o.wksLeft))};
   }
-  r.note=r.loss?_ofLossTxt(r.loss):'';
+  return o;
 }
+function _ofCalcStock(r,arrIdx){
+  _ofStockCalc(r,r.curIdx,arrIdx);
+  r.note=r.loss?_ofLossTxt(r.loss):'';
+  // 사이즈별 (표시 사이즈 + 기타)
+  r.szSt={};
+  [..._ofSizes.w,..._ofSizes.m,'etc'].forEach(z=>{
+    r.szSt[z]=_ofStockCalc({stock:Math.max(0,(r.invSz[z]||0)),wk2:Math.max(0,r.recSz[z]||0),wkSales:Math.max(0,r.recSz[z]||0)/2},r.curIdx,arrIdx);
+  });
+  r.szLoss=Object.entries(r.szSt).filter(([,o])=>o.loss).map(([z,o])=>({z,txt:_ofLossTxt(o.loss).replace(' 영업 로스',''),o}));
+}
+const _ofSzName=z=>z==='etc'?'기타':String(z);
 function _ofLossTxt(l){
   const a=_ofIdxToYW(l.from),b=_ofIdxToYW(l.to);
   const range=l.from===l.to?`${a.wk}주차`:(a.yr===b.yr?`${a.wk}~${b.wk}주차`:`${String(a.yr).slice(2)}년 ${a.wk}주차~${String(b.yr).slice(2)}년 ${b.wk}주차`);
   return `${range} 영업 로스`;
+}
+function _ofViewName(){return {order:'오더 수량',stock:'현재 재고',wk:'주당 판매',arr:'입고시점 재고',out:'소진 예상'}[_of.szView];}
+// 사이즈 칸 내용 (보기 모드별)
+function _ofSzCell(r,z){
+  const v=_of.szView,f=n=>wonNo(n),o=r.szSt[z]||{stock:0,wkSales:0,arrStock:0,loss:null};
+  const lossTip=o.loss?` · ${_ofLossTxt(o.loss)} (약 ${o.loss.qty}개)`:'';
+  if(v==='order'){
+    const q=z==='etc'?r.etc:r.sz[z];
+    return {html:q?f(q):'-',empty:!q,loss:!!o.loss,tip:`ROUND(${f(r.order)} × ${((r.ratio[z]||0)*100).toFixed(1)}%) = ${f(q)}${lossTip}`};
+  }
+  if(v==='stock')return {html:o.stock?f(o.stock):'-',empty:!o.stock,loss:!!o.loss,tip:`현재 재고 ${f(o.stock)}개${lossTip}`};
+  if(v==='wk')return {html:o.wkSales?(Math.round(o.wkSales*10)/10).toLocaleString():'-',empty:!o.wkSales,loss:!!o.loss,tip:`최근 2주 ${f(o.wk2||0)}개 ÷ 2${lossTip}`};
+  if(v==='arr')return {html:(o.stock||o.wkSales)?f(o.arrStock):'-',empty:!(o.stock||o.wkSales),loss:!!o.loss,tip:`MAX(0, ROUND(${f(o.stock)} − ${Math.round(o.wkSales*10)/10} × ${o.wksToArr}주)) = ${f(o.arrStock)}${lossTip}`};
+  // 소진 예상
+  if(!o.stock&&!o.wkSales)return {html:'-',empty:true,loss:false,tip:'재고·판매 없음'};
+  if(!o.stock)return {html:'없음',empty:false,loss:false,tip:'현재 재고 없음'};
+  if(o.outIdx==null)return {html:'-',empty:true,loss:false,tip:'최근 2주 판매 없음'};
+  if(o.wksLeft>104)return {html:'2년+',empty:false,loss:false,tip:`약 ${Math.round(o.wksLeft)}주분 재고`};
+  const yw=_ofIdxToYW(o.outIdx),cy=_ofIdxToYW(o.curIdx).yr;
+  return {html:'W'+yw.wk+(yw.yr!==cy?`<span style="font-size:9px;opacity:.7"> '${String(yw.yr).slice(2)}</span>`:''),empty:false,loss:!!o.loss,tip:`${_ofWkTxt(o.outIdx)} 소진 (약 ${o.wksLeft.toFixed(1)}주 후)${lossTip}`};
+}
+// 여성/남성 합계 칸 (보기 모드별)
+function _ofGrpSum(r,zs){
+  const v=_of.szView;
+  if(v==='order')return wonNo(zs.reduce((a,z)=>a+r.sz[z],0));
+  if(v==='out'){const n=zs.filter(z=>r.szSt[z]&&r.szSt[z].loss).length;return n?`<span style="color:var(--red)">로스 ${n}</span>`:'-';}
+  const key={stock:'stock',wk:'wkSales',arr:'arrStock'}[v];
+  const t=zs.reduce((a,z)=>a+((r.szSt[z]||{})[key]||0),0);
+  return v==='wk'?(Math.round(t*10)/10).toLocaleString():wonNo(t);
 }
 function _ofOutCell(r){
   if(r.stock<=0)return '<span style="color:var(--red);font-weight:700">재고 없음</span>';
@@ -9253,7 +9304,7 @@ function renderForecast(){
   <div class="kpi-card"><div class="kpi-label">최종 오더수량</div><div class="kpi-val" id="of-kpi-ord" style="color:#059669">${wonNo(totOrd)}개</div><div class="kpi-sub">상품별 추가 오더 % 반영</div></div>
   <div class="kpi-card"><div class="kpi-label">대상 상품</div><div class="kpi-val" id="of-kpi-cnt">${wonNo(res.rows.length)}개</div><div class="kpi-sub">기준 기간 판매 실적 보유</div></div>
   <div class="kpi-card"><div class="kpi-label">판매 목표 기간</div><div class="kpi-val" style="font-size:18px">${res.tLen}${unitTxt}</div><div class="kpi-sub">${_ofPeriodText(s.tYr,s.unit,s.tFrom,s.tTo)}</div></div>
-  <div class="kpi-card"><div class="kpi-label">⚠️ 입고 전 재고 소진</div><div class="kpi-val" id="of-kpi-loss" style="color:var(--red)">${wonNo(res.rows.filter(r=>r.loss).length)}개</div><div class="kpi-sub">입고 ${_ofWkTxt(res.arrIdx)} · 영업 로스 예상</div></div>
+  <div class="kpi-card"><div class="kpi-label">⚠️ 입고 전 재고 소진</div><div class="kpi-val" id="of-kpi-loss" style="color:var(--red)">${wonNo(res.rows.filter(r=>r.loss).length)}개</div><div class="kpi-sub" id="of-kpi-loss-sub">입고 ${_ofWkTxt(res.arrIdx)} · 사이즈 로스 ${wonNo(res.rows.filter(r=>r.szLoss.length).length)}개 상품</div></div>
 </div>
 
 <div class="chart-card" style="margin-bottom:16px">
@@ -9312,7 +9363,7 @@ function renderForecast(){
     <div><b>주당 판매</b> = 최근 2주 판매수량 ÷ 2 (최신 데이터 ${_ofWkTxt(Math.max(...Object.values(res.latest)))} 기준)</div>
     <div><b>재고 소진 예상</b> = 현재 재고 ÷ 주당 판매 (소진까지 주수)</div>
     <div><b>입고시점 예상재고</b> = MAX(0, ROUND(현재 재고 − 주당 판매 × 입고까지 주수))</div>
-    <div><b>비고</b> = 소진까지 주수 &lt; 입고까지 주수 → "○○주차 영업 로스" (소진 ~ 입고 전 주)</div>
+    <div><b>비고</b> = 소진까지 주수 &lt; 입고까지 주수 → "○○주차 영업 로스" (소진 ~ 입고 전 주) · 사이즈별도 같은 방식 (사이즈 재고 ÷ 사이즈 최근 2주 판매)</div>
     <div style="grid-column:1/-1;color:var(--muted);font-size:11px">사이즈 비율 = 기준 기간 해당 상품 사이즈별 판매 ÷ 전체 사이즈 판매 (없으면 전체 기간 → 브랜드 평균 순으로 대체) · 범위 밖·의류·키즈 사이즈는 '기타'로 분리 · 사이즈별 반올림으로 합계가 최종 오더와 1~2개 다를 수 있음</div>
   </div>
 </div>
@@ -9343,34 +9394,40 @@ function _ofTableHtml(isAll){
       <th rowspan="2">#</th>${isAll?'<th rowspan="2">브랜드</th>':''}<th rowspan="2">상품</th>
       <th rowspan="2" class="nr">현재 재고</th><th rowspan="2" class="nr" title="최근 2주 판매 ÷ 2">주당 판매<br><span style="font-weight:400;font-size:10px">(최근 2주)</span></th><th rowspan="2">재고 소진 예상</th><th rowspan="2" class="nr">입고시점<br>예상재고</th><th rowspan="2">비고</th>
       <th rowspan="2" class="nr">기준 판매</th><th rowspan="2" class="nr">예측 수량</th><th rowspan="2" class="nr">추가 오더 %</th><th rowspan="2" class="nr" style="color:#059669">최종 오더</th>
-      <th rowspan="2" class="nr" style="background:${wBg}">여성</th><th rowspan="2" class="nr" style="background:${mBg}">남성</th><th rowspan="2" class="nr">기타</th>
+      <th rowspan="2" class="nr" style="background:${wBg}">여성${_of.szView!=='order'?'<br><span style="font-weight:400;font-size:10px">'+_ofViewName()+'</span>':''}</th><th rowspan="2" class="nr" style="background:${mBg}">남성${_of.szView!=='order'?'<br><span style="font-weight:400;font-size:10px">'+_ofViewName()+'</span>':''}</th><th rowspan="2" class="nr">기타</th>
       ${W.length?`<th colspan="${W.length}" style="text-align:center;background:${wBg};color:#db2777">여성 (220~245)</th>`:''}
       ${M.length?`<th colspan="${M.length}" style="text-align:center;background:${mBg};color:#2563eb">남성 (250~300)</th>`:''}
     </tr>
     <tr>${W.map(z=>`<th ${th2.replace('style="','style="background:'+wBg+';')}>${z}</th>`).join('')}${M.map(z=>`<th ${th2.replace('style="','style="background:'+mBg+';')}>${z}</th>`).join('')}</tr>
   </thead>`;
+  const VIEWS=[['order','오더 수량'],['stock','현재 재고'],['wk','주당 판매'],['arr','입고시점 재고'],['out','소진 예상']];
+  const seg=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+    <span style="font-size:12px;font-weight:600;color:var(--muted)">사이즈별 보기</span>
+    <div class="seg">${VIEWS.map(([k,l])=>`<button class="seg-btn${_of.szView===k?' active':''}" onclick="_ofSet('szView','${k}')">${l}</button>`).join('')}</div>
+    <span style="font-size:11px;color:var(--muted)">빨간 칸 = 입고 전 해당 사이즈 소진 (영업 로스)</span>
+  </div>`;
   const body=_ofRows.map((r,i)=>`<tr data-of-key="${escHtml(r.key)}">${_ofRowCells(r,i,isAll)}</tr>`).join('');
-  return `<div class="table-wrap" style="max-height:620px"><table style="font-size:12px">${head}<tbody>${body}</tbody><tfoot id="of-foot">${_ofFootHtml(isAll)}</tfoot></table></div>`;
+  return `${seg}<div class="table-wrap" style="max-height:620px"><table style="font-size:12px">${head}<tbody>${body}</tbody><tfoot id="of-foot">${_ofFootHtml(isAll)}</tfoot></table></div>`;
 }
 function _ofRowCells(r,i,isAll){
   const s=_of,K=_ofK(),G=s.growth/100;
   const f=n=>wonNo(n);
-  const tip=z=>`ROUND(${f(r.order)} × ${((r.ratio[z]||0)*100).toFixed(1)}%) = ${f(r.sz[z])}`;
-  const zc=(z,bg)=>`<td class="nr" style="background:${bg};color:${r.sz[z]?'var(--ink)':'var(--hint)'}" title="${tip(z)}">${r.sz[z]?f(r.sz[z]):'-'}</td>`;
+  const zc=(z,bg)=>{const c=_ofSzCell(r,z);return `<td class="nr" style="background:${c.loss?'rgba(239,68,68,.14)':bg};color:${c.loss?'var(--red)':(c.empty?'var(--hint)':'var(--ink)')};${c.loss?'font-weight:700;':''}white-space:nowrap" title="${escHtml(c.tip)}">${c.html}</td>`;};
+  const grp=(zs)=>_ofGrpSum(r,zs);
   return `<td style="color:var(--muted)">${i+1}</td>${isAll?`<td style="white-space:nowrap;color:${BCOLORS[r.bi]};font-weight:600">${BNAMES[r.bi]}</td>`:''}
     <td style="min-width:180px"><div style="font-weight:600">${escHtml(r.prod)}</div><div style="font-size:10px;color:var(--muted)">사이즈 비율: ${r.src}</div></td>
     <td class="nr" style="font-weight:600">${f(r.stock)}</td>
     <td class="nr" title="최근 2주 ${f(r.wk2)}개 ÷ 2">${r.wkSales?(Math.round(r.wkSales*10)/10).toLocaleString():'-'}</td>
     <td style="white-space:nowrap;font-size:11px">${_ofOutCell(r)}</td>
     <td class="nr" style="font-weight:700;color:${r.arrStock>0?'var(--ink)':'var(--red)'}" title="MAX(0, ROUND(${f(r.stock)} − ${Math.round(r.wkSales*10)/10} × ${r.wksToArr}주)) = ${f(r.arrStock)}">${f(r.arrStock)}</td>
-    <td style="white-space:nowrap;font-size:11px;font-weight:700;color:var(--red)">${r.loss?escHtml(r.note)+`<div style="font-weight:500;color:var(--muted);font-size:10px">${r.loss.weeks}주 · 약 ${f(r.loss.qty)}개 판매 기회 손실</div>`:''}</td>
+    <td style="font-size:11px;font-weight:700;color:var(--red);min-width:150px;max-width:240px">${r.loss?`<div style="white-space:nowrap">${escHtml(r.note)}</div><div style="font-weight:500;color:var(--muted);font-size:10px">${r.loss.weeks}주 · 약 ${f(r.loss.qty)}개 판매 기회 손실</div>`:''}${r.szLoss.length?`<div style="font-weight:600;font-size:10.5px;color:#ea580c;margin-top:${r.loss?4:0}px;line-height:1.45" title="${escHtml(r.szLoss.map(x=>_ofSzName(x.z)+': '+x.txt+' 영업 로스 (약 '+x.o.loss.qty+'개)').join('\n'))}">사이즈 로스 ${r.szLoss.length}개: ${r.szLoss.map(x=>_ofSzName(x.z)).join(' · ')}</div>`:''}</td>
     <td class="nr">${f(r.base)}</td>
     <td class="nr" style="color:var(--sky);font-weight:600" title="ROUND(${f(r.base)} × ${K.toFixed(4)} × ${s.growth}%) = ${f(r.fc)}">${f(r.fc)}</td>
     <td class="nr"><input type="number" min="0" step="5" value="${r.pct}" onchange="_ofSetPct(this)" style="width:70px;padding:5px 6px;font-size:12px;border:1px solid ${r.pct!==100?'#059669':'var(--hairline)'};border-radius:6px;background:var(--canvas);color:var(--ink);text-align:right;font-family:inherit">%</td>
     <td class="nr" style="font-weight:800;color:#059669" title="ROUND(${f(r.fc)} × ${r.pct}%) = ${f(r.order)}">${f(r.order)}</td>
-    <td class="nr" style="background:rgba(236,72,153,.07);font-weight:700" title="여성 사이즈 합계">${f(r.wSum)}</td>
-    <td class="nr" style="background:rgba(37,99,235,.07);font-weight:700" title="남성 사이즈 합계">${f(r.mSum)}</td>
-    <td class="nr" style="color:${r.etc?'var(--ink)':'var(--hint)'}" title="ROUND(${f(r.order)} × ${((r.ratio.etc||0)*100).toFixed(1)}%) = ${f(r.etc)}">${r.etc?f(r.etc):'-'}</td>
+    <td class="nr" style="background:rgba(236,72,153,.07);font-weight:700" title="여성 사이즈 합계">${grp(_ofSizes.w)}</td>
+    <td class="nr" style="background:rgba(37,99,235,.07);font-weight:700" title="남성 사이즈 합계">${grp(_ofSizes.m)}</td>
+    ${zc('etc','transparent')}
     ${_ofSizes.w.map(z=>zc(z,'rgba(236,72,153,.04)')).join('')}${_ofSizes.m.map(z=>zc(z,'rgba(37,99,235,.04)')).join('')}`;
 }
 function _ofFootHtml(isAll){
@@ -9378,10 +9435,15 @@ function _ofFootHtml(isAll){
   const sum=fn=>wonNo(R.reduce((a,r)=>a+fn(r),0));
   const st='position:sticky;bottom:0;background:var(--card);font-weight:800;border-top:2px solid var(--hairline)';
   return `<tr><td style="${st}" colspan="${isAll?3:2}">합계 · ${R.length}개 상품</td>
-    <td class="nr" style="${st}">${sum(r=>r.stock)}</td><td class="nr" style="${st}">${wonNo(Math.round(R.reduce((a,r)=>a+r.wkSales,0)))}</td><td style="${st}"></td><td class="nr" style="${st}">${sum(r=>r.arrStock)}</td><td style="${st};color:var(--red);font-size:11px">${R.filter(r=>r.loss).length?'로스 '+R.filter(r=>r.loss).length+'개 상품':''}</td>
+    <td class="nr" style="${st}">${sum(r=>r.stock)}</td><td class="nr" style="${st}">${wonNo(Math.round(R.reduce((a,r)=>a+r.wkSales,0)))}</td><td style="${st}"></td><td class="nr" style="${st}">${sum(r=>r.arrStock)}</td><td style="${st};color:var(--red);font-size:11px;white-space:nowrap">${R.filter(r=>r.loss).length?'로스 '+R.filter(r=>r.loss).length+'개 상품':''}${R.filter(r=>r.szLoss.length).length?`<div style="color:#ea580c">사이즈 로스 ${R.filter(r=>r.szLoss.length).length}개 상품</div>`:''}</td>
     <td class="nr" style="${st}">${sum(r=>r.base)}</td><td class="nr" style="${st};color:var(--sky)">${sum(r=>r.fc)}</td><td style="${st}"></td>
-    <td class="nr" style="${st};color:#059669">${sum(r=>r.order)}</td><td class="nr" style="${st}">${sum(r=>r.wSum)}</td><td class="nr" style="${st}">${sum(r=>r.mSum)}</td><td class="nr" style="${st}">${sum(r=>r.etc)}</td>
-    ${[..._ofSizes.w,..._ofSizes.m].map(z=>`<td class="nr" style="${st}">${sum(r=>r.sz[z])}</td>`).join('')}</tr>`;
+    <td class="nr" style="${st};color:#059669">${sum(r=>r.order)}</td>${(()=>{
+      const v=_of.szView,ALL=[..._ofSizes.w,..._ofSizes.m];
+      const val=(r,z)=>v==='order'?(z==='etc'?r.etc:r.sz[z]):v==='out'?((r.szSt[z]&&r.szSt[z].loss)?1:0):((r.szSt[z]||{})[{stock:'stock',wk:'wkSales',arr:'arrStock'}[v]]||0);
+      const fmt=n=>v==='out'?(n?`<span style="color:var(--red)">로스 ${n}</span>`:'-'):v==='wk'?(Math.round(n*10)/10).toLocaleString():wonNo(n);
+      const tot=zs=>fmt(R.reduce((a,r)=>a+zs.reduce((b,z)=>b+val(r,z),0),0));
+      return `<td class="nr" style="${st}">${tot(_ofSizes.w)}</td><td class="nr" style="${st}">${tot(_ofSizes.m)}</td><td class="nr" style="${st}">${tot(['etc'])}</td>`+ALL.map(z=>`<td class="nr" style="${st}">${tot([z])}</td>`).join('');
+    })()}</tr>`;
 }
 function _ofK(){const s=_of;const b=s.bTo-s.bFrom+1;return b>0?(s.tTo-s.tFrom+1)/b:0;}
 function _ofSet(k,v){
@@ -9411,6 +9473,7 @@ function _ofRefreshKpi(){
   const set=(id,v,u)=>{const el=document.getElementById(id);if(el)el.textContent=wonNo(v)+u;};
   set('of-kpi-base',R.reduce((a,r)=>a+r.base,0),'개');set('of-kpi-fc',R.reduce((a,r)=>a+r.fc,0),'개');
   set('of-kpi-ord',R.reduce((a,r)=>a+r.order,0),'개');set('of-kpi-cnt',R.length,'개');set('of-kpi-loss',R.filter(r=>r.loss).length,'개');
+  const ls=document.getElementById('of-kpi-loss-sub');if(ls)ls.textContent=`입고 ${_ofWkTxt(_ofWIdx(_of.arrYr,_of.arrWk))} · 사이즈 로스 ${wonNo(R.filter(r=>r.szLoss.length).length)}개 상품`;
 }
 function _ofSetPct(inp){
   const tr=inp.closest('tr');const key=tr.dataset.ofKey;
@@ -9486,7 +9549,7 @@ function exportForecastXlsx(){
     put(ws,c('out'),txt(r.stock<=0?'재고 없음':(r.outIdx==null?'판매 없음':(r.wksLeft>104?'2년 이상':_ofWkTxt(r.outIdx)))));
     put(ws,c('toArr'),num(r.wksToArr));
     put(ws,c('arrStock'),fx(`MAX(0,ROUND(${c('stock')}-${c('wk')}*${c('toArr')},0))`,r.arrStock));
-    put(ws,c('note'),txt(r.loss?`${r.note} (${r.loss.weeks}주, 약 ${r.loss.qty}개)`:''));
+    put(ws,c('note'),txt([r.loss?`${r.note} (${r.loss.weeks}주, 약 ${r.loss.qty}개)`:'',r.szLoss.length?'사이즈 로스: '+r.szLoss.map(x=>`${_ofSzName(x.z)}(${x.txt})`).join(', '):''].filter(Boolean).join(' / ')));
     put(ws,c('base'),num(r.base));
     put(ws,c('fc'),fx(`ROUND(${c('base')}*$B$7*$B$8,0)`,r.fc));
     put(ws,c('pct'),num(r.pct/100,'0%'));
@@ -9530,9 +9593,34 @@ function exportForecastXlsx(){
     ['사이즈 비율 출처','','기준 기간 → (없으면) 전체 기간 → (없으면) 브랜드 평균'],
     ['참고','','사이즈별 반올림으로 사이즈 합계가 최종 오더수량과 1~2개 다를 수 있음'],
   ];
+  // 사이즈별 재고 시트 (상품×사이즈 1행, 수식 포함)
+  const wz={};const ZH=['순위','브랜드','상품','사이즈','구분','현재 재고','주당 판매 (최근 2주 ÷ 2)','소진까지 주수','재고 소진 예상','입고까지 주수','입고시점 예상재고','비고','사이즈 오더수량'];
+  put(wz,'A1',txt(`사이즈별 재고 · 소진 예상 — 입고 ${_ofWkTxt(_ofWIdx(s.arrYr,s.arrWk))}`));
+  ZH.forEach((t,i)=>put(wz,enc(i)+'3',txt(t)));
+  let zn=4;
+  R.forEach((r,i)=>{
+    [..._ofSizes.w,..._ofSizes.m,'etc'].forEach(z=>{
+      const o=r.szSt[z],q=z==='etc'?r.etc:r.sz[z];
+      if(!o||(!o.stock&&!o.wkSales&&!q))return;
+      const n=zn++,ordCell=z==='etc'?C.etc:C['z'+z];
+      put(wz,'A'+n,num(i+1));put(wz,'B'+n,txt(BNAMES[r.bi]));put(wz,'C'+n,txt(r.prod));put(wz,'D'+n,txt(_ofSzName(z)));
+      put(wz,'E'+n,txt(z==='etc'?'기타':(z<=245?'여성':'남성')));
+      put(wz,'F'+n,num(o.stock));put(wz,'G'+n,num(o.wkSales,'0.0'));
+      put(wz,'H'+n,fx(`IF(G${n}>0,F${n}/G${n},"판매 없음")`,o.wkSales>0?o.wksLeft:'판매 없음','0.0'));
+      put(wz,'I'+n,txt(!o.stock?'재고 없음':(o.outIdx==null?'판매 없음':(o.wksLeft>104?'2년 이상':_ofWkTxt(o.outIdx)))));
+      put(wz,'J'+n,num(o.wksToArr));
+      put(wz,'K'+n,fx(`MAX(0,ROUND(F${n}-G${n}*J${n},0))`,o.arrStock));
+      put(wz,'L'+n,txt(o.loss?`${_ofLossTxt(o.loss)} (${o.loss.weeks}주, 약 ${o.loss.qty}개)`:''));
+      put(wz,'M'+n,fx(`'오더예측'!${ordCell}${R0+i}`,q));
+    });
+  });
+  wz['!ref']=`A1:M${Math.max(3,zn-1)}`;wz['!cols']=[6,16,36,8,6,10,12,11,14,11,13,34,12].map(w=>({wch:w}));
+  wz['!autofilter']={ref:`A3:M${Math.max(3,zn-1)}`};
+  guide.push([],['사이즈별 재고 시트','=MAX(0, ROUND(사이즈 재고 − 사이즈 주당판매 × 입고까지주수, 0))','사이즈별 재고(INV)와 사이즈별 최근 2주 판매로 소진·로스 계산 · 사이즈 오더수량은 오더예측 시트 참조']);
   const wg=XLSX.utils.aoa_to_sheet(guide);wg['!cols']=[{wch:18},{wch:52},{wch:70}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'오더예측');
+  XLSX.utils.book_append_sheet(wb,wz,'사이즈별재고');
   XLSX.utils.book_append_sheet(wb,wr,'사이즈비율');
   XLSX.utils.book_append_sheet(wb,wg,'계산방법');
   const d=new Date(),ymd=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
