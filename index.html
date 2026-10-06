@@ -894,6 +894,7 @@ body[data-db1-mode="weekly"] [data-period="monthly"]{display:none !important}
     <!-- <button class="nav-item" onclick="setTab('churn',this)">🔄 신규/이탈</button> -->
     <!-- <button class="nav-item" onclick="setTab('restock',this)">🔄 재입고 우선순위</button> -->
     <button class="nav-item" data-navkey="inbound" onclick="setTab('inbound',this)">📦 입고 현황</button>
+    <button class="nav-item" data-navkey="forecast" onclick="setTab('forecast',this)">🔮 오더 예측</button>
   </nav>
   <div class="topbar-right">
     <!-- 통합 검색 트리거 (검색 인풋 형태로 노출, 클릭/단축키로 모달 열기) -->
@@ -964,6 +965,7 @@ body[data-db1-mode="weekly"] [data-period="monthly"]{display:none !important}
   <button class="nav-item more-sheet-item" id="nav-margin-more" data-navkey="margin" onclick="setTab('margin',this);closeMoreSheet()" style="display:none">💰 마진 분석</button>
   <button class="nav-item more-sheet-item" data-navkey="deadstock" onclick="setTab('deadstock',this);closeMoreSheet()">💀 데드스톡</button>
   <button class="nav-item more-sheet-item" data-navkey="inbound" onclick="setTab('inbound',this);closeMoreSheet()">📦 입고 현황</button>
+  <button class="nav-item more-sheet-item" data-navkey="forecast" onclick="setTab('forecast',this);closeMoreSheet()">🔮 오더 예측</button>
 </div>
 <nav class="bottom-nav" id="bottom-nav">
   <button class="bottom-nav-item nav-item active" data-navkey="goal" onclick="setTab('goal',this)"><span class="bni-ico">🎯</span><span class="bni-label">목표매출</span></button>
@@ -2442,6 +2444,7 @@ function apply(){
 
   // 입고 현황·목표매출은 매출 데이터 없이도 독립 렌더링
   if(activeTab==='inbound'){renderInbound(f);return;}
+  if(activeTab==='forecast'){renderForecast();return;}
   if(activeTab==='goal'){renderGoalSales();return;}
 
   if(!filtered.length&&!filteredP.length){
@@ -9039,6 +9042,370 @@ function calcBrandSellThrough(bi,yr){
   const rate=denom>0?Math.min(100,sales/denom*100):0;
   return{openStock:stock,ins,sales,rate};
 }
+// ══ 🔮 오더 예측 ══
+// 기준 기간(기본: 전년 동기간) 판매수량 × 기간 계수 × 전체 성장률 = 예측 수량 → × 상품별 추가 오더 % = 최종 오더 → 사이즈 비율로 분배
+const _OF_WOMEN=[220,225,230,235,240,245];
+const _OF_MEN=[250,255,260,265,270,275,280,285,290,295,300];
+let _of=null;      // 설정 상태
+let _ofRows=[];    // 계산 결과 (엑셀 출력/행 갱신용)
+let _ofSizes={w:[],m:[]}; // 표에 표시 중인 사이즈 컬럼
+let _ofPct={};     // 상품별 추가 오더 % (key: bi|prod)
+try{_ofPct=JSON.parse(localStorage.getItem('of_pct')||'{}')||{};}catch(e){_ofPct={};}
+function _ofSavePct(){try{localStorage.setItem('of_pct',JSON.stringify(_ofPct));}catch(e){}}
+// 사이즈 표기 → mm(220~300). "230", "37 (235)", "230 (36)", "36(230)" 지원. 범위 표기·의류·키즈 사이즈는 null(기타)
+function _ofSizeMm(sz){
+  const nums=(String(sz).match(/\d+(\.\d+)?/g)||[]).map(Number).filter(n=>Number.isInteger(n)&&n>=200&&n<=320&&n%5===0);
+  if(nums.length!==1)return null;
+  return (nums[0]>=220&&nums[0]<=300)?nums[0]:null;
+}
+const _ofExcl=r=>r[2]===12&&r[3]===1; // ISO 주차 오류 행 (다른 탭과 동일하게 제외)
+function _ofInPeriod(r,yr,unit,from,to){
+  if(r[1]!==yr||_ofExcl(r))return false;
+  const v=unit==='mo'?r[2]:r[3];
+  return v>=from&&v<=to;
+}
+function _ofPeriodText(yr,unit,from,to){
+  if(unit==='mo')return from===to?`${yr}년 ${from}월`:`${yr}년 ${from}월 ~ ${to}월`;
+  const d=w=>{const l=wkLabel(yr,w);return Array.isArray(l)?l[1].replace(/[()]/g,''):'';};
+  const s=d(from).split('~')[0],e=d(to).split('~')[1]||'';
+  return `${yr}년 W${from} ~ W${to}${s&&e?` (${s}~${e})`:''}`;
+}
+function _ofInitState(){
+  const bSel=document.getElementById('f-brand').value;
+  const bIdx=bSel==='ALL'?-1:parseInt(bSel);
+  const rows=PROD_DATA.filter(r=>(bIdx<0||r[0]===bIdx)&&!_ofExcl(r));
+  const maxYr=rows.length?Math.max(...rows.map(r=>r[1])):new Date().getFullYear();
+  const maxWk=Math.max(0,...rows.filter(r=>r[1]===maxYr).map(r=>r[3]));
+  // 기본 판매 목표 기간: 최근 데이터 다음 주부터 12주 (연말을 넘기면 다음 해 W1~W12)
+  let tYr=maxYr,tFrom=maxWk+1;
+  if(tFrom>52){tYr++;tFrom=1;}
+  const tTo=Math.min(52,tFrom+11);
+  return {b:bSel,gB:bSel,unit:'wk',tYr,tFrom,tTo,auto:true,bYr:tYr-1,bFrom:tFrom,bTo:tTo,growth:100,bulk:110,q:''};
+}
+function _ofSyncBase(){
+  if(!_of.auto)return;
+  _of.bYr=_of.tYr-1;_of.bFrom=_of.tFrom;_of.bTo=_of.tTo;
+}
+function _ofCompute(){
+  const s=_of;
+  const bIdx=s.b==='ALL'?-1:parseInt(s.b);
+  const brOk=r=>bIdx<0||r[0]===bIdx;
+  const tLen=s.tTo-s.tFrom+1,bLen=s.bTo-s.bFrom+1;
+  const K=bLen>0?tLen/bLen:0,G=s.growth/100;
+  // 기준 기간 상품별 판매수량
+  const base={};
+  PROD_DATA.forEach(r=>{
+    if(!brOk(r)||!_ofInPeriod(r,s.bYr,s.unit,s.bFrom,s.bTo))return;
+    const k=r[0]+'|'+r[4];
+    if(!base[k])base[k]={bi:r[0],prod:r[4],q:0};
+    base[k].q+=r[5];
+  });
+  // 사이즈 분포: 기준 기간 상품별 / 전체 기간 상품별 / 기준 기간 브랜드 평균
+  const szBase={},szAll={},szBrand={};
+  const add=(o,k,mm,q)=>{if(!o[k])o[k]={};const key=mm==null?'etc':mm;o[k][key]=(o[k][key]||0)+q;};
+  SZ_DATA.forEach(r=>{
+    if(!brOk(r)||_ofExcl(r))return;
+    const k=r[0]+'|'+String(r[4]).trim().toLowerCase();
+    const mm=_ofSizeMm(r[5]);
+    add(szAll,k,mm,r[6]);
+    if(_ofInPeriod(r,s.bYr,s.unit,s.bFrom,s.bTo)){add(szBase,k,mm,r[6]);add(szBrand,String(r[0]),mm,r[6]);}
+  });
+  const toRatio=d=>{
+    if(!d)return null;
+    const pos={};let t=0;
+    Object.entries(d).forEach(([k,v])=>{if(v>0){pos[k]=v;t+=v;}});
+    if(t<=0)return null;
+    Object.keys(pos).forEach(k=>pos[k]/=t);
+    return pos;
+  };
+  const rows=Object.values(base).filter(x=>x.q>0).map(x=>{
+    const key=x.bi+'|'+x.prod;
+    const nk=x.bi+'|'+String(x.prod).trim().toLowerCase();
+    let ratio=toRatio(szBase[nk]),src='기준 기간';
+    if(!ratio){ratio=toRatio(szAll[nk]);src='전체 기간';}
+    if(!ratio){ratio=toRatio(szBrand[String(x.bi)]);src='브랜드 평균';}
+    if(!ratio){ratio={};src='없음';}
+    return {key,bi:x.bi,prod:x.prod,base:x.q,ratio,src};
+  }).sort((a,b)=>b.base-a.base);
+  // 표시할 사이즈 컬럼: 범위 내에서 데이터가 있는 사이즈만
+  const used=new Set();rows.forEach(r=>Object.keys(r.ratio).forEach(k=>{if(k!=='etc')used.add(+k);}));
+  _ofSizes={w:_OF_WOMEN.filter(z=>used.has(z)),m:_OF_MEN.filter(z=>used.has(z))};
+  rows.forEach(r=>_ofCalcRow(r,K,G));
+  return {rows,K,G,tLen,bLen};
+}
+function _ofCalcRow(r,K,G){
+  r.pct=_ofPct[r.key]!=null?_ofPct[r.key]:100;
+  r.fc=Math.round(r.base*K*G);
+  r.order=Math.round(r.fc*r.pct/100);
+  r.sz={};
+  [..._ofSizes.w,..._ofSizes.m].forEach(z=>{r.sz[z]=Math.round(r.order*(r.ratio[z]||0));});
+  r.etc=Math.round(r.order*(r.ratio.etc||0));
+  r.wSum=_ofSizes.w.reduce((a,z)=>a+r.sz[z],0);
+  r.mSum=_ofSizes.m.reduce((a,z)=>a+r.sz[z],0);
+}
+function renderForecast(){
+  destroyCharts();
+  const gB=document.getElementById('f-brand').value;
+  if(!_of)_of=_ofInitState();
+  else if(_of.gB!==gB){_of.b=gB;_of.gB=gB;} // 상단 브랜드 필터 변경 시 반영
+  const s=_of;
+  const res=_ofCompute();
+  _ofRows=res.rows;
+  const yrs=[...new Set(PROD_DATA.map(r=>r[1]))].sort();
+  const allYrs=[...new Set([...yrs,yrs[yrs.length-1]+1,s.tYr,s.bYr])].sort();
+  const maxP=s.unit==='mo'?12:53;
+  const pOpt=(yr,sel)=>Array.from({length:maxP},(_,i)=>i+1).map(v=>{
+    let lbl=s.unit==='mo'?`${v}월`:`W${v}`;
+    if(s.unit==='wk'){const l=wkLabel(yr,v);if(Array.isArray(l))lbl+=' '+l[1];}
+    return `<option value="${v}"${v===sel?' selected':''}>${lbl}</option>`;
+  }).join('');
+  const yOpt=sel=>allYrs.map(y=>`<option value="${y}"${y===sel?' selected':''}>${y}년</option>`).join('');
+  const bOpt=['ALL',0,1,2,3].map(v=>`<option value="${v}"${String(v)===String(s.b)?' selected':''}>${v==='ALL'?'전체 브랜드':BNAMES[v]}</option>`).join('');
+  const unitTxt=s.unit==='mo'?'개월':'주';
+  const lbl='font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px';
+  const numIn='padding:8px 10px;font-size:13px;border:1px solid var(--hairline);border-radius:8px;background:var(--canvas);color:var(--ink);width:84px;font-family:inherit;text-align:right';
+  const totBase=res.rows.reduce((a,r)=>a+r.base,0),totFc=res.rows.reduce((a,r)=>a+r.fc,0),totOrd=res.rows.reduce((a,r)=>a+r.order,0);
+  const isAll=s.b==='ALL';
+  document.getElementById('content').innerHTML=`
+<div class="kpi-grid" style="grid-template-columns:repeat(5,minmax(0,1fr))">
+  <div class="kpi-card accent"><div class="kpi-label">기준 기간 판매수량</div><div class="kpi-val" id="of-kpi-base">${wonNo(totBase)}개</div><div class="kpi-sub">${_ofPeriodText(s.bYr,s.unit,s.bFrom,s.bTo)}</div></div>
+  <div class="kpi-card"><div class="kpi-label">예측 판매수량</div><div class="kpi-val" id="of-kpi-fc" style="color:var(--sky)">${wonNo(totFc)}개</div><div class="kpi-sub">기간 계수 ${res.K.toFixed(2)} × 성장률 ${s.growth}%</div></div>
+  <div class="kpi-card"><div class="kpi-label">최종 오더수량</div><div class="kpi-val" id="of-kpi-ord" style="color:#059669">${wonNo(totOrd)}개</div><div class="kpi-sub">상품별 추가 오더 % 반영</div></div>
+  <div class="kpi-card"><div class="kpi-label">대상 상품</div><div class="kpi-val">${wonNo(res.rows.length)}개</div><div class="kpi-sub">기준 기간 판매 실적 보유</div></div>
+  <div class="kpi-card"><div class="kpi-label">판매 목표 기간</div><div class="kpi-val" style="font-size:18px">${res.tLen}${unitTxt}</div><div class="kpi-sub">${_ofPeriodText(s.tYr,s.unit,s.tFrom,s.tTo)}</div></div>
+</div>
+
+<div class="chart-card" style="margin-bottom:16px">
+  <div class="chart-header">
+    <div><div class="chart-title">⚙️ 예측 조건 설정</div><div class="chart-sub">조건을 바꾸면 바로 다시 계산됩니다 · 상품별 추가 오더 %는 이 브라우저에 저장됩니다</div></div>
+    <div class="seg">
+      <button class="seg-btn${s.unit==='wk'?' active':''}" onclick="_ofSet('unit','wk')">주차 기준</button>
+      <button class="seg-btn${s.unit==='mo'?' active':''}" onclick="_ofSet('unit','mo')">월 기준</button>
+    </div>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:18px 28px;align-items:flex-end">
+    <div><div style="${lbl}">브랜드</div><select onchange="_ofSet('b',this.value)">${bOpt}</select></div>
+    <div>
+      <div style="${lbl}">🎯 판매 목표 기간 (희망 판매 일정)</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select onchange="_ofSet('tYr',+this.value)">${yOpt(s.tYr)}</select>
+        <select onchange="_ofSet('tFrom',+this.value)">${pOpt(s.tYr,s.tFrom)}</select><span style="color:var(--muted)">~</span>
+        <select onchange="_ofSet('tTo',+this.value)">${pOpt(s.tYr,s.tTo)}</select>
+      </div>
+    </div>
+    <div>
+      <div style="${lbl};display:flex;align-items:center;gap:10px">📚 기준 판매 기간
+        <label style="display:inline-flex;align-items:center;gap:4px;font-weight:600;color:var(--ink);cursor:pointer"><input type="checkbox"${s.auto?' checked':''} onchange="_ofSet('auto',this.checked)">전년 동기간 자동</label>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select ${s.auto?'disabled':''} onchange="_ofSet('bYr',+this.value)">${yOpt(s.bYr)}</select>
+        <select ${s.auto?'disabled':''} onchange="_ofSet('bFrom',+this.value)">${pOpt(s.bYr,s.bFrom)}</select><span style="color:var(--muted)">~</span>
+        <select ${s.auto?'disabled':''} onchange="_ofSet('bTo',+this.value)">${pOpt(s.bYr,s.bTo)}</select>
+      </div>
+    </div>
+    <div><div style="${lbl}">전체 성장률</div><div style="display:flex;align-items:center;gap:4px"><input type="number" min="0" step="5" value="${s.growth}" style="${numIn}" onchange="_ofSet('growth',Math.max(0,+this.value||0))"><span style="color:var(--muted)">%</span></div></div>
+    <div><div style="${lbl}">추가 오더 % 일괄 적용</div><div style="display:flex;align-items:center;gap:4px">
+      <input type="number" min="0" step="5" value="${s.bulk}" id="of-bulk" style="${numIn}"><span style="color:var(--muted)">%</span>
+      <button onclick="_ofBulk()" style="padding:8px 12px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface);color:var(--ink);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">전체 적용</button>
+      <button onclick="_ofBulk(100)" style="padding:8px 12px;border:1px solid var(--hairline);border-radius:8px;background:transparent;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">100%로 초기화</button>
+    </div></div>
+  </div>
+</div>
+
+<div class="chart-card" style="margin-bottom:16px;padding-block:18px">
+  <div class="chart-title" style="font-size:14px;margin-bottom:8px">📐 계산식</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:6px 24px;font-size:12px;line-height:1.7;color:var(--ink)">
+    <div><b>기간 계수</b> = 목표 기간 길이 ÷ 기준 기간 길이 = ${res.tLen} ÷ ${res.bLen} = <b>${res.K.toFixed(4)}</b></div>
+    <div><b>예측 수량</b> = ROUND(기준 판매수량 × 기간 계수 × 전체 성장률 ${s.growth}%)</div>
+    <div><b>최종 오더</b> = ROUND(예측 수량 × 추가 오더 %)</div>
+    <div><b>사이즈별 오더</b> = ROUND(최종 오더 × 사이즈 비율) · 여성 220~245 / 남성 250~300</div>
+    <div style="grid-column:1/-1;color:var(--muted);font-size:11px">사이즈 비율 = 기준 기간 해당 상품 사이즈별 판매 ÷ 전체 사이즈 판매 (없으면 전체 기간 → 브랜드 평균 순으로 대체) · 범위 밖·의류·키즈 사이즈는 '기타'로 분리 · 사이즈별 반올림으로 합계가 최종 오더와 1~2개 다를 수 있음</div>
+  </div>
+</div>
+
+<div class="table-card">
+  <div class="chart-header" style="flex-wrap:wrap;gap:10px">
+    <div><div class="chart-title">📦 상품별 · 사이즈별 오더 예측</div><div class="chart-sub">기준 판매수량 내림차순 · 추가 오더 % 칸을 직접 수정하세요 · 셀에 마우스를 올리면 계산식 확인</div></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="text" placeholder="상품 검색" value="${escHtml(s.q)}" oninput="_ofFilter(this.value)" style="width:180px">
+      <button onclick="exportForecastXlsx()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">📥 엑셀 (수식 포함)</button>
+    </div>
+  </div>
+  ${res.rows.length?_ofTableHtml(isAll):`<div class="empty"><div class="empty-icon">🔍</div>기준 기간(${_ofPeriodText(s.bYr,s.unit,s.bFrom,s.bTo)})에 판매 데이터가 없습니다</div>`}
+</div>`;
+  if(s.q)_ofFilter(s.q);
+}
+function _ofTableHtml(isAll){
+  const W=_ofSizes.w,M=_ofSizes.m;
+  const wBg='rgba(236,72,153,.07)',mBg='rgba(37,99,235,.07)';
+  const th2=`style="text-align:right;padding:6px 8px;font-size:11px;top:37px"`;
+  const head=`<thead>
+    <tr>
+      <th rowspan="2">#</th>${isAll?'<th rowspan="2">브랜드</th>':''}<th rowspan="2">상품</th>
+      <th rowspan="2" class="nr">기준 판매</th><th rowspan="2" class="nr">예측 수량</th><th rowspan="2" class="nr">추가 오더 %</th><th rowspan="2" class="nr" style="color:#059669">최종 오더</th>
+      <th rowspan="2" class="nr" style="background:${wBg}">여성</th><th rowspan="2" class="nr" style="background:${mBg}">남성</th><th rowspan="2" class="nr">기타</th>
+      ${W.length?`<th colspan="${W.length}" style="text-align:center;background:${wBg};color:#db2777">여성 (220~245)</th>`:''}
+      ${M.length?`<th colspan="${M.length}" style="text-align:center;background:${mBg};color:#2563eb">남성 (250~300)</th>`:''}
+    </tr>
+    <tr>${W.map(z=>`<th ${th2.replace('style="','style="background:'+wBg+';')}>${z}</th>`).join('')}${M.map(z=>`<th ${th2.replace('style="','style="background:'+mBg+';')}>${z}</th>`).join('')}</tr>
+  </thead>`;
+  const body=_ofRows.map((r,i)=>`<tr data-of-key="${escHtml(r.key)}" data-of-name="${escHtml(String(r.prod).toLowerCase())}">${_ofRowCells(r,i,isAll)}</tr>`).join('');
+  return `<div class="table-wrap" style="max-height:620px"><table style="font-size:12px">${head}<tbody>${body}</tbody><tfoot id="of-foot">${_ofFootHtml(isAll)}</tfoot></table></div>`;
+}
+function _ofRowCells(r,i,isAll){
+  const s=_of,K=_ofK(),G=s.growth/100;
+  const f=n=>wonNo(n);
+  const tip=z=>`ROUND(${f(r.order)} × ${((r.ratio[z]||0)*100).toFixed(1)}%) = ${f(r.sz[z])}`;
+  const zc=(z,bg)=>`<td class="nr" style="background:${bg};color:${r.sz[z]?'var(--ink)':'var(--hint)'}" title="${tip(z)}">${r.sz[z]?f(r.sz[z]):'-'}</td>`;
+  return `<td style="color:var(--muted)">${i+1}</td>${isAll?`<td style="white-space:nowrap;color:${BCOLORS[r.bi]};font-weight:600">${BNAMES[r.bi]}</td>`:''}
+    <td style="min-width:180px"><div style="font-weight:600">${escHtml(r.prod)}</div><div style="font-size:10px;color:var(--muted)">사이즈 비율: ${r.src}</div></td>
+    <td class="nr">${f(r.base)}</td>
+    <td class="nr" style="color:var(--sky);font-weight:600" title="ROUND(${f(r.base)} × ${K.toFixed(4)} × ${s.growth}%) = ${f(r.fc)}">${f(r.fc)}</td>
+    <td class="nr"><input type="number" min="0" step="5" value="${r.pct}" onchange="_ofSetPct(this)" style="width:70px;padding:5px 6px;font-size:12px;border:1px solid ${r.pct!==100?'#059669':'var(--hairline)'};border-radius:6px;background:var(--canvas);color:var(--ink);text-align:right;font-family:inherit">%</td>
+    <td class="nr" style="font-weight:800;color:#059669" title="ROUND(${f(r.fc)} × ${r.pct}%) = ${f(r.order)}">${f(r.order)}</td>
+    <td class="nr" style="background:rgba(236,72,153,.07);font-weight:700" title="여성 사이즈 합계">${f(r.wSum)}</td>
+    <td class="nr" style="background:rgba(37,99,235,.07);font-weight:700" title="남성 사이즈 합계">${f(r.mSum)}</td>
+    <td class="nr" style="color:${r.etc?'var(--ink)':'var(--hint)'}" title="ROUND(${f(r.order)} × ${((r.ratio.etc||0)*100).toFixed(1)}%) = ${f(r.etc)}">${r.etc?f(r.etc):'-'}</td>
+    ${_ofSizes.w.map(z=>zc(z,'rgba(236,72,153,.04)')).join('')}${_ofSizes.m.map(z=>zc(z,'rgba(37,99,235,.04)')).join('')}`;
+}
+function _ofFootHtml(isAll){
+  const R=_ofRows.filter(r=>!_of.q||String(r.prod).toLowerCase().includes(_of.q.toLowerCase()));
+  const sum=fn=>wonNo(R.reduce((a,r)=>a+fn(r),0));
+  const st='position:sticky;bottom:0;background:var(--card);font-weight:800;border-top:2px solid var(--hairline)';
+  return `<tr><td style="${st}" colspan="${isAll?3:2}">합계 · ${R.length}개 상품</td>
+    <td class="nr" style="${st}">${sum(r=>r.base)}</td><td class="nr" style="${st};color:var(--sky)">${sum(r=>r.fc)}</td><td style="${st}"></td>
+    <td class="nr" style="${st};color:#059669">${sum(r=>r.order)}</td><td class="nr" style="${st}">${sum(r=>r.wSum)}</td><td class="nr" style="${st}">${sum(r=>r.mSum)}</td><td class="nr" style="${st}">${sum(r=>r.etc)}</td>
+    ${[..._ofSizes.w,..._ofSizes.m].map(z=>`<td class="nr" style="${st}">${sum(r=>r.sz[z])}</td>`).join('')}</tr>`;
+}
+function _ofK(){const s=_of;const b=s.bTo-s.bFrom+1;return b>0?(s.tTo-s.tFrom+1)/b:0;}
+function _ofSet(k,v){
+  const s=_of;
+  if(k==='unit'&&s.unit!==v){
+    // 단위 변경 시 기간을 해당 단위로 환산 (주차 → 월은 대략적 위치)
+    const conv=v==='mo'?(w=>Math.min(12,Math.max(1,Math.ceil(w/4.35)))):(m=>Math.min(52,Math.max(1,Math.round((m-1)*4.35)+1)));
+    s.tFrom=conv(s.tFrom);s.tTo=v==='mo'?conv(s.tTo):Math.min(52,Math.round(s.tTo*4.35));
+    s.bFrom=conv(s.bFrom);s.bTo=v==='mo'?conv(s.bTo):Math.min(52,Math.round(s.bTo*4.35));
+  }
+  s[k]=v;
+  // 시작 > 종료가 되면 방금 바꾼 값으로 맞춤
+  if(s.tFrom>s.tTo){if(k==='tTo')s.tFrom=s.tTo;else s.tTo=s.tFrom;}
+  if(s.bFrom>s.bTo){if(k==='bTo')s.bFrom=s.bTo;else s.bTo=s.bFrom;}
+  if(k==='b'){const g=document.getElementById('f-brand');if(g){g.value=v;s.gB=v;}}
+  _ofSyncBase();
+  renderForecast();
+}
+function _ofRefreshTotals(){
+  const isAll=_of.b==='ALL';
+  const foot=document.getElementById('of-foot');if(foot)foot.innerHTML=_ofFootHtml(isAll);
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=wonNo(v)+'개';};
+  set('of-kpi-ord',_ofRows.reduce((a,r)=>a+r.order,0));
+}
+function _ofSetPct(inp){
+  const tr=inp.closest('tr');const key=tr.dataset.ofKey;
+  const r=_ofRows.find(x=>x.key===key);if(!r)return;
+  const v=Math.max(0,parseFloat(inp.value));
+  if(isNaN(v)){inp.value=r.pct;return;}
+  if(v===100)delete _ofPct[key];else _ofPct[key]=v;
+  _ofSavePct();
+  _ofCalcRow(r,_ofK(),_of.growth/100);
+  const i=_ofRows.indexOf(r);
+  tr.innerHTML=_ofRowCells(r,i,_of.b==='ALL');
+  _ofRefreshTotals();
+}
+function _ofBulk(v){
+  if(v==null){v=parseFloat((document.getElementById('of-bulk')||{}).value);if(isNaN(v)||v<0)return;_of.bulk=v;}
+  // 검색 중이면 검색된 상품에만 적용
+  const q=(_of.q||'').toLowerCase();
+  _ofRows.forEach(r=>{if(q&&!String(r.prod).toLowerCase().includes(q))return;if(v===100)delete _ofPct[r.key];else _ofPct[r.key]=v;});
+  _ofSavePct();
+  renderForecast();
+  if(typeof showToast==='function')showToast(`추가 오더 ${v}% ${q?'검색된 상품에':'전체 상품에'} 적용`);
+}
+function _ofFilter(q){
+  _of.q=q;const ql=q.trim().toLowerCase();
+  document.querySelectorAll('tr[data-of-key]').forEach(tr=>{tr.hidden=!!ql&&!tr.dataset.ofName.includes(ql);});
+  const foot=document.getElementById('of-foot');if(foot)foot.innerHTML=_ofFootHtml(_of.b==='ALL');
+}
+// 엑셀 출력: 결과값과 함께 수식(기간 계수·예측·최종 오더·사이즈 분배)을 셀 수식으로 저장
+function exportForecastXlsx(){
+  if(typeof XLSX==='undefined'){showToast&&showToast('⚠️ 엑셀 라이브러리를 불러오지 못했습니다');return;}
+  const s=_of,K=_ofK(),isAll=s.b==='ALL';
+  const R=_ofRows.filter(r=>!s.q||String(r.prod).toLowerCase().includes(s.q.toLowerCase()));
+  if(!R.length){showToast&&showToast('출력할 상품이 없습니다');return;}
+  const enc=XLSX.utils.encode_col,SZ=[..._ofSizes.w,..._ofSizes.m];
+  const RS="'사이즈비율'";
+  const unitTxt=s.unit==='mo'?'개월':'주';
+  // 레이아웃: A 순위 | B 브랜드 | C 상품 | D 기준판매 | E 예측 | F 추가오더% | G 최종오더 | H 여성 | I 남성 | J 기타 | K~ 사이즈 | 마지막 사이즈합계
+  const C0=10,cS=i=>enc(C0+i),cSum=enc(C0+SZ.length),cSrc=enc(C0+SZ.length+1);
+  const wCols=_ofSizes.w.map((_,i)=>cS(i)),mCols=_ofSizes.m.map((_,i)=>cS(_ofSizes.w.length+i));
+  const HR=10,R0=HR+1;
+  const ws={},wr={};
+  const put=(o,addr,cell)=>{o[addr]=cell;};
+  const txt=v=>({t:'s',v:String(v)});
+  const num=(v,z)=>Object.assign({t:'n',v},z?{z}:{});
+  const fx=(f,v,z)=>Object.assign({t:'n',f,v},z?{z}:{});
+  put(ws,'A1',txt(`오더 예측 — ${isAll?'전체 브랜드':BNAMES[+s.b]}`));
+  put(ws,'A3',txt('판매 목표 기간'));put(ws,'B3',txt(_ofPeriodText(s.tYr,s.unit,s.tFrom,s.tTo)));
+  put(ws,'A4',txt(`목표 기간 길이(${unitTxt})`));put(ws,'B4',num(s.tTo-s.tFrom+1));
+  put(ws,'A5',txt('기준 판매 기간'));put(ws,'B5',txt(_ofPeriodText(s.bYr,s.unit,s.bFrom,s.bTo)+(s.auto?' (전년 동기간)':'')));
+  put(ws,'A6',txt(`기준 기간 길이(${unitTxt})`));put(ws,'B6',num(s.bTo-s.bFrom+1));
+  put(ws,'A7',txt('기간 계수'));put(ws,'B7',fx('B4/B6',K,'0.0000'));put(ws,'C7',txt('= 목표 기간 길이 ÷ 기준 기간 길이'));
+  put(ws,'A8',txt('전체 성장률'));put(ws,'B8',num(s.growth/100,'0%'));put(ws,'C8',txt('B4·B6·B8 값을 바꾸면 전체가 다시 계산됩니다'));
+  const heads=['순위','브랜드','상품','기준 판매수량','예측 수량','추가 오더 %','최종 오더수량','여성 합계 (220~245)','남성 합계 (250~300)','기타 사이즈',...SZ.map(String),'사이즈 합계','사이즈 비율 출처'];
+  heads.forEach((h,i)=>{put(ws,enc(i)+HR,txt(h));});
+  ['순위','브랜드','상품','사이즈 비율 출처'].forEach((h,i)=>put(wr,enc(i)+HR,txt(h)));
+  put(wr,'J'+HR,txt('기타'));SZ.forEach((z,i)=>put(wr,cS(i)+HR,txt(String(z))));
+  put(wr,'A1',txt('사이즈 비율 = 기준 기간 해당 상품 사이즈별 판매수량 ÷ 전체 사이즈 판매수량 (오더예측 시트의 같은 행·같은 열과 연결)'));
+  R.forEach((r,i)=>{
+    const n=R0+i;
+    put(ws,'A'+n,num(i+1));put(ws,'B'+n,txt(BNAMES[r.bi]));put(ws,'C'+n,txt(r.prod));
+    put(ws,'D'+n,num(r.base));
+    put(ws,'E'+n,fx(`ROUND(D${n}*$B$7*$B$8,0)`,r.fc));
+    put(ws,'F'+n,num(r.pct/100,'0%'));
+    put(ws,'G'+n,fx(`ROUND(E${n}*F${n},0)`,r.order));
+    put(ws,'H'+n,wCols.length?fx(`SUM(${wCols[0]}${n}:${wCols[wCols.length-1]}${n})`,r.wSum):num(0));
+    put(ws,'I'+n,mCols.length?fx(`SUM(${mCols[0]}${n}:${mCols[mCols.length-1]}${n})`,r.mSum):num(0));
+    put(ws,'J'+n,fx(`ROUND($G${n}*${RS}!J${n},0)`,r.etc));
+    SZ.forEach((z,j)=>put(ws,cS(j)+n,fx(`ROUND($G${n}*${RS}!${cS(j)}${n},0)`,r.sz[z])));
+    put(ws,cSum+n,fx(`H${n}+I${n}+J${n}`,r.wSum+r.mSum+r.etc));
+    put(ws,cSrc+n,txt(r.src));
+    // 사이즈비율 시트 (같은 행·열)
+    put(wr,'A'+n,num(i+1));put(wr,'B'+n,txt(BNAMES[r.bi]));put(wr,'C'+n,txt(r.prod));put(wr,'D'+n,txt(r.src));
+    put(wr,'J'+n,num(r.ratio.etc||0,'0.0%'));
+    SZ.forEach((z,j)=>put(wr,cS(j)+n,num(r.ratio[z]||0,'0.0%')));
+  });
+  const last=R0+R.length-1,T=last+1;
+  put(ws,'C'+T,txt('합계'));
+  ['D','E','G','H','I','J',...SZ.map((_,j)=>cS(j)),cSum].forEach(c=>{
+    let v=0;for(let n=R0;n<=last;n++){const cell=ws[c+n];v+=cell?cell.v:0;}
+    put(ws,c+T,fx(`SUM(${c}${R0}:${c}${last})`,v));
+  });
+  ws['!ref']=`A1:${cSrc}${T}`;wr['!ref']=`A1:${cS(SZ.length-1)||'J'}${last}`;
+  ws['!cols']=[{wch:6},{wch:16},{wch:36},{wch:12},{wch:11},{wch:11},{wch:13},{wch:14},{wch:14},{wch:10},...SZ.map(()=>({wch:7})),{wch:11},{wch:12}];
+  wr['!cols']=[{wch:6},{wch:16},{wch:36},{wch:12},{wch:4},{wch:4},{wch:4},{wch:4},{wch:4},{wch:8},...SZ.map(()=>({wch:7}))];
+  ws['!autofilter']={ref:`A${HR}:${cSrc}${last}`};
+  const guide=[
+    ['계산 방법'],[],
+    ['항목','엑셀 수식','설명'],
+    ['기간 계수','=B4/B6','목표 기간 길이 ÷ 기준 기간 길이'],
+    ['예측 수량','=ROUND(기준판매수량 × $B$7 × $B$8, 0)','기준 기간 판매수량 × 기간 계수 × 전체 성장률'],
+    ['최종 오더수량','=ROUND(예측수량 × 추가오더%, 0)','추가 오더 % (F열)를 바꾸면 사이즈별 수량까지 다시 계산'],
+    ['사이즈별 오더','=ROUND(최종오더 × 사이즈비율!같은셀, 0)','사이즈 비율은 \'사이즈비율\' 시트 참조'],
+    ['여성 / 남성 합계','=SUM(220~245열) / =SUM(250~300열)','여성 220~245mm, 남성 250~300mm'],
+    ['기타','=ROUND(최종오더 × 기타비율, 0)','범위 밖(키즈 등)·의류·범위 표기 사이즈'],
+    [],
+    ['사이즈 비율 출처','','기준 기간 → (없으면) 전체 기간 → (없으면) 브랜드 평균'],
+    ['참고','','사이즈별 반올림으로 사이즈 합계가 최종 오더수량과 1~2개 다를 수 있음'],
+  ];
+  const wg=XLSX.utils.aoa_to_sheet(guide);wg['!cols']=[{wch:18},{wch:44},{wch:56}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'오더예측');
+  XLSX.utils.book_append_sheet(wb,wr,'사이즈비율');
+  XLSX.utils.book_append_sheet(wb,wg,'계산방법');
+  const d=new Date(),ymd=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  XLSX.writeFile(wb,`오더예측_${isAll?'전체':BNAMES[+s.b]}_${ymd}.xlsx`);
+}
+
 function renderGoalSales(){
   destroyCharts();
   const bSel=document.getElementById('f-brand').value;
