@@ -9542,13 +9542,6 @@ function renderForecast(){
   const totBase=res.rows.reduce((a,r)=>a+r.base,0),totFc=res.rows.reduce((a,r)=>a+r.fc,0),totOrd=res.rows.reduce((a,r)=>a+r.order,0);
   const isAll=_ofIsAll(),UPM=_ofIsUp(),UP=res.UP;
   document.getElementById('content').innerHTML=`
-<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
-  <div class="seg">
-    <button class="seg-btn${UPM?'':' active'}" onclick="_ofSet('mode','all')">📊 전체 상품 예측</button>
-    <button class="seg-btn${UPM?' active':''}" onclick="_ofSet('mode','up')">📤 상품 업로드 오더</button>
-  </div>
-  <span style="font-size:12px;color:var(--muted)">${UPM?'업로드한 상품만 같은 조건으로 추천 수량을 계산 · 사이즈별 수량을 직접 수정할 수 있습니다':'기준 기간 판매·재고가 있는 상품 전체'}</span>
-</div>
 <div class="kpi-grid" style="grid-template-columns:repeat(6,minmax(0,1fr))">
   <div class="kpi-card accent"><div class="kpi-label">기준 기간 판매수량</div><div class="kpi-val" id="of-kpi-base">${wonNo(totBase)}개</div><div class="kpi-sub">${_ofPeriodText(s.bYr,s.unit,s.bFrom,s.bTo)}</div></div>
   <div class="kpi-card"><div class="kpi-label">예측 판매수량</div><div class="kpi-val" id="of-kpi-fc" style="color:var(--sky)">${wonNo(totFc)}개</div><div class="kpi-sub">기간 계수 ${res.K.toFixed(2)} × 성장률 ${s.growth}%</div></div>
@@ -9624,7 +9617,11 @@ function renderForecast(){
 
 <div class="table-card">
   <div class="chart-header" style="flex-wrap:wrap;gap:10px">
-    <div><div class="chart-title">${UPM?'📤 업로드 상품 오더 (사이즈별 수정 가능)':'📦 상품별 · 사이즈별 오더 예측'}</div><div class="chart-sub">${UPM?'업로드 파일 순서 · 오른쪽 사이즈 칸에 수량을 직접 입력하면 확정 오더에 반영 (노란 칸 = 수정됨)':'기준 판매수량 내림차순'} · 추가 오더 % 칸을 직접 수정하세요 · 셀에 마우스를 올리면 계산식 확인${(typeof SELECTED_PRODS!=='undefined'&&SELECTED_PRODS.length)?` · <b style="color:var(--sky)">상단 상품 필터 ${SELECTED_PRODS.length}개 적용 중</b>`:''}</div></div>
+    <div><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px"><div class="chart-title">📦 상품별 · 사이즈별 오더 예측</div>
+      <div class="seg">
+        <button class="seg-btn${UPM?'':' active'}" onclick="_ofSet('mode','all')">📊 전체 상품</button>
+        <button class="seg-btn${UPM?' active':''}" onclick="_ofSet('mode','up')">📤 상품 업로드 오더</button>
+      </div></div><div class="chart-sub">${UPM?'업로드 파일 순서 · 오른쪽 사이즈 칸에 수량을 직접 입력하면 확정 오더에 반영 (노란 칸 = 수정됨)':'기준 판매수량 내림차순'} · 추가 오더 % 칸을 직접 수정하세요 · 셀에 마우스를 올리면 계산식 확인${(typeof SELECTED_PRODS!=='undefined'&&SELECTED_PRODS.length)?` · <b style="color:var(--sky)">상단 상품 필터 ${SELECTED_PRODS.length}개 적용 중</b>`:''}</div></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <div style="position:relative;display:flex;align-items:center">
         <span style="position:absolute;left:11px;color:var(--muted);font-size:13px;pointer-events:none">🔍</span>
