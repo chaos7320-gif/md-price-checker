@@ -9330,7 +9330,8 @@ function _ofCompute(){
     const mm=_ofSizeMm(r[5]);addSz(recSz,r[0]+'|'+String(r[4]).trim().toLowerCase(),mm==null?'etc':mm,r[6]);
   });
   rows.forEach(r=>{const nk=r.bi+'|'+String(r.prod).trim().toLowerCase();[invSz[nk],recSz[nk]].forEach(o=>o&&Object.entries(o).forEach(([z,v])=>{if(z!=='etc'&&v>0)used.add(+z);}));});
-  _ofSizes={w:_OF_WOMEN.filter(z=>used.has(z)),m:_OF_MEN.filter(z=>used.has(z))};
+  // 사이즈 열은 데이터 유무와 관계없이 여성 220~245 / 남성 250~300 전체 표시 (업로드 오더에서 직접 입력 가능하도록)
+  _ofSizes={w:[..._OF_WOMEN],m:[..._OF_MEN]};
   // 올해(브랜드별 최신 데이터 연도) 성별 사이즈 판매수량 — 소진율 = 판매 ÷ (판매 + 현재 재고)
   const curYr={};Object.entries(latest).forEach(([bi,i])=>{if(i!=null)curYr[bi]=_ofIdxToYW(i).yr;});
   const soldG={};
