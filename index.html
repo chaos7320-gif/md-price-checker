@@ -9654,7 +9654,7 @@ function _ofTableHtml(isAll){
       <th rowspan="2">#</th>${isAll?'<th rowspan="2">브랜드</th>':''}<th rowspan="2">상품</th>
       <th rowspan="2" class="nr">현재 재고</th><th rowspan="2" class="nr" title="최근 2주 판매 ÷ 2">주당 판매<br><span style="font-weight:400;font-size:10px">(최근 2주)</span></th><th rowspan="2">재고 소진 예상<br><span style="font-weight:400;font-size:10px">(사이즈별)</span></th><th rowspan="2" title="현재 재고 ÷ 주당 판매 (최근 2주), 사이즈 구분 없음">재고 소진 예상<br><span style="font-weight:400;font-size:10px">(단순 계산)</span></th><th rowspan="2" class="nr">입고시점<br>예상재고</th><th rowspan="2">비고</th>
       <th rowspan="2" class="nr">기준 판매</th><th rowspan="2" class="nr">예측 수량</th><th rowspan="2" class="nr">추가 오더 %</th><th rowspan="2" class="nr" style="color:#059669">${_ofIsUp()?'추천 오더':'최종 오더'}</th>${_ofIsUp()?'<th rowspan="2" class="nr" style="color:#d97706" title="사이즈별 수량 합계 (직접 수정 반영)">확정 오더<br><span style="font-weight:400;font-size:10px">(사이즈 합계)</span></th>':''}
-      <th rowspan="2" class="nr" style="background:${wBg}">여성${_of.szView!=='order'?'<br><span style="font-weight:400;font-size:10px">'+_ofViewName()+'</span>':''}</th><th rowspan="2" class="nr" style="background:${mBg}">남성${_of.szView!=='order'?'<br><span style="font-weight:400;font-size:10px">'+_ofViewName()+'</span>':''}</th><th rowspan="2" class="nr" title="기준 기간 사이즈별 판매 비율 (사이즈 비율과 동일)">판매 비율<br><span style="font-weight:400;font-size:10px">여성 / 남성</span></th><th rowspan="2" class="nr" title="올해 판매 ÷ (올해 판매 + 현재 재고)">소진율<br><span style="font-weight:400;font-size:10px">여성 / 남성</span></th><th rowspan="2" class="nr">기타</th>
+      <th rowspan="2" class="nr" title="기준 기간 사이즈별 판매 비율 (사이즈 비율과 동일)">판매 비율<br><span style="font-weight:400;font-size:10px">여성 / 남성</span></th><th rowspan="2" class="nr" title="올해 판매 ÷ (올해 판매 + 현재 재고)">소진율<br><span style="font-weight:400;font-size:10px">여성 / 남성</span></th><th rowspan="2" class="nr">기타</th>
       ${W.length?`<th colspan="${W.length}" style="text-align:center;background:${wBg};color:#db2777">여성 (220~245)</th>`:''}
       ${M.length?`<th colspan="${M.length}" style="text-align:center;background:${mBg};color:#2563eb">남성 (250~300)</th>`:''}
     </tr>
@@ -9689,8 +9689,6 @@ function _ofRowCells(r,i,isAll){
     <td class="nr" style="color:var(--sky);font-weight:600" title="ROUND(${f(r.base)} × ${K.toFixed(4)} × ${s.growth}%) = ${f(r.fc)}">${f(r.fc)}</td>
     <td class="nr"><input type="number" min="0" step="5" value="${r.pct}" onchange="_ofSetPct(this)" style="width:70px;padding:5px 6px;font-size:12px;border:1px solid ${r.pct!==100?'#059669':'var(--hairline)'};border-radius:6px;background:var(--canvas);color:var(--ink);text-align:right;font-family:inherit">%</td>
     <td class="nr" style="font-weight:800;color:#059669" title="ROUND(${f(r.fc)} × ${r.pct}%) = ${f(r.order)}">${f(r.order)}</td>${_ofIsUp()?`<td class="nr" data-of="fin" style="font-weight:800">${_ofFinCell(r)}</td>`:''}
-    <td class="nr" data-of="w" style="background:rgba(236,72,153,.07);font-weight:700" title="여성 사이즈 합계">${grp(_ofSizes.w)}</td>
-    <td class="nr" data-of="m" style="background:rgba(37,99,235,.07);font-weight:700" title="남성 사이즈 합계">${grp(_ofSizes.m)}</td>
     <td class="nr" style="font-size:11px;white-space:nowrap;line-height:1.5" title="기준 기간 사이즈별 판매 비율 (출처: ${r.src})"><div style="color:#db2777">여 ${_ofPctTxt(r.gR.w)}</div><div style="color:#2563eb">남 ${_ofPctTxt(r.gR.m)}</div></td>
     <td class="nr" style="font-size:11px;white-space:nowrap;line-height:1.5"><div style="color:#db2777" title="${r.curYr}년 여성 사이즈 판매 ${f(r.soldG.w)} ÷ (판매 ${f(r.soldG.w)} + 재고 ${f(r.gStk.w)})">여 ${_ofPctTxt(r.gST.w)}</div><div style="color:#2563eb" title="${r.curYr}년 남성 사이즈 판매 ${f(r.soldG.m)} ÷ (판매 ${f(r.soldG.m)} + 재고 ${f(r.gStk.m)})">남 ${_ofPctTxt(r.gST.m)}</div></td>
     ${zc('etc','transparent')}
@@ -9711,7 +9709,7 @@ function _ofFootHtml(isAll){
       const bT=R.reduce((a,r)=>a+r.base,0),gr=g=>bT>0?R.reduce((a,r)=>a+r.base*r.gR[g],0)/bT:null;
       const st2=g=>{const s=R.reduce((a,r)=>a+Math.max(0,r.soldG[g]),0),d=s+R.reduce((a,r)=>a+r.gStk[g],0);return d>0?s/d:null;};
       const two=(a,b)=>`<div style="color:#db2777">여 ${_ofPctTxt(a)}</div><div style="color:#2563eb">남 ${_ofPctTxt(b)}</div>`;
-      return `<td class="nr" style="${st}">${tot(_ofSizes.w)}</td><td class="nr" style="${st}">${tot(_ofSizes.m)}</td><td class="nr" style="${st};font-size:11px;line-height:1.5" title="기준 판매수량 가중 평균">${two(gr('w'),gr('m'))}</td><td class="nr" style="${st};font-size:11px;line-height:1.5" title="전체 판매 ÷ (전체 판매 + 전체 재고)">${two(st2('w'),st2('m'))}</td><td class="nr" style="${st}">${tot(['etc'])}</td>`+ALL.map(z=>`<td class="nr" style="${st}">${tot([z])}</td>`).join('');
+      return `<td class="nr" style="${st};font-size:11px;line-height:1.5" title="기준 판매수량 가중 평균">${two(gr('w'),gr('m'))}</td><td class="nr" style="${st};font-size:11px;line-height:1.5" title="전체 판매 ÷ (전체 판매 + 전체 재고)">${two(st2('w'),st2('m'))}</td><td class="nr" style="${st}">${tot(['etc'])}</td>`+ALL.map(z=>`<td class="nr" style="${st}">${tot([z])}</td>`).join('');
     })()}</tr>`;
 }
 function _ofK(){const s=_of;const b=s.bTo-s.bFrom+1;return b>0?(s.tTo-s.tFrom+1)/b:0;}
@@ -9786,7 +9784,7 @@ function exportForecastXlsx(){
   const RS="'사이즈비율'";
   const unitTxt=s.unit==='mo'?'개월':'주';
   // 열 배치 (이름 → 열 문자)
-  const keys=['rank','brand','prod','stock','wk','left','out','leftS','outS','toArr','arrStock','note','base','fc','pct','order','w','m','wR','mR','wSold','wStk','wST','mSold','mStk','mST','etc',...SZ.map(z=>'z'+z),'szSum','src'];
+  const keys=['rank','brand','prod','stock','wk','left','out','leftS','outS','toArr','arrStock','note','base','fc','pct','order','wR','mR','wSold','wStk','wST','mSold','mStk','mST','etc',...SZ.map(z=>'z'+z),'szSum','src'];
   const C={};keys.forEach((k,i)=>C[k]=enc(i));
   const lastCol=C.src;
   const wCols=_ofSizes.w.map(z=>C['z'+z]),mCols=_ofSizes.m.map(z=>C['z'+z]);
@@ -9829,8 +9827,6 @@ function exportForecastXlsx(){
     put(ws,c('fc'),fx(`ROUND(${c('base')}*$B$7*$B$8,0)`,r.fc));
     put(ws,c('pct'),num(r.pct/100,'0%'));
     put(ws,c('order'),fx(`ROUND(${c('fc')}*${c('pct')},0)`,r.order));
-    put(ws,c('w'),wCols.length?fx(`SUM(${wCols[0]}${n}:${wCols[wCols.length-1]}${n})`,r.wSum):num(0));
-    put(ws,c('m'),mCols.length?fx(`SUM(${mCols[0]}${n}:${mCols[mCols.length-1]}${n})`,r.mSum):num(0));
     put(ws,c('wR'),wCols.length?fx(`SUM(${RS}!${wCols[0]}${n}:${wCols[wCols.length-1]}${n})`,r.gR.w,'0.0%'):num(0,'0.0%'));
     put(ws,c('mR'),mCols.length?fx(`SUM(${RS}!${mCols[0]}${n}:${mCols[mCols.length-1]}${n})`,r.gR.m,'0.0%'):num(0,'0.0%'));
     ['w','m'].forEach(g=>{
@@ -9839,7 +9835,7 @@ function exportForecastXlsx(){
     });
     put(ws,c('etc'),r.etc!==r.etcRec?num(r.etc):fx(`ROUND($${C.order}${n}*${RS}!${c('etc')},0)`,r.etc));
     SZ.forEach(z=>put(ws,c('z'+z),r.sz[z]!==r.szRec[z]?num(r.sz[z]):fx(`ROUND($${C.order}${n}*${RS}!${c('z'+z)},0)`,r.sz[z]))); // 직접 수정한 사이즈는 값으로
-    put(ws,c('szSum'),fx(`${c('w')}+${c('m')}+${c('etc')}`,r.wSum+r.mSum+r.etc));
+    put(ws,c('szSum'),fx(`SUM(${c('etc')}:${SZ.length?C['z'+SZ[SZ.length-1]]+n:c('etc')})`,r.wSum+r.mSum+r.etc));
     const edZ=[...SZ.filter(z=>r.sz[z]!==r.szRec[z]),...(r.etc!==r.etcRec?['etc']:[])];
     put(ws,c('src'),txt(r.src+(r.est?' · 기준 판매 추정 (기준 기간 실적 없음)':'')+(edZ.length?' · 수동 수정: '+edZ.map(z=>_ofSzName(z)+'('+(z==='etc'?r.etcRec:r.szRec[z])+'→'+(z==='etc'?r.etc:r.sz[z])+')').join(', '):'')));
     // 사이즈비율 시트 (같은 행·열)
@@ -9849,7 +9845,7 @@ function exportForecastXlsx(){
   });
   const last=R0+R.length-1,T=last+1;
   put(ws,C.prod+T,txt('합계'));
-  ['stock','wk','arrStock','base','fc','order','w','m','wSold','wStk','mSold','mStk','etc',...SZ.map(z=>'z'+z),'szSum'].forEach(k=>{
+  ['stock','wk','arrStock','base','fc','order','wSold','wStk','mSold','mStk','etc',...SZ.map(z=>'z'+z),'szSum'].forEach(k=>{
     const col=C[k];let v=0;for(let n=R0;n<=last;n++){const cell=ws[col+n];v+=cell&&typeof cell.v==='number'?cell.v:0;}
     put(ws,col+T,fx(`SUM(${col}${R0}:${col}${last})`,v,k==='wk'?'0.0':undefined));
   });
@@ -9866,7 +9862,6 @@ function exportForecastXlsx(){
     ['기준 판매 추정','=ROUND(주당판매 × 기준기간 주수, 0)','기준 기간 실적이 없는 상품(신상품 등)만 · 사이즈 비율 출처 열에 표시'],
     ['최종 오더수량','=ROUND(예측수량 × 추가오더%, 0)','추가 오더 %를 바꾸면 사이즈별 수량까지 다시 계산'],
     ['사이즈별 오더','=ROUND(최종오더 × 사이즈비율!같은셀, 0)','사이즈 비율은 \'사이즈비율\' 시트 참조'],
-    ['여성 / 남성 합계','=SUM(220~245열) / =SUM(250~300열)','여성 220~245mm, 남성 250~300mm'],
     ['기타','=ROUND(최종오더 × 기타비율, 0)','범위 밖(키즈 등)·의류·범위 표기 사이즈'],
     ['여성 / 남성 판매 비율','=SUM(사이즈비율!220~245열) / =SUM(사이즈비율!250~300열)','기준 기간 사이즈별 판매 비율의 성별 합계'],
     ['여성 / 남성 소진율','=올해판매 ÷ (올해판매 + 현재재고)','올해 = 브랜드 최신 데이터 연도 · 성별 사이즈 판매(SZ)와 사이즈별 재고(INV) 기준'],
