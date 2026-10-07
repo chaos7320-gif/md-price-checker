@@ -9258,9 +9258,19 @@ function _ofCompute(){
   });
   rows.forEach(r=>{const nk=r.bi+'|'+String(r.prod).trim().toLowerCase();[invSz[nk],recSz[nk]].forEach(o=>o&&Object.entries(o).forEach(([z,v])=>{if(z!=='etc'&&v>0)used.add(+z);}));});
   _ofSizes={w:_OF_WOMEN.filter(z=>used.has(z)),m:_OF_MEN.filter(z=>used.has(z))};
+  // 올해(브랜드별 최신 데이터 연도) 성별 사이즈 판매수량 — 소진율 = 판매 ÷ (판매 + 현재 재고)
+  const curYr={};Object.entries(latest).forEach(([bi,i])=>{if(i!=null)curYr[bi]=_ofIdxToYW(i).yr;});
+  const soldG={};
+  SZ_DATA.forEach(r=>{
+    if(!brOk(r)||_ofExcl(r)||r[1]!==curYr[r[0]])return;
+    const g=_ofGender(_ofSizeMm(r[5]));if(!g)return;
+    const k=r[0]+'|'+String(r[4]).trim().toLowerCase();
+    if(!soldG[k])soldG[k]={w:0,m:0};soldG[k][g]+=r[6];
+  });
   const arrIdx=_ofWIdx(s.arrYr,s.arrWk);
   rows.forEach(r=>{
     const nk=r.bi+'|'+String(r.prod).trim().toLowerCase();
+    r.soldG=soldG[nk]||{w:0,m:0};r.curYr=curYr[r.bi];
     r.invSz=invSz[nk]||{};r.recSz=recSz[nk]||{};
     r.stock=Math.max(0,inv[nk]||0);
     r.wk2=Math.max(0,recent[nk]||0);
@@ -9269,6 +9279,7 @@ function _ofCompute(){
     _ofCalcStock(r,arrIdx);
     if(r.est){r.bWeeks=(s.unit==='wk'?bLen:bLen*52/12);r.base=Math.round(r.wkSales*r.bWeeks);} // 추정 기준 판매 = 주당 판매 × 기준 기간 주수
     _ofCalcRow(r,K,G);
+    _ofCalcGender(r);
   });
   rows.sort((a,b)=>b.base-a.base||b.stock-a.stock);
   return {rows,K,G,tLen,bLen,arrIdx,latest};
@@ -9327,6 +9338,14 @@ function _ofSimpleOut(r){
   r.outIdxS=r.stock<=0?r.curIdx:(r.wkSales>0?r.curIdx+Math.max(1,Math.ceil(r.wksLeftS)):null);
 }
 const _ofSzName=z=>z==='etc'?'기타':String(z);
+// 여성 220~245 / 남성 250~300
+const _ofGender=mm=>mm==null?null:(mm<=245?'w':'m');
+function _ofCalcGender(r){
+  r.gR={w:0,m:0};Object.entries(r.ratio).forEach(([k,v])=>{const g=k==='etc'?null:_ofGender(+k);if(g)r.gR[g]+=v;});
+  r.gStk={w:0,m:0};Object.entries(r.szSt||{}).forEach(([k,o])=>{const g=k==='etc'?null:_ofGender(+k);if(g)r.gStk[g]+=o.stock;});
+  r.gST={};['w','m'].forEach(g=>{const s=Math.max(0,r.soldG[g]),d=s+r.gStk[g];r.gST[g]=d>0?s/d:null;});
+}
+const _ofPctTxt=v=>v==null?'-':(v*100).toFixed(v>=0.995||v===0?0:1)+'%';
 function _ofLossTxt(l){
   const a=_ofIdxToYW(l.from),b=_ofIdxToYW(l.to);
   const range=l.from===l.to?`${a.wk}주차`:(a.yr===b.yr?`${a.wk}~${b.wk}주차`:`${String(a.yr).slice(2)}년 ${a.wk}주차~${String(b.yr).slice(2)}년 ${b.wk}주차`);
@@ -9471,6 +9490,7 @@ function renderForecast(){
     <div><b>최종 오더</b> = ROUND(예측 수량 × 추가 오더 %)</div>
     <div><b>🆕 기준 기간 실적 없는 상품</b> (신상품 등) = 기준 판매* 추정 = 주당 판매(최근 2주) × 기준 기간 주수</div>
     <div><b>사이즈별 오더</b> = ROUND(최종 오더 × 사이즈 비율) · 여성 220~245 / 남성 250~300</div>
+    <div><b>판매 비율 (여성/남성)</b> = 기준 기간 여성·남성 사이즈 판매 ÷ 전체 사이즈 판매 · <b>소진율</b> = 올해 판매 ÷ (올해 판매 + 현재 재고)</div>
     <div><b>주당 판매</b> = 최근 2주 판매수량 ÷ 2 (최신 데이터 ${_ofWkTxt(Math.max(...Object.values(res.latest)))} 기준)</div>
     <div><b>재고 소진 예상 (사이즈별)</b> = 판매 중인 사이즈가 모두 소진되는 주 (사이즈 재고 ÷ 사이즈 주당 판매)</div>
     <div><b>재고 소진 예상 (단순 계산)</b> = 현재 재고 ÷ 주당 판매 (최근 2주) → 소진까지 주수</div>
@@ -9506,7 +9526,7 @@ function _ofTableHtml(isAll){
       <th rowspan="2">#</th>${isAll?'<th rowspan="2">브랜드</th>':''}<th rowspan="2">상품</th>
       <th rowspan="2" class="nr">현재 재고</th><th rowspan="2" class="nr" title="최근 2주 판매 ÷ 2">주당 판매<br><span style="font-weight:400;font-size:10px">(최근 2주)</span></th><th rowspan="2">재고 소진 예상<br><span style="font-weight:400;font-size:10px">(사이즈별)</span></th><th rowspan="2" title="현재 재고 ÷ 주당 판매 (최근 2주), 사이즈 구분 없음">재고 소진 예상<br><span style="font-weight:400;font-size:10px">(단순 계산)</span></th><th rowspan="2" class="nr">입고시점<br>예상재고</th><th rowspan="2">비고</th>
       <th rowspan="2" class="nr">기준 판매</th><th rowspan="2" class="nr">예측 수량</th><th rowspan="2" class="nr">추가 오더 %</th><th rowspan="2" class="nr" style="color:#059669">최종 오더</th>
-      <th rowspan="2" class="nr" style="background:${wBg}">여성${_of.szView!=='order'?'<br><span style="font-weight:400;font-size:10px">'+_ofViewName()+'</span>':''}</th><th rowspan="2" class="nr" style="background:${mBg}">남성${_of.szView!=='order'?'<br><span style="font-weight:400;font-size:10px">'+_ofViewName()+'</span>':''}</th><th rowspan="2" class="nr">기타</th>
+      <th rowspan="2" class="nr" style="background:${wBg}">여성${_of.szView!=='order'?'<br><span style="font-weight:400;font-size:10px">'+_ofViewName()+'</span>':''}</th><th rowspan="2" class="nr" style="background:${mBg}">남성${_of.szView!=='order'?'<br><span style="font-weight:400;font-size:10px">'+_ofViewName()+'</span>':''}</th><th rowspan="2" class="nr" title="기준 기간 사이즈별 판매 비율 (사이즈 비율과 동일)">판매 비율<br><span style="font-weight:400;font-size:10px">여성 / 남성</span></th><th rowspan="2" class="nr" title="올해 판매 ÷ (올해 판매 + 현재 재고)">소진율<br><span style="font-weight:400;font-size:10px">여성 / 남성</span></th><th rowspan="2" class="nr">기타</th>
       ${W.length?`<th colspan="${W.length}" style="text-align:center;background:${wBg};color:#db2777">여성 (220~245)</th>`:''}
       ${M.length?`<th colspan="${M.length}" style="text-align:center;background:${mBg};color:#2563eb">남성 (250~300)</th>`:''}
     </tr>
@@ -9537,6 +9557,8 @@ function _ofRowCells(r,i,isAll){
     <td class="nr" style="font-weight:800;color:#059669" title="ROUND(${f(r.fc)} × ${r.pct}%) = ${f(r.order)}">${f(r.order)}</td>
     <td class="nr" style="background:rgba(236,72,153,.07);font-weight:700" title="여성 사이즈 합계">${grp(_ofSizes.w)}</td>
     <td class="nr" style="background:rgba(37,99,235,.07);font-weight:700" title="남성 사이즈 합계">${grp(_ofSizes.m)}</td>
+    <td class="nr" style="font-size:11px;white-space:nowrap;line-height:1.5" title="기준 기간 사이즈별 판매 비율 (출처: ${r.src})"><div style="color:#db2777">여 ${_ofPctTxt(r.gR.w)}</div><div style="color:#2563eb">남 ${_ofPctTxt(r.gR.m)}</div></td>
+    <td class="nr" style="font-size:11px;white-space:nowrap;line-height:1.5"><div style="color:#db2777" title="${r.curYr}년 여성 사이즈 판매 ${f(r.soldG.w)} ÷ (판매 ${f(r.soldG.w)} + 재고 ${f(r.gStk.w)})">여 ${_ofPctTxt(r.gST.w)}</div><div style="color:#2563eb" title="${r.curYr}년 남성 사이즈 판매 ${f(r.soldG.m)} ÷ (판매 ${f(r.soldG.m)} + 재고 ${f(r.gStk.m)})">남 ${_ofPctTxt(r.gST.m)}</div></td>
     ${zc('etc','transparent')}
     ${_ofSizes.w.map(z=>zc(z,'rgba(236,72,153,.04)')).join('')}${_ofSizes.m.map(z=>zc(z,'rgba(37,99,235,.04)')).join('')}`;
 }
@@ -9552,7 +9574,10 @@ function _ofFootHtml(isAll){
       const val=(r,z)=>v==='order'?(z==='etc'?r.etc:r.sz[z]):v==='out'?((r.szSt[z]&&r.szSt[z].loss)?1:0):((r.szSt[z]||{})[{stock:'stock',wk:'wkSales',arr:'arrStock'}[v]]||0);
       const fmt=n=>v==='out'?(n?`<span style="color:var(--red)">로스 ${n}</span>`:'-'):v==='wk'?(Math.round(n*10)/10).toLocaleString():wonNo(n);
       const tot=zs=>fmt(R.reduce((a,r)=>a+zs.reduce((b,z)=>b+val(r,z),0),0));
-      return `<td class="nr" style="${st}">${tot(_ofSizes.w)}</td><td class="nr" style="${st}">${tot(_ofSizes.m)}</td><td class="nr" style="${st}">${tot(['etc'])}</td>`+ALL.map(z=>`<td class="nr" style="${st}">${tot([z])}</td>`).join('');
+      const bT=R.reduce((a,r)=>a+r.base,0),gr=g=>bT>0?R.reduce((a,r)=>a+r.base*r.gR[g],0)/bT:null;
+      const st2=g=>{const s=R.reduce((a,r)=>a+Math.max(0,r.soldG[g]),0),d=s+R.reduce((a,r)=>a+r.gStk[g],0);return d>0?s/d:null;};
+      const two=(a,b)=>`<div style="color:#db2777">여 ${_ofPctTxt(a)}</div><div style="color:#2563eb">남 ${_ofPctTxt(b)}</div>`;
+      return `<td class="nr" style="${st}">${tot(_ofSizes.w)}</td><td class="nr" style="${st}">${tot(_ofSizes.m)}</td><td class="nr" style="${st};font-size:11px;line-height:1.5" title="기준 판매수량 가중 평균">${two(gr('w'),gr('m'))}</td><td class="nr" style="${st};font-size:11px;line-height:1.5" title="전체 판매 ÷ (전체 판매 + 전체 재고)">${two(st2('w'),st2('m'))}</td><td class="nr" style="${st}">${tot(['etc'])}</td>`+ALL.map(z=>`<td class="nr" style="${st}">${tot([z])}</td>`).join('');
     })()}</tr>`;
 }
 function _ofK(){const s=_of;const b=s.bTo-s.bFrom+1;return b>0?(s.tTo-s.tFrom+1)/b:0;}
@@ -9626,7 +9651,7 @@ function exportForecastXlsx(){
   const RS="'사이즈비율'";
   const unitTxt=s.unit==='mo'?'개월':'주';
   // 열 배치 (이름 → 열 문자)
-  const keys=['rank','brand','prod','stock','wk','left','out','leftS','outS','toArr','arrStock','note','base','fc','pct','order','w','m','etc',...SZ.map(z=>'z'+z),'szSum','src'];
+  const keys=['rank','brand','prod','stock','wk','left','out','leftS','outS','toArr','arrStock','note','base','fc','pct','order','w','m','wR','mR','wSold','wStk','wST','mSold','mStk','mST','etc',...SZ.map(z=>'z'+z),'szSum','src'];
   const C={};keys.forEach((k,i)=>C[k]=enc(i));
   const lastCol=C.src;
   const wCols=_ofSizes.w.map(z=>C['z'+z]),mCols=_ofSizes.m.map(z=>C['z'+z]);
@@ -9645,7 +9670,7 @@ function exportForecastXlsx(){
   put(ws,'A8',txt('전체 성장률'));put(ws,'B8',num(s.growth/100,'0%'));put(ws,'C8',txt('B4·B6·B8 값을 바꾸면 전체가 다시 계산됩니다'));
   put(ws,'A9',txt('입고 예정 주차'));put(ws,'B9',txt(_ofWkTxt(_ofWIdx(s.arrYr,s.arrWk))));put(ws,'C9',txt('입고까지 주수(H열) = 최신 데이터 다음 주 ~ 입고 전 주'));
   const head={rank:'순위',brand:'브랜드',prod:'상품',stock:'현재 재고',wk:'주당 판매 (최근 2주 ÷ 2)',left:'소진까지 주수 (사이즈별)',out:'재고 소진 예상 (사이즈별)',leftS:'소진까지 주수 (단순 계산)',outS:'재고 소진 예상 (단순 계산)',toArr:'입고까지 주수',arrStock:'입고시점 예상재고',note:'비고',
-    base:'기준 판매수량',fc:'예측 수량',pct:'추가 오더 %',order:'최종 오더수량',w:'여성 합계 (220~245)',m:'남성 합계 (250~300)',etc:'기타 사이즈',szSum:'사이즈 합계',src:'사이즈 비율 출처'};
+    base:'기준 판매수량',fc:'예측 수량',pct:'추가 오더 %',order:'최종 오더수량',w:'여성 합계 (220~245)',m:'남성 합계 (250~300)',wR:'여성 판매 비율',mR:'남성 판매 비율',wSold:'여성 올해 판매',wStk:'여성 현재 재고',wST:'여성 소진율',mSold:'남성 올해 판매',mStk:'남성 현재 재고',mST:'남성 소진율',etc:'기타 사이즈',szSum:'사이즈 합계',src:'사이즈 비율 출처'};
   SZ.forEach(z=>head['z'+z]=String(z));
   keys.forEach(k=>put(ws,C[k]+HR,txt(head[k])));
   ['rank','brand','prod'].forEach(k=>put(wr,C[k]+HR,txt(head[k])));
@@ -9670,6 +9695,12 @@ function exportForecastXlsx(){
     put(ws,c('order'),fx(`ROUND(${c('fc')}*${c('pct')},0)`,r.order));
     put(ws,c('w'),wCols.length?fx(`SUM(${wCols[0]}${n}:${wCols[wCols.length-1]}${n})`,r.wSum):num(0));
     put(ws,c('m'),mCols.length?fx(`SUM(${mCols[0]}${n}:${mCols[mCols.length-1]}${n})`,r.mSum):num(0));
+    put(ws,c('wR'),wCols.length?fx(`SUM(${RS}!${wCols[0]}${n}:${wCols[wCols.length-1]}${n})`,r.gR.w,'0.0%'):num(0,'0.0%'));
+    put(ws,c('mR'),mCols.length?fx(`SUM(${RS}!${mCols[0]}${n}:${mCols[mCols.length-1]}${n})`,r.gR.m,'0.0%'):num(0,'0.0%'));
+    ['w','m'].forEach(g=>{
+      put(ws,c(g+'Sold'),num(Math.max(0,r.soldG[g])));put(ws,c(g+'Stk'),num(r.gStk[g]));
+      put(ws,c(g+'ST'),fx(`IF(${c(g+'Sold')}+${c(g+'Stk')}>0,${c(g+'Sold')}/(${c(g+'Sold')}+${c(g+'Stk')}),"-")`,r.gST[g]==null?'-':r.gST[g],'0.0%'));
+    });
     put(ws,c('etc'),fx(`ROUND($${C.order}${n}*${RS}!${c('etc')},0)`,r.etc));
     SZ.forEach(z=>put(ws,c('z'+z),fx(`ROUND($${C.order}${n}*${RS}!${c('z'+z)},0)`,r.sz[z])));
     put(ws,c('szSum'),fx(`${c('w')}+${c('m')}+${c('etc')}`,r.wSum+r.mSum+r.etc));
@@ -9681,12 +9712,12 @@ function exportForecastXlsx(){
   });
   const last=R0+R.length-1,T=last+1;
   put(ws,C.prod+T,txt('합계'));
-  ['stock','wk','arrStock','base','fc','order','w','m','etc',...SZ.map(z=>'z'+z),'szSum'].forEach(k=>{
+  ['stock','wk','arrStock','base','fc','order','w','m','wSold','wStk','mSold','mStk','etc',...SZ.map(z=>'z'+z),'szSum'].forEach(k=>{
     const col=C[k];let v=0;for(let n=R0;n<=last;n++){const cell=ws[col+n];v+=cell&&typeof cell.v==='number'?cell.v:0;}
     put(ws,col+T,fx(`SUM(${col}${R0}:${col}${last})`,v,k==='wk'?'0.0':undefined));
   });
   ws['!ref']=`A1:${lastCol}${T}`;wr['!ref']=`A1:${SZ.length?C['z'+SZ[SZ.length-1]]:C.etc}${last}`;
-  const widths={rank:6,brand:16,prod:36,stock:10,wk:12,left:13,out:16,leftS:13,outS:16,toArr:11,arrStock:13,note:30,base:12,fc:11,pct:11,order:13,w:14,m:14,etc:10,szSum:11,src:12};
+  const widths={rank:6,brand:16,prod:36,stock:10,wk:12,left:13,out:16,leftS:13,outS:16,toArr:11,arrStock:13,note:30,base:12,fc:11,pct:11,order:13,w:14,m:14,wR:11,mR:11,wSold:11,wStk:11,wST:10,mSold:11,mStk:11,mST:10,etc:10,szSum:11,src:12};
   ws['!cols']=keys.map(k=>({wch:widths[k]||7}));
   wr['!cols']=keys.slice(0,-2).map(k=>({wch:k==='prod'?36:k==='brand'?16:k==='stock'?12:k.startsWith('z')||k==='etc'?8:4}));
   ws['!autofilter']={ref:`A${HR}:${lastCol}${last}`};
@@ -9700,6 +9731,8 @@ function exportForecastXlsx(){
     ['사이즈별 오더','=ROUND(최종오더 × 사이즈비율!같은셀, 0)','사이즈 비율은 \'사이즈비율\' 시트 참조'],
     ['여성 / 남성 합계','=SUM(220~245열) / =SUM(250~300열)','여성 220~245mm, 남성 250~300mm'],
     ['기타','=ROUND(최종오더 × 기타비율, 0)','범위 밖(키즈 등)·의류·범위 표기 사이즈'],
+    ['여성 / 남성 판매 비율','=SUM(사이즈비율!220~245열) / =SUM(사이즈비율!250~300열)','기준 기간 사이즈별 판매 비율의 성별 합계'],
+    ['여성 / 남성 소진율','=올해판매 ÷ (올해판매 + 현재재고)','올해 = 브랜드 최신 데이터 연도 · 성별 사이즈 판매(SZ)와 사이즈별 재고(INV) 기준'],
     ['주당 판매','최근 2주 판매수량 ÷ 2','브랜드별 최신 업로드 데이터 주 기준'],
     ['소진까지 주수','=현재재고 ÷ 주당판매','주당 판매가 0이면 "판매 없음"'],
     ['입고시점 예상재고','=SUMIF(사이즈별재고!A:A, 순위, 사이즈별재고!K:K)','사이즈별 MAX(0, ROUND(사이즈재고 − 사이즈 주당판매 × 입고까지주수, 0))의 합계 (사이즈 데이터 없는 상품은 상품 단위 수식)'],
