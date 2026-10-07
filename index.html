@@ -9822,7 +9822,7 @@ function exportForecastXlsx(){
     put(ws,c('outS'),txt(r.stock<=0?'재고 없음':(r.outIdxS==null?'판매 없음':(r.wksLeftS>104?'2년 이상':_ofWkTxt(r.outIdxS)))));
     put(ws,c('toArr'),num(r.wksToArr));
     put(ws,c('arrStock'),r.bySize?fx(`SUMIF(${ZS}!$A:$A,${c('rank')},${ZS}!$K:$K)`,r.arrStock):fx(`MAX(0,ROUND(${c('stock')}-${c('wk')}*${c('toArr')},0))`,r.arrStock));
-    put(ws,c('note'),txt([r.loss?`${r.note} (${r.loss.weeks}주, 약 ${r.loss.qty}개)`:'',r.szLoss.length?'사이즈 로스: '+r.szLoss.map(x=>`${_ofSzName(x.z)}(${x.txt})`).join(', '):''].filter(Boolean).join(' / ')));
+    put(ws,c('note'),txt([r.loss?`${r.note} (${r.loss.weeks}주, 약 ${r.loss.qty}개)`:'',r.szLoss.length?`사이즈 로스 ${r.szLoss.length}개 (약 ${r.szLossQty}개): `+r.szLoss.map(x=>`${_ofSzName(x.z)}(${x.txt} 영업 로스, 약 ${x.o.loss.qty}개)`).join(', '):''].filter(Boolean).join(' / ')));
     put(ws,c('base'),r.est?fx(`ROUND(${c('wk')}*${Math.round(r.bWeeks*10000)/10000},0)`,r.base):num(r.base));
     put(ws,c('fc'),fx(`ROUND(${c('base')}*$B$7*$B$8,0)`,r.fc));
     put(ws,c('pct'),num(r.pct/100,'0%'));
