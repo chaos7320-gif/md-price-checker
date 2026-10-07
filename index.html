@@ -9106,6 +9106,74 @@ let _ofSizes={w:[],m:[]}; // 표에 표시 중인 사이즈 컬럼
 let _ofPct={};     // 상품별 추가 오더 % (key: bi|prod)
 try{_ofPct=JSON.parse(localStorage.getItem('of_pct')||'{}')||{};}catch(e){_ofPct={};}
 function _ofSavePct(){try{localStorage.setItem('of_pct',JSON.stringify(_ofPct));}catch(e){}}
+// 📤 상품 업로드 오더: 업로드한 상품명 목록 + 사이즈별 수동 수정값 (key: bi|prod → {사이즈: 수량})
+let _ofUp=null,_ofEdits={};
+try{_ofUp=JSON.parse(localStorage.getItem('of_up')||'null');}catch(e){_ofUp=null;}
+try{_ofEdits=JSON.parse(localStorage.getItem('of_edits')||'{}')||{};}catch(e){_ofEdits={};}
+function _ofSaveUp(){try{localStorage.setItem('of_up',JSON.stringify(_ofUp));localStorage.setItem('of_edits',JSON.stringify(_ofEdits));}catch(e){}}
+const _ofIsUp=()=>!!_of&&_of.mode==='up';
+const _ofIsAll=()=>String(_of.b)==='ALL'||_ofIsUp();
+// 상품명 인덱스 (PROD/INV 상품명, 대소문자·공백·하이픈 무시 매칭)
+let _ofIdxCache=null;
+function _ofNameIndex(){
+  const sig=PROD_DATA.length+'|'+INV_DATA.length;
+  if(_ofIdxCache&&_ofIdxCache.sig===sig)return _ofIdxCache;
+  const m1={},m2={};
+  const add=(bi,prod)=>{
+    const t=String(prod).trim(),n1=t.toLowerCase(),n2=_ofNorm(t),it={bi,prod:t};
+    if(!m1[n1])m1[n1]=[];if(!m1[n1].some(x=>x.bi===bi))m1[n1].push(it);
+    if(!m2[n2])m2[n2]=[];if(!m2[n2].some(x=>x.bi===bi))m2[n2].push(it);
+  };
+  PROD_DATA.forEach(r=>add(r[0],r[4]));INV_DATA.forEach(x=>add(x.bi,x.prod));
+  _ofIdxCache={sig,m1,m2};return _ofIdxCache;
+}
+// 업로드 목록 → 매칭 결과 (브랜드 무관, 동명 상품이 여러 브랜드에 있으면 상단 브랜드 필터 우선)
+function _ofUpScope(){
+  const names=(_ofUp&&_ofUp.names)||[];
+  const ix=_ofNameIndex(),gB=document.getElementById('f-brand').value;
+  const pick=l=>l&&l.length?(l.find(x=>String(x.bi)===gB)||l[0]):null;
+  const items=[],unmatched=[],seen=new Set();
+  names.forEach((nm,i)=>{
+    const it=pick(ix.m1[String(nm).trim().toLowerCase()])||pick(ix.m2[_ofNorm(nm)]);
+    if(!it){unmatched.push(nm);return;}
+    const nk=it.bi+'|'+it.prod.toLowerCase();
+    if(seen.has(nk))return;seen.add(nk);
+    items.push({...it,nk,name:nm,ord:i});
+  });
+  return {items,unmatched,set:new Set(items.map(x=>x.nk)),ord:Object.fromEntries(items.map(x=>[x.nk,x.ord])),total:names.length};
+}
+function _ofUploadFile(inp){
+  const file=inp.files&&inp.files[0];inp.value='';
+  if(!file)return;
+  if(typeof XLSX==='undefined'){showToast&&showToast('⚠️ 엑셀 라이브러리를 불러오지 못했습니다');return;}
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:null,raw:false});
+      // '상품명' 헤더를 찾고 (없으면 첫 열) 그 아래 값을 상품명으로 사용
+      let hr=-1,col=0;
+      for(let i=0;i<Math.min(rows.length,20);i++){const j=(rows[i]||[]).findIndex(v=>v!=null&&String(v).replace(/\s/g,'')==='상품명');if(j>=0){hr=i;col=j;break;}}
+      const names=[],seen=new Set();
+      rows.slice(hr+1).forEach(r=>{const v=r&&r[col];if(v==null)return;const t=String(v).trim();if(!t||seen.has(t.toLowerCase()))return;seen.add(t.toLowerCase());names.push(t);});
+      if(!names.length){showToast&&showToast('⚠️ 상품명을 찾지 못했습니다 (첫 행에 "상품명" 헤더 필요)',5000);return;}
+      _ofUp={names,fname:file.name,ts:Date.now()};_ofSaveUp();
+      _of.mode='up';renderForecast();
+      const sc=_ofUpScope();
+      showToast&&showToast(`📤 ${names.length}개 상품 업로드 · ${sc.items.length}개 매칭${sc.unmatched.length?' · '+sc.unmatched.length+'개 매칭 안 됨':''}`,5000);
+    }catch(err){console.warn(err);showToast&&showToast('⚠️ 파일을 읽을 수 없습니다',5000);}
+  };
+  rd.readAsArrayBuffer(file);
+}
+function _ofUpTemplate(){
+  const ws=XLSX.utils.aoa_to_sheet([['상품명'],['3003 SAWYER-BLACK'],['906-BLACK']]);ws['!cols']=[{wch:44}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Sheet1');XLSX.writeFile(wb,'오더예측_업로드양식.xlsx');
+}
+function _ofUpClear(){_ofUp=null;_ofSaveUp();renderForecast();showToast&&showToast('업로드 목록을 비웠습니다');}
+function _ofEditsReset(){
+  _ofRows.forEach(r=>delete _ofEdits[r.key]);_ofSaveUp();renderForecast();
+  showToast&&showToast('사이즈 수정값을 추천 수량으로 되돌렸습니다');
+}
 // 사이즈 표기 → mm(220~300). "230", "37 (235)", "230 (36)", "36(230)" 지원. 범위 표기·의류·키즈 사이즈는 null(기타)
 function _ofSizeMm(sz){
   const nums=(String(sz).match(/\d+(\.\d+)?/g)||[]).map(Number).filter(n=>Number.isInteger(n)&&n>=200&&n<=320&&n%5===0);
@@ -9175,16 +9243,18 @@ function _ofSyncBase(){
 }
 function _ofCompute(){
   const s=_of;
-  const bIdx=s.b==='ALL'?-1:parseInt(s.b);
+  const UP=_ofIsUp()?_ofUpScope():null;
+  const bIdx=(UP||s.b==='ALL')?-1:parseInt(s.b);
   const brOk=r=>bIdx<0||r[0]===bIdx;
   const tLen=s.tTo-s.tFrom+1,bLen=s.bTo-s.bFrom+1;
   const K=bLen>0?tLen/bLen:0,G=s.growth/100;
   // 기준 기간 상품별 판매수량
   const base={};
-  const selP=(typeof SELECTED_PRODS!=='undefined'&&SELECTED_PRODS.length)?new Set(SELECTED_PRODS):null;
+  const selP=(!UP&&typeof SELECTED_PRODS!=='undefined'&&SELECTED_PRODS.length)?new Set(SELECTED_PRODS):null;
   PROD_DATA.forEach(r=>{
     if(!brOk(r)||!_ofInPeriod(r,s.bYr,s.unit,s.bFrom,s.bTo))return;
     if(selP&&!selP.has(r[4]))return;
+    if(UP&&!UP.set.has(r[0]+'|'+String(r[4]).trim().toLowerCase()))return;
     const k=r[0]+'|'+r[4];
     if(!base[k])base[k]={bi:r[0],prod:r[4],q:0};
     base[k].q+=r[5];
@@ -9238,8 +9308,11 @@ function _ofCompute(){
     if((recent[nk]||0)<=0&&!((inv[nk]||0)>0&&(lastSale[nk]||-1e9)>=latest[bi]-25))return; // 재고만 있는 상품은 최근 26주 내 판매가 있을 때만 (장기 미판매 재고 제외)
     extra[nk]={bi,prod};
   };
-  INV_DATA.forEach(x=>{if((+x.stock||0)>0)cand(x.bi,x.prod);});
-  PROD_DATA.forEach(r=>{if(latest[r[0]]==null||_ofExcl(r))return;const i=_ofRowIdx(r);if(i>=latest[r[0]]-1&&i<=latest[r[0]])cand(r[0],r[4]);});
+  if(UP){UP.items.forEach(it=>{if(!have.has(it.nk)&&!extra[it.nk])extra[it.nk]={bi:it.bi,prod:it.prod};});}
+  else{
+    INV_DATA.forEach(x=>{if((+x.stock||0)>0)cand(x.bi,x.prod);});
+    PROD_DATA.forEach(r=>{if(latest[r[0]]==null||_ofExcl(r))return;const i=_ofRowIdx(r);if(i>=latest[r[0]]-1&&i<=latest[r[0]])cand(r[0],r[4]);});
+  }
   Object.entries(extra).forEach(([nk,x])=>{
     let ratio=toRatio(szAll[nk]),src='전체 기간';
     if(!ratio){ratio=toRatio(szBrand[String(x.bi)]);src='브랜드 평균';}
@@ -9281,8 +9354,9 @@ function _ofCompute(){
     _ofCalcRow(r,K,G);
     _ofCalcGender(r);
   });
-  rows.sort((a,b)=>b.base-a.base||b.stock-a.stock);
-  return {rows,K,G,tLen,bLen,arrIdx,latest};
+  if(UP){const ok=r=>UP.ord[r.bi+'|'+String(r.prod).trim().toLowerCase()];rows.sort((a,b)=>(ok(a)??1e9)-(ok(b)??1e9));} // 업로드 파일 순서
+  else rows.sort((a,b)=>b.base-a.base||b.stock-a.stock);
+  return {rows,K,G,tLen,bLen,arrIdx,latest,UP};
 }
 // 재고 소진 / 입고시점 예상재고 / 영업 로스 (o: {stock, wkSales} → 결과 필드 채움, 상품·사이즈 공용)
 function _ofStockCalc(o,curIdx,arrIdx){
@@ -9395,8 +9469,49 @@ function _ofCalcRow(r,K,G){
   r.sz={};
   [..._ofSizes.w,..._ofSizes.m].forEach(z=>{r.sz[z]=Math.round(r.order*(r.ratio[z]||0));});
   r.etc=Math.round(r.order*(r.ratio.etc||0));
+  r.szRec={...r.sz};r.etcRec=r.etc; // 추천 수량
+  r.edited=false;
+  const ed=_ofIsUp()&&_ofEdits[r.key];
+  if(ed)Object.entries(ed).forEach(([z,v])=>{if(z==='etc'){r.etc=v;r.edited=true;}else if(z in r.sz){r.sz[z]=v;r.edited=true;}});
+  _ofSumRow(r);
+}
+function _ofSumRow(r){
   r.wSum=_ofSizes.w.reduce((a,z)=>a+r.sz[z],0);
   r.mSum=_ofSizes.m.reduce((a,z)=>a+r.sz[z],0);
+  r.fin=r.wSum+r.mSum+r.etc; // 확정 오더 (사이즈 합계)
+}
+// 사이즈 칸 직접 수정 (업로드 오더)
+function _ofSetSz(inp){
+  const tr=inp.closest('tr'),key=tr.dataset.ofKey,z=inp.dataset.z;
+  const r=_ofRows.find(x=>x.key===key);if(!r)return;
+  let v=Math.round(parseFloat(inp.value));
+  const rec=z==='etc'?r.etcRec:r.szRec[z];
+  if(isNaN(v)||v<0){inp.value=z==='etc'?r.etc:r.sz[z];return;}
+  if(!_ofEdits[key])_ofEdits[key]={};
+  if(v===rec)delete _ofEdits[key][z];else _ofEdits[key][z]=v;
+  if(!Object.keys(_ofEdits[key]).length)delete _ofEdits[key];
+  _ofSaveUp();
+  if(z==='etc')r.etc=v;else r.sz[z]=v;
+  r.edited=!!_ofEdits[key];
+  _ofSumRow(r);
+  inp.value=v;
+  const ed=v!==rec;
+  inp.style.borderColor=ed?'#f59e0b':'var(--hairline)';inp.style.background=ed?'rgba(245,158,11,.12)':'var(--canvas)';
+  inp.closest('td').title=`추천 ${wonNo(rec)}${ed?' → 수정 '+wonNo(v):''}`;
+  const set=(k,html)=>{const td=tr.querySelector(`td[data-of="${k}"]`);if(td)td.innerHTML=html;};
+  set('w',wonNo(r.wSum));set('m',wonNo(r.mSum));set('fin',_ofFinCell(r));
+  _ofRefreshTotals();
+}
+function _ofResetRow(btn){
+  const tr=btn.closest('tr'),key=tr.dataset.ofKey,r=_ofRows.find(x=>x.key===key);if(!r)return;
+  delete _ofEdits[key];_ofSaveUp();
+  _ofCalcRow(r,_ofK(),_of.growth/100);
+  tr.innerHTML=_ofRowCells(r,_ofRows.indexOf(r),_ofIsAll());
+  _ofRefreshTotals();
+}
+function _ofFinCell(r){
+  const diff=r.fin-r.order;
+  return `<b style="color:${r.edited?'#d97706':'#059669'}">${wonNo(r.fin)}</b>${r.edited?`<div style="font-size:10px;color:var(--muted);white-space:nowrap">추천 ${wonNo(r.order)} (${diff>=0?'+':''}${wonNo(diff)}) <button onclick="_ofResetRow(this)" title="추천 수량으로 되돌리기" style="border:none;background:transparent;color:var(--sky);cursor:pointer;font-size:11px;padding:0 2px">↺</button></div>`:''}`;
 }
 function renderForecast(){
   destroyCharts();
@@ -9425,13 +9540,20 @@ function renderForecast(){
   const lbl='font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px';
   const numIn='padding:8px 10px;font-size:13px;border:1px solid var(--hairline);border-radius:8px;background:var(--canvas);color:var(--ink);width:84px;font-family:inherit;text-align:right';
   const totBase=res.rows.reduce((a,r)=>a+r.base,0),totFc=res.rows.reduce((a,r)=>a+r.fc,0),totOrd=res.rows.reduce((a,r)=>a+r.order,0);
-  const isAll=s.b==='ALL';
+  const isAll=_ofIsAll(),UPM=_ofIsUp(),UP=res.UP;
   document.getElementById('content').innerHTML=`
+<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+  <div class="seg">
+    <button class="seg-btn${UPM?'':' active'}" onclick="_ofSet('mode','all')">📊 전체 상품 예측</button>
+    <button class="seg-btn${UPM?' active':''}" onclick="_ofSet('mode','up')">📤 상품 업로드 오더</button>
+  </div>
+  <span style="font-size:12px;color:var(--muted)">${UPM?'업로드한 상품만 같은 조건으로 추천 수량을 계산 · 사이즈별 수량을 직접 수정할 수 있습니다':'기준 기간 판매·재고가 있는 상품 전체'}</span>
+</div>
 <div class="kpi-grid" style="grid-template-columns:repeat(6,minmax(0,1fr))">
   <div class="kpi-card accent"><div class="kpi-label">기준 기간 판매수량</div><div class="kpi-val" id="of-kpi-base">${wonNo(totBase)}개</div><div class="kpi-sub">${_ofPeriodText(s.bYr,s.unit,s.bFrom,s.bTo)}</div></div>
   <div class="kpi-card"><div class="kpi-label">예측 판매수량</div><div class="kpi-val" id="of-kpi-fc" style="color:var(--sky)">${wonNo(totFc)}개</div><div class="kpi-sub">기간 계수 ${res.K.toFixed(2)} × 성장률 ${s.growth}%</div></div>
-  <div class="kpi-card"><div class="kpi-label">최종 오더수량</div><div class="kpi-val" id="of-kpi-ord" style="color:#059669">${wonNo(totOrd)}개</div><div class="kpi-sub">상품별 추가 오더 % 반영</div></div>
-  <div class="kpi-card"><div class="kpi-label">대상 상품</div><div class="kpi-val" id="of-kpi-cnt">${wonNo(res.rows.length)}개</div><div class="kpi-sub">${res.rows.some(r=>r.est)?`🆕 기준 기간 실적 없는 상품 ${res.rows.filter(r=>r.est).length}개 포함`:'기준 기간 판매 실적 보유'}</div></div>
+  <div class="kpi-card"><div class="kpi-label">${UPM?'확정 오더수량':'최종 오더수량'}</div><div class="kpi-val" id="of-kpi-ord" style="color:#059669">${wonNo(UPM?res.rows.reduce((a,r)=>a+r.fin,0):totOrd)}개</div><div class="kpi-sub" id="of-kpi-ord-sub">${UPM?'사이즈 수정 반영 · 추천 '+wonNo(totOrd)+'개':'상품별 추가 오더 % 반영'}</div></div>
+  <div class="kpi-card"><div class="kpi-label">대상 상품</div><div class="kpi-val" id="of-kpi-cnt">${wonNo(res.rows.length)}개</div><div class="kpi-sub">${UPM?(UP.total?`업로드 ${UP.total}개 중 ${UP.items.length}개 매칭`:'업로드 대기'):(res.rows.some(r=>r.est)?`🆕 기준 기간 실적 없는 상품 ${res.rows.filter(r=>r.est).length}개 포함`:'기준 기간 판매 실적 보유')}</div></div>
   <div class="kpi-card"><div class="kpi-label">판매 목표 기간</div><div class="kpi-val" style="font-size:18px">${res.tLen}${unitTxt}</div><div class="kpi-sub">${_ofPeriodText(s.tYr,s.unit,s.tFrom,s.tTo)}</div></div>
   <div class="kpi-card"><div class="kpi-label">⚠️ 입고 전 재고 소진</div><div class="kpi-val" id="of-kpi-loss" style="color:var(--red)">${wonNo(res.rows.filter(r=>r.loss).length)}개</div><div class="kpi-sub" id="of-kpi-loss-sub">입고 ${_ofWkTxt(res.arrIdx)} · 사이즈 로스 ${wonNo(res.rows.filter(r=>r.szLoss.length).length)}개 상품</div></div>
 </div>
@@ -9445,7 +9567,7 @@ function renderForecast(){
     </div>
   </div>
   <div style="display:flex;flex-wrap:wrap;gap:18px 28px;align-items:flex-end">
-    <div><div style="${lbl}">브랜드</div><select onchange="_ofSet('b',this.value)">${bOpt}</select></div>
+    <div${UPM?' style="display:none"':''}><div style="${lbl}">브랜드</div><select onchange="_ofSet('b',this.value)">${bOpt}</select></div>
     <div>
       <div style="${lbl}">🎯 판매 목표 기간 (희망 판매 일정)</div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -9502,7 +9624,7 @@ function renderForecast(){
 
 <div class="table-card">
   <div class="chart-header" style="flex-wrap:wrap;gap:10px">
-    <div><div class="chart-title">📦 상품별 · 사이즈별 오더 예측</div><div class="chart-sub">기준 판매수량 내림차순 · 추가 오더 % 칸을 직접 수정하세요 · 셀에 마우스를 올리면 계산식 확인${(typeof SELECTED_PRODS!=='undefined'&&SELECTED_PRODS.length)?` · <b style="color:var(--sky)">상단 상품 필터 ${SELECTED_PRODS.length}개 적용 중</b>`:''}</div></div>
+    <div><div class="chart-title">${UPM?'📤 업로드 상품 오더 (사이즈별 수정 가능)':'📦 상품별 · 사이즈별 오더 예측'}</div><div class="chart-sub">${UPM?'업로드 파일 순서 · 오른쪽 사이즈 칸에 수량을 직접 입력하면 확정 오더에 반영 (노란 칸 = 수정됨)':'기준 판매수량 내림차순'} · 추가 오더 % 칸을 직접 수정하세요 · 셀에 마우스를 올리면 계산식 확인${(typeof SELECTED_PRODS!=='undefined'&&SELECTED_PRODS.length)?` · <b style="color:var(--sky)">상단 상품 필터 ${SELECTED_PRODS.length}개 적용 중</b>`:''}</div></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <div style="position:relative;display:flex;align-items:center">
         <span style="position:absolute;left:11px;color:var(--muted);font-size:13px;pointer-events:none">🔍</span>
@@ -9510,10 +9632,19 @@ function renderForecast(){
         <button id="of-q-clear" onclick="const i=document.getElementById('of-q');i.value='';_ofFilter('');i.focus();" title="검색어 지우기" style="position:absolute;right:6px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;padding:4px;${s.q?'':'display:none'}">✕</button>
       </div>
       <span id="of-q-cnt" style="font-size:12px;color:var(--muted);white-space:nowrap"></span>
+      ${UPM?`<input type="file" id="of-up-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="_ofUploadFile(this)">
+      <button onclick="document.getElementById('of-up-file').click()" class="upload-btn" style="padding:6px 14px;font-size:12px">📤 상품명 업로드</button>
+      <button onclick="_ofUpTemplate()" style="padding:6px 12px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface);color:var(--ink);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">📄 양식</button>
+      ${res.rows.some(r=>r.edited)?`<button onclick="_ofEditsReset()" style="padding:6px 12px;border:1px solid #f59e0b;border-radius:8px;background:rgba(245,158,11,.1);color:#b45309;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">↺ 수정 초기화</button>`:''}`:''}
       <button onclick="exportForecastXlsx()" style="padding:6px 14px;background:var(--green-light);color:var(--green);border:1.5px solid var(--green);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">📥 엑셀 (수식 포함)</button>
     </div>
   </div>
-  ${res.rows.length?_ofTableHtml(isAll):`<div class="empty"><div class="empty-icon">🔍</div>기준 기간(${_ofPeriodText(s.bYr,s.unit,s.bFrom,s.bTo)})에 판매 데이터가 없습니다</div>`}
+  ${UPM&&_ofUp?`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;margin:-4px 0 12px;padding:10px 14px;border-radius:10px;background:var(--surface);border:1px solid var(--hairline)">
+    <span>📄 <b>${escHtml(_ofUp.fname||'업로드 목록')}</b> · ${UP.total}개 중 <b style="color:#059669">${UP.items.length}개 매칭</b>${UP.unmatched.length?` · <b style="color:var(--red)">${UP.unmatched.length}개 매칭 안 됨</b>`:''}</span>
+    ${UP.unmatched.length?`<span style="color:var(--red);font-size:11px">${UP.unmatched.map(escHtml).join(', ')}</span>`:''}
+    <button onclick="_ofUpClear()" style="margin-left:auto;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:11px;font-family:inherit">목록 비우기 ✕</button>
+  </div>`:''}
+  ${res.rows.length?_ofTableHtml(isAll):(UPM?`<div class="empty"><div class="empty-icon">📤</div>오더를 낼 상품명을 엑셀로 업로드하세요<div style="font-size:12px;color:var(--muted);margin-top:6px">첫 행에 <b>상품명</b> 헤더, 아래로 상품명을 한 줄씩 (바탕화면 '테스트' 파일과 같은 양식)</div><div style="margin-top:14px;display:flex;gap:8px;justify-content:center"><button class="upload-btn" onclick="document.getElementById('of-up-file').click()" style="padding:9px 18px;font-size:13px">📤 상품명 업로드</button><button onclick="_ofUpTemplate()" style="padding:9px 14px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">📄 양식 다운로드</button></div></div>`:`<div class="empty"><div class="empty-icon">🔍</div>기준 기간(${_ofPeriodText(s.bYr,s.unit,s.bFrom,s.bTo)})에 판매 데이터가 없습니다</div>`)}
 </div>`;
   _ofFilter(s.q);
 }
@@ -9525,7 +9656,7 @@ function _ofTableHtml(isAll){
     <tr>
       <th rowspan="2">#</th>${isAll?'<th rowspan="2">브랜드</th>':''}<th rowspan="2">상품</th>
       <th rowspan="2" class="nr">현재 재고</th><th rowspan="2" class="nr" title="최근 2주 판매 ÷ 2">주당 판매<br><span style="font-weight:400;font-size:10px">(최근 2주)</span></th><th rowspan="2">재고 소진 예상<br><span style="font-weight:400;font-size:10px">(사이즈별)</span></th><th rowspan="2" title="현재 재고 ÷ 주당 판매 (최근 2주), 사이즈 구분 없음">재고 소진 예상<br><span style="font-weight:400;font-size:10px">(단순 계산)</span></th><th rowspan="2" class="nr">입고시점<br>예상재고</th><th rowspan="2">비고</th>
-      <th rowspan="2" class="nr">기준 판매</th><th rowspan="2" class="nr">예측 수량</th><th rowspan="2" class="nr">추가 오더 %</th><th rowspan="2" class="nr" style="color:#059669">최종 오더</th>
+      <th rowspan="2" class="nr">기준 판매</th><th rowspan="2" class="nr">예측 수량</th><th rowspan="2" class="nr">추가 오더 %</th><th rowspan="2" class="nr" style="color:#059669">${_ofIsUp()?'추천 오더':'최종 오더'}</th>${_ofIsUp()?'<th rowspan="2" class="nr" style="color:#d97706" title="사이즈별 수량 합계 (직접 수정 반영)">확정 오더<br><span style="font-weight:400;font-size:10px">(사이즈 합계)</span></th>':''}
       <th rowspan="2" class="nr" style="background:${wBg}">여성${_of.szView!=='order'?'<br><span style="font-weight:400;font-size:10px">'+_ofViewName()+'</span>':''}</th><th rowspan="2" class="nr" style="background:${mBg}">남성${_of.szView!=='order'?'<br><span style="font-weight:400;font-size:10px">'+_ofViewName()+'</span>':''}</th><th rowspan="2" class="nr" title="기준 기간 사이즈별 판매 비율 (사이즈 비율과 동일)">판매 비율<br><span style="font-weight:400;font-size:10px">여성 / 남성</span></th><th rowspan="2" class="nr" title="올해 판매 ÷ (올해 판매 + 현재 재고)">소진율<br><span style="font-weight:400;font-size:10px">여성 / 남성</span></th><th rowspan="2" class="nr">기타</th>
       ${W.length?`<th colspan="${W.length}" style="text-align:center;background:${wBg};color:#db2777">여성 (220~245)</th>`:''}
       ${M.length?`<th colspan="${M.length}" style="text-align:center;background:${mBg};color:#2563eb">남성 (250~300)</th>`:''}
@@ -9541,7 +9672,13 @@ function _ofTableHtml(isAll){
 function _ofRowCells(r,i,isAll){
   const s=_of,K=_ofK(),G=s.growth/100;
   const f=n=>wonNo(n);
-  const zc=(z,bg)=>{const c=_ofSzCell(r,z);return `<td class="nr" style="background:${c.loss?'rgba(239,68,68,.14)':bg};color:${c.loss?'var(--red)':(c.empty?'var(--hint)':'var(--ink)')};${c.loss?'font-weight:700;':''}white-space:nowrap" title="${escHtml(c.tip)}">${c.html}</td>`;};
+  const zc=(z,bg)=>{const c=_ofSzCell(r,z);
+    if(_ofIsUp()){
+      const q=z==='etc'?r.etc:r.sz[z],rec=z==='etc'?r.etcRec:r.szRec[z],ed=q!==rec,o=r.szSt[z];
+      const tip=`추천 ${f(rec)}${ed?' → 수정 '+f(q):''}${o&&o.loss?' · '+_ofLossTxt(o.loss):''}`;
+      return `<td class="nr" style="background:${c.loss?'rgba(239,68,68,.14)':bg};padding:4px 3px" title="${escHtml(tip)}"><input type="number" min="0" step="1" value="${q}" data-z="${z}" onchange="_ofSetSz(this)" onfocus="this.select()" style="width:50px;padding:4px 5px;font-size:12px;text-align:right;border:1px solid ${ed?'#f59e0b':'var(--hairline)'};background:${ed?'rgba(245,158,11,.12)':'var(--canvas)'};border-radius:6px;color:${c.loss?'var(--red)':'var(--ink)'};font-weight:${c.loss||ed?700:500};font-family:inherit"></td>`;
+    }
+    return `<td class="nr" style="background:${c.loss?'rgba(239,68,68,.14)':bg};color:${c.loss?'var(--red)':(c.empty?'var(--hint)':'var(--ink)')};${c.loss?'font-weight:700;':''}white-space:nowrap" title="${escHtml(c.tip)}">${c.html}</td>`;};
   const grp=(zs)=>_ofGrpSum(r,zs);
   return `<td style="color:var(--muted)">${i+1}</td>${isAll?`<td style="white-space:nowrap;color:${BCOLORS[r.bi]};font-weight:600">${BNAMES[r.bi]}</td>`:''}
     <td style="min-width:180px"><div style="font-weight:600">${escHtml(r.prod)}</div><div style="font-size:10px;color:var(--muted)">${r.est?'<span style="color:#d97706;font-weight:700">🆕 기준 기간 실적 없음 · 최근 판매 기준</span> · ':''}사이즈 비율: ${r.src}</div></td>
@@ -9554,9 +9691,9 @@ function _ofRowCells(r,i,isAll){
     <td class="nr"${r.est?` style="color:#d97706;font-style:italic" title="추정: 주당 판매 ${Math.round(r.wkSales*10)/10} × 기준 기간 ${Math.round(r.bWeeks*10)/10}주 = ${f(r.base)}"`:''}>${f(r.base)}${r.est?'*':''}</td>
     <td class="nr" style="color:var(--sky);font-weight:600" title="ROUND(${f(r.base)} × ${K.toFixed(4)} × ${s.growth}%) = ${f(r.fc)}">${f(r.fc)}</td>
     <td class="nr"><input type="number" min="0" step="5" value="${r.pct}" onchange="_ofSetPct(this)" style="width:70px;padding:5px 6px;font-size:12px;border:1px solid ${r.pct!==100?'#059669':'var(--hairline)'};border-radius:6px;background:var(--canvas);color:var(--ink);text-align:right;font-family:inherit">%</td>
-    <td class="nr" style="font-weight:800;color:#059669" title="ROUND(${f(r.fc)} × ${r.pct}%) = ${f(r.order)}">${f(r.order)}</td>
-    <td class="nr" style="background:rgba(236,72,153,.07);font-weight:700" title="여성 사이즈 합계">${grp(_ofSizes.w)}</td>
-    <td class="nr" style="background:rgba(37,99,235,.07);font-weight:700" title="남성 사이즈 합계">${grp(_ofSizes.m)}</td>
+    <td class="nr" style="font-weight:800;color:#059669" title="ROUND(${f(r.fc)} × ${r.pct}%) = ${f(r.order)}">${f(r.order)}</td>${_ofIsUp()?`<td class="nr" data-of="fin" style="font-weight:800">${_ofFinCell(r)}</td>`:''}
+    <td class="nr" data-of="w" style="background:rgba(236,72,153,.07);font-weight:700" title="여성 사이즈 합계">${grp(_ofSizes.w)}</td>
+    <td class="nr" data-of="m" style="background:rgba(37,99,235,.07);font-weight:700" title="남성 사이즈 합계">${grp(_ofSizes.m)}</td>
     <td class="nr" style="font-size:11px;white-space:nowrap;line-height:1.5" title="기준 기간 사이즈별 판매 비율 (출처: ${r.src})"><div style="color:#db2777">여 ${_ofPctTxt(r.gR.w)}</div><div style="color:#2563eb">남 ${_ofPctTxt(r.gR.m)}</div></td>
     <td class="nr" style="font-size:11px;white-space:nowrap;line-height:1.5"><div style="color:#db2777" title="${r.curYr}년 여성 사이즈 판매 ${f(r.soldG.w)} ÷ (판매 ${f(r.soldG.w)} + 재고 ${f(r.gStk.w)})">여 ${_ofPctTxt(r.gST.w)}</div><div style="color:#2563eb" title="${r.curYr}년 남성 사이즈 판매 ${f(r.soldG.m)} ÷ (판매 ${f(r.soldG.m)} + 재고 ${f(r.gStk.m)})">남 ${_ofPctTxt(r.gST.m)}</div></td>
     ${zc('etc','transparent')}
@@ -9569,7 +9706,7 @@ function _ofFootHtml(isAll){
   return `<tr><td style="${st}" colspan="${isAll?3:2}">합계 · ${R.length}개 상품</td>
     <td class="nr" style="${st}">${sum(r=>r.stock)}</td><td class="nr" style="${st}">${wonNo(Math.round(R.reduce((a,r)=>a+r.wkSales,0)))}</td><td style="${st}"></td><td style="${st}"></td><td class="nr" style="${st}">${sum(r=>r.arrStock)}</td><td style="${st};color:var(--red);font-size:11px;white-space:nowrap">${R.filter(r=>r.loss).length?'로스 '+R.filter(r=>r.loss).length+'개 상품':''}${R.filter(r=>r.szLoss.length).length?`<div style="color:#ea580c">사이즈 로스 ${R.filter(r=>r.szLoss.length).length}개 상품</div>`:''}</td>
     <td class="nr" style="${st}">${sum(r=>r.base)}</td><td class="nr" style="${st};color:var(--sky)">${sum(r=>r.fc)}</td><td style="${st}"></td>
-    <td class="nr" style="${st};color:#059669">${sum(r=>r.order)}</td>${(()=>{
+    <td class="nr" style="${st};color:#059669">${sum(r=>r.order)}</td>${_ofIsUp()?`<td class="nr" style="${st};color:#d97706">${sum(r=>r.fin)}</td>`:''}${(()=>{
       const v=_of.szView,ALL=[..._ofSizes.w,..._ofSizes.m];
       const val=(r,z)=>v==='order'?(z==='etc'?r.etc:r.sz[z]):v==='out'?((r.szSt[z]&&r.szSt[z].loss)?1:0):((r.szSt[z]||{})[{stock:'stock',wk:'wkSales',arr:'arrStock'}[v]]||0);
       const fmt=n=>v==='out'?(n?`<span style="color:var(--red)">로스 ${n}</span>`:'-'):v==='wk'?(Math.round(n*10)/10).toLocaleString():wonNo(n);
@@ -9599,7 +9736,7 @@ function _ofSet(k,v){
   renderForecast();
 }
 function _ofRefreshTotals(){
-  const isAll=_of.b==='ALL';
+  const isAll=_ofIsAll();
   const foot=document.getElementById('of-foot');if(foot)foot.innerHTML=_ofFootHtml(isAll);
   _ofRefreshKpi();
 }
@@ -9607,7 +9744,8 @@ function _ofRefreshKpi(){
   const R=_ofVisible();
   const set=(id,v,u)=>{const el=document.getElementById(id);if(el)el.textContent=wonNo(v)+u;};
   set('of-kpi-base',R.reduce((a,r)=>a+r.base,0),'개');set('of-kpi-fc',R.reduce((a,r)=>a+r.fc,0),'개');
-  set('of-kpi-ord',R.reduce((a,r)=>a+r.order,0),'개');set('of-kpi-cnt',R.length,'개');set('of-kpi-loss',R.filter(r=>r.loss).length,'개');
+  set('of-kpi-ord',R.reduce((a,r)=>a+(_ofIsUp()?r.fin:r.order),0),'개');
+  const os=document.getElementById('of-kpi-ord-sub');if(os&&_ofIsUp())os.textContent='사이즈 수정 반영 · 추천 '+wonNo(R.reduce((a,r)=>a+r.order,0))+'개';set('of-kpi-cnt',R.length,'개');set('of-kpi-loss',R.filter(r=>r.loss).length,'개');
   const ls=document.getElementById('of-kpi-loss-sub');if(ls)ls.textContent=`입고 ${_ofWkTxt(_ofWIdx(_of.arrYr,_of.arrWk))} · 사이즈 로스 ${wonNo(R.filter(r=>r.szLoss.length).length)}개 상품`;
 }
 function _ofSetPct(inp){
@@ -9619,7 +9757,7 @@ function _ofSetPct(inp){
   _ofSavePct();
   _ofCalcRow(r,_ofK(),_of.growth/100);
   const i=_ofRows.indexOf(r);
-  tr.innerHTML=_ofRowCells(r,i,_of.b==='ALL');
+  tr.innerHTML=_ofRowCells(r,i,_ofIsAll());
   _ofRefreshTotals();
 }
 function _ofBulk(v){
@@ -9638,7 +9776,7 @@ function _ofFilter(q){
   const cnt=document.getElementById('of-q-cnt');if(cnt)cnt.textContent=q.trim()?`${vis.size}개 / ${_ofRows.length}개`:'';
   const clr=document.getElementById('of-q-clear');if(clr)clr.style.display=q?'':'none';
   _ofRefreshKpi();
-  const foot=document.getElementById('of-foot');if(foot)foot.innerHTML=_ofFootHtml(_of.b==='ALL');
+  const foot=document.getElementById('of-foot');if(foot)foot.innerHTML=_ofFootHtml(_ofIsAll());
 }
 // 엑셀 출력: 결과값과 함께 수식(기간 계수·예측·최종 오더·사이즈 분배·입고시점 재고)을 셀 수식으로 저장
 function exportForecastXlsx(){
@@ -9661,7 +9799,7 @@ function exportForecastXlsx(){
   const txt=v=>({t:'s',v:String(v)});
   const num=(v,z)=>Object.assign({t:'n',v},z?{z}:{});
   const fx=(f,v,z)=>Object.assign({t:typeof v==='string'?'s':'n',f,v},z?{z}:{});
-  put(ws,'A1',txt(`오더 예측 — ${isAll?'전체 브랜드':BNAMES[+s.b]}`));
+  put(ws,'A1',txt(`오더 예측 — ${_ofIsUp()?'업로드 상품 ('+((_ofUp&&_ofUp.fname)||'')+') · 사이즈 수동 수정 반영':(isAll?'전체 브랜드':BNAMES[+s.b])}`));
   put(ws,'A3',txt('판매 목표 기간'));put(ws,'B3',txt(_ofPeriodText(s.tYr,s.unit,s.tFrom,s.tTo)));
   put(ws,'A4',txt(`목표 기간 길이(${unitTxt})`));put(ws,'B4',num(s.tTo-s.tFrom+1));
   put(ws,'A5',txt('기준 판매 기간'));put(ws,'B5',txt(_ofPeriodText(s.bYr,s.unit,s.bFrom,s.bTo)+(s.auto?' (전년 동기간)':'')));
@@ -9672,6 +9810,7 @@ function exportForecastXlsx(){
   const head={rank:'순위',brand:'브랜드',prod:'상품',stock:'현재 재고',wk:'주당 판매 (최근 2주 ÷ 2)',left:'소진까지 주수 (사이즈별)',out:'재고 소진 예상 (사이즈별)',leftS:'소진까지 주수 (단순 계산)',outS:'재고 소진 예상 (단순 계산)',toArr:'입고까지 주수',arrStock:'입고시점 예상재고',note:'비고',
     base:'기준 판매수량',fc:'예측 수량',pct:'추가 오더 %',order:'최종 오더수량',w:'여성 합계 (220~245)',m:'남성 합계 (250~300)',wR:'여성 판매 비율',mR:'남성 판매 비율',wSold:'여성 올해 판매',wStk:'여성 현재 재고',wST:'여성 소진율',mSold:'남성 올해 판매',mStk:'남성 현재 재고',mST:'남성 소진율',etc:'기타 사이즈',szSum:'사이즈 합계',src:'사이즈 비율 출처'};
   SZ.forEach(z=>head['z'+z]=String(z));
+  if(_ofIsUp()){head.order='추천 오더수량';head.szSum='확정 오더 (사이즈 합계)';}
   keys.forEach(k=>put(ws,C[k]+HR,txt(head[k])));
   ['rank','brand','prod'].forEach(k=>put(wr,C[k]+HR,txt(head[k])));
   put(wr,C.stock+HR,txt('사이즈 비율 출처'));put(wr,C.etc+HR,txt('기타'));SZ.forEach(z=>put(wr,C['z'+z]+HR,txt(String(z))));
@@ -9701,10 +9840,11 @@ function exportForecastXlsx(){
       put(ws,c(g+'Sold'),num(Math.max(0,r.soldG[g])));put(ws,c(g+'Stk'),num(r.gStk[g]));
       put(ws,c(g+'ST'),fx(`IF(${c(g+'Sold')}+${c(g+'Stk')}>0,${c(g+'Sold')}/(${c(g+'Sold')}+${c(g+'Stk')}),"-")`,r.gST[g]==null?'-':r.gST[g],'0.0%'));
     });
-    put(ws,c('etc'),fx(`ROUND($${C.order}${n}*${RS}!${c('etc')},0)`,r.etc));
-    SZ.forEach(z=>put(ws,c('z'+z),fx(`ROUND($${C.order}${n}*${RS}!${c('z'+z)},0)`,r.sz[z])));
+    put(ws,c('etc'),r.etc!==r.etcRec?num(r.etc):fx(`ROUND($${C.order}${n}*${RS}!${c('etc')},0)`,r.etc));
+    SZ.forEach(z=>put(ws,c('z'+z),r.sz[z]!==r.szRec[z]?num(r.sz[z]):fx(`ROUND($${C.order}${n}*${RS}!${c('z'+z)},0)`,r.sz[z]))); // 직접 수정한 사이즈는 값으로
     put(ws,c('szSum'),fx(`${c('w')}+${c('m')}+${c('etc')}`,r.wSum+r.mSum+r.etc));
-    put(ws,c('src'),txt(r.src+(r.est?' · 기준 판매 추정 (기준 기간 실적 없음)':'')));
+    const edZ=[...SZ.filter(z=>r.sz[z]!==r.szRec[z]),...(r.etc!==r.etcRec?['etc']:[])];
+    put(ws,c('src'),txt(r.src+(r.est?' · 기준 판매 추정 (기준 기간 실적 없음)':'')+(edZ.length?' · 수동 수정: '+edZ.map(z=>_ofSzName(z)+'('+(z==='etc'?r.etcRec:r.szRec[z])+'→'+(z==='etc'?r.etc:r.sz[z])+')').join(', '):'')));
     // 사이즈비율 시트 (같은 행·열)
     put(wr,c('rank'),num(i+1));put(wr,c('brand'),txt(BNAMES[r.bi]));put(wr,c('prod'),txt(r.prod));put(wr,c('stock'),txt(r.src));
     put(wr,c('etc'),num(r.ratio.etc||0,'0.0%'));
@@ -9774,7 +9914,8 @@ function exportForecastXlsx(){
   XLSX.utils.book_append_sheet(wb,wr,'사이즈비율');
   XLSX.utils.book_append_sheet(wb,wg,'계산방법');
   const d=new Date(),ymd=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-  XLSX.writeFile(wb,`오더예측_${isAll?'전체':BNAMES[+s.b]}_${ymd}.xlsx`);
+  if(_ofIsUp()){const sc=_ofUpScope();if(sc.unmatched.length){const wu=XLSX.utils.aoa_to_sheet([['매칭 안 된 상품명'],...sc.unmatched.map(x=>[x])]);wu['!cols']=[{wch:44}];XLSX.utils.book_append_sheet(wb,wu,'매칭안됨');}}
+  XLSX.writeFile(wb,`오더예측_${_ofIsUp()?'업로드':(isAll?'전체':BNAMES[+s.b])}_${ymd}.xlsx`);
 }
 
 function renderGoalSales(){
