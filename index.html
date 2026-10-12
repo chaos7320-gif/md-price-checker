@@ -10076,10 +10076,19 @@ ${brands.map(bi=>{
   <div class="chart-header">
     <div>
       <div class="chart-title">월별 목표 vs 실매출 비교</div>
-      <div class="chart-sub">${bIdx<0?'전체 브랜드 합산':BNAMES[bIdx]} | 2026년 월별 · 막대 클릭 시 상품별/매출처별 판매 확인</div>
+      <div class="chart-sub">${bIdx<0?'전체 브랜드 합산':BNAMES[bIdx]} | 2026년 월별 · 막대 위 % = 월 달성률 · 막대 클릭 시 상품별/매출처별 판매 확인</div>
     </div>
+    ${(()=>{
+      const tgtM=Array.from({length:12},(_,i)=>brands.reduce((s,bi)=>s+GOAL_DATA[bi].monthly_target[i],0));
+      const actM=Array.from({length:12},(_,i)=>brands.reduce((s,bi)=>s+actual[bi][i],0));
+      const cT=tgtM.slice(0,nowMo+1).reduce((a,b)=>a+b,0),cA=actM.slice(0,nowMo+1).reduce((a,b)=>a+b,0),yT=tgtM.reduce((a,b)=>a+b,0);
+      if(!cT)return '';
+      const r=cA/cT*100,ry=yT?cA/yT*100:0;
+      const chip=(l,v,c)=>`<div style="padding:6px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--hairline);text-align:right"><div style="font-size:10px;color:var(--muted);font-weight:600">${l}</div><div style="font-size:14px;font-weight:800;color:${c||'var(--ink)'}">${v}</div></div>`;
+      return `<div style="display:flex;gap:8px;flex-wrap:wrap">${chip(`2026 목표 (1~${nowMo+1}월 누적)`,won(cT))}${chip('2026 실매출',won(cA),'#0284c7')}${chip('현재 달성률',r.toFixed(1)+'%',rateColor(r))}${chip('연간 목표 대비',ry.toFixed(1)+'%',rateColor(ry))}</div>`;
+    })()}
   </div>
-  <div style="position:relative;height:260px"><canvas id="c-goal-main"></canvas></div>
+  <div style="position:relative;height:280px"><canvas id="c-goal-main"></canvas></div>
   ${(()=>{
     const mo2025=Array.from({length:12},(_,i)=>brands.reduce((s,bi)=>s+actual2025[bi][i],0));
     const mo2026=Array.from({length:12},(_,i)=>brands.reduce((s,bi)=>s+actual[bi][i],0));
@@ -10116,6 +10125,20 @@ ${brands.map(bi=>{
           ${mo2026.map((v,i)=>grCell(v,mo2025[i])).join('')}
           ${grCell(total2026,total2025)}
         </tr>
+        ${(()=>{
+          const tgtM=Array.from({length:12},(_,i)=>brands.reduce((s,bi)=>s+GOAL_DATA[bi].monthly_target[i],0));
+          const cT=tgtM.slice(0,nowMo+1).reduce((a,b)=>a+b,0),cA=mo2026.slice(0,nowMo+1).reduce((a,b)=>a+b,0);
+          return `<tr>
+          <td style="font-weight:700;color:#f97316;white-space:nowrap">2026 목표</td>
+          ${tgtM.map((v,i)=>`<td class="nr" style="color:var(--muted);${i===nowMo?'background:#fff7ed':''}">${v?won(v):'-'}</td>`).join('')}
+          <td class="nr" style="font-weight:700;color:var(--muted)">${won(tgtM.reduce((a,b)=>a+b,0))}</td>
+        </tr>
+        <tr style="background:#fff7ed">
+          <td style="font-weight:700;color:#c2410c;white-space:nowrap">2026 달성률</td>
+          ${tgtM.map((t,i)=>{const a=mo2026[i];if(!t||!a)return '<td class="nr" style="font-size:11px;color:var(--hint)">-</td>';const r=a/t*100;return `<td class="nr" style="font-size:11px;font-weight:700;color:${rateColor(r)}">${r.toFixed(0)}%</td>`;}).join('')}
+          <td class="nr" style="font-size:11px;font-weight:800;color:${cT?rateColor(cA/cT*100):'var(--muted)'}">${cT?(cA/cT*100).toFixed(1)+'%':'-'}<div style="font-weight:500;color:var(--muted);font-size:10px">${nowMo+1}월까지 누적</div></td>
+        </tr>`;
+        })()}
       </tbody>
     </table>
     </div>`;
@@ -10210,8 +10233,15 @@ ${brands.map(bi=>{
         GOAL_DATA[bi].monthly_target.forEach((v,i)=>tgt[i]+=v);
         actual[bi].forEach((v,i)=>act2[i]+=v);
       });
+      const goalAchPlugin={id:'goalAch',afterDatasetsDraw(ch){
+        const m=ch.getDatasetMeta(1),mt=ch.getDatasetMeta(0);if(!m||m.hidden)return;
+        const ctx=ch.ctx;ctx.save();ctx.font='700 10px Pretendard,system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='bottom';
+        act2.forEach((a,i)=>{const t=tgt[i];if(!t||!a)return;const bar=m.data[i],tb=mt&&!mt.hidden?mt.data[i]:null;if(!bar)return;
+          const r=a/t*100;ctx.fillStyle=rateColor(r);ctx.fillText(r.toFixed(0)+'%',bar.x,Math.min(bar.y,tb?tb.y:bar.y)-4);});
+        ctx.restore();
+      }};
       charts.goalMain=new Chart(mainEl,{
-        type:'bar',
+        type:'bar',plugins:[goalAchPlugin],
         data:{
           labels:MONTHS,
           datasets:[
@@ -10220,7 +10250,7 @@ ${brands.map(bi=>{
           ]
         },
         options:{
-          responsive:true,maintainAspectRatio:false,
+          responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},
           onClick:(evt,els)=>{
             if(!els.length)return;
             const i=els[0].index;
@@ -10228,7 +10258,7 @@ ${brands.map(bi=>{
           },
           plugins:{legend:{position:'top',labels:{font:{size:12}}},tooltip:{callbacks:{
             label:ctx=>`${ctx.dataset.label}: ${wonNo(ctx.parsed.y)}원`,
-            afterBody:ctx=>diffRateLines(tgt[ctx[0].dataIndex],act2[ctx[0].dataIndex])
+            afterBody:ctx=>{const i=ctx[0].dataIndex,t=tgt[i],a=act2[i];return [...(t&&a?[`달성률: ${(a/t*100).toFixed(1)}%`]:[]),...diffRateLines(t,a)];}
           }}},
           scales:{y:{ticks:{callback:v=>{if(v>=100000000)return (v/100000000).toFixed(0)+'억';if(v>=10000)return (v/10000).toFixed(0)+'만';return v;}},grid:{color:'rgba(0,0,0,.04)'}},x:{grid:{display:false}}}
         }
