@@ -8015,8 +8015,36 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   const moByYr={};
   cmpYrs.forEach(yr=>{moByYr[yr]=aggMo(yr);});
   const moAll=cmpYrs.length===0?aggMo(null):{};
-  const allMos=[...new Set([...cmpYrs.flatMap(yr=>Object.keys(moByYr[yr]||{})),...Object.keys(moAll)])].sort();
+  // 2026 목표 대비 달성률용: 2026 월별 실매출(현재 필터 반영) · 월별 목표(브랜드 기준)
+  const mo26=moByYr[2026]||aggMo(2026);
+  const tgt26M=get26MonthlyTarget(f.b);
+  const tgtMoKeys=tgt26M.map((v,i)=>v>0&&(!moF2||moF2.includes(i+1))?String(i+1).padStart(2,'0'):null).filter(Boolean);
+  const allMos=[...new Set([...cmpYrs.flatMap(yr=>Object.keys(moByYr[yr]||{})),...Object.keys(moAll),...tgtMoKeys])].sort();
   const moLabels=allMos.map(m=>parseInt(m)+'월');
+  const t26=mk=>tgt26M[parseInt(mk)-1]||0,a26=mk=>mo26[mk]||0;
+  const achColor=r=>r>=100?'#059669':r>=80?'#0ea5e9':r>=60?'#f59e0b':'#ef4444';
+  const lastMo26=Math.max(0,...allMos.filter(mk=>a26(mk)>0).map(Number)); // 2026 데이터 반영 마지막 월
+  const cumMos=allMos.filter(mk=>+mk<=lastMo26);
+  const cumT26=cumMos.reduce((s,mk)=>s+t26(mk),0),cumA26=cumMos.reduce((s,mk)=>s+a26(mk),0);
+  const yrT26=allMos.reduce((s,mk)=>s+t26(mk),0);
+  const hasFilt26=(f.chs&&f.chs.length>0)||(f.prods&&f.prods.length>0)||f.prod!=='ALL';
+  // 표 행: 2026 목표 / (실매출) / 달성률
+  const tgtRows26=withAct=>`
+        <tr>
+          <td style="font-weight:700;color:#f97316;white-space:nowrap">2026 목표</td>
+          ${allMos.map(mk=>`<td class="nr" style="color:var(--muted)">${t26(mk)?won(t26(mk)):'-'}</td>`).join('')}
+          <td class="nr" style="font-weight:700;color:var(--muted)">${won(yrT26)}</td>
+        </tr>${withAct?`
+        <tr>
+          <td style="font-weight:700;color:#15803d;white-space:nowrap">2026 실매출</td>
+          ${allMos.map(mk=>`<td class="nr">${a26(mk)?won(a26(mk)):'-'}</td>`).join('')}
+          <td class="nr" style="font-weight:700">${won(allMos.reduce((s,mk)=>s+a26(mk),0))}</td>
+        </tr>`:''}
+        <tr style="background:#fff7ed">
+          <td style="font-weight:700;color:#c2410c;white-space:nowrap">2026 달성률</td>
+          ${allMos.map(mk=>{const t=t26(mk),a=a26(mk);if(!t||!a)return '<td class="nr" style="font-size:11px;color:var(--hint)">-</td>';const r=a/t*100;return `<td class="nr" style="font-size:11px;font-weight:700;color:${achColor(r)}">${r.toFixed(0)}%</td>`;}).join('')}
+          <td class="nr" style="font-size:11px;font-weight:800;color:${cumT26?achColor(cumA26/cumT26*100):'var(--muted)'}" title="${lastMo26?lastMo26+'월까지 누적':''}">${cumT26?(cumA26/cumT26*100).toFixed(1)+'%':'-'}<div style="font-weight:500;color:var(--muted);font-size:10px">${lastMo26?lastMo26+'월까지 누적':''}</div></td>
+        </tr>`;
   // 주간 집계 (N년 비교용, 매출+수량)
   function aggWk(yr){
     const src=hasProd?filteredP:TOP_DATA;
@@ -8071,8 +8099,12 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   <div class="kpi-card"><div class="kpi-label">평균 단가</div><div class="kpi-val">${won(avg)}</div><div class="kpi-sub">건당 평균</div></div>
 </div>
 <div class="chart-card" data-period="monthly" style="margin-bottom:14px">
-  <div class="chart-header"><div><div class="chart-title">📅 월별 실매출 추이</div><div class="chart-sub">${cmpYrs.length>=2?cmpYrs.map(y=>y+'년').join(' vs '):cmpYrs.length===1?cmpYrs[0]+'년 월별 추이':'전체 기간 합산'} · 막대 클릭 시 상품별/매출처별 매출 확인</div></div></div>
-  <div style="position:relative;height:220px"><canvas id="d1-mo"></canvas></div>
+  <div class="chart-header" style="flex-wrap:wrap;gap:10px"><div><div class="chart-title">📅 월별 실매출 추이</div><div class="chart-sub">${cmpYrs.length>=2?cmpYrs.map(y=>y+'년').join(' vs '):cmpYrs.length===1?cmpYrs[0]+'년 월별 추이':'전체 기간 합산'} · 주황 점선 = 2026 목표 · 막대 위 % = 2026 월 달성률 · 막대 클릭 시 상품별/매출처별 매출 확인</div></div>
+    ${cumT26?(()=>{const r=cumA26/cumT26*100,ry=yrT26?cumA26/yrT26*100:0;const chip=(l,v,c)=>`<div style="padding:6px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--hairline);text-align:right"><div style="font-size:10px;color:var(--muted);font-weight:600">${l}</div><div style="font-size:14px;font-weight:800;color:${c||'var(--ink)'}">${v}</div></div>`;
+      return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch">${chip(`2026 목표 (${moF2?'선택 월 ':parseInt(cumMos[0])+'~'}${lastMo26}월 누적)`,won(cumT26))}${chip('2026 실매출',won(cumA26),'#15803d')}${chip('현재 달성률',r.toFixed(1)+'%',achColor(r))}${chip('연간 목표 대비',ry.toFixed(1)+'%',achColor(ry))}</div>`;})():''}
+  </div>
+  ${cumT26&&hasFilt26?'<div style="font-size:11px;color:#b45309;margin:-6px 0 8px">⚠️ 매출처·상품 필터가 적용된 실매출입니다 · 목표는 브랜드 전체 기준</div>':''}
+  <div style="position:relative;height:240px"><canvas id="d1-mo"></canvas></div>
   ${cmpYrs.length>=2?(()=>{
     const yA=cmpYrs[0],yB=cmpYrs[cmpYrs.length-1];
     const moA=moByYr[yA]||{},moB=moByYr[yB]||{};
@@ -8103,6 +8135,7 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
             <td class="nr" style="font-weight:700">${won(total)}</td>
           </tr>`;
         }).join('')}
+        ${yrT26?tgtRows26(!cmpYrs.includes(2026)):''}
         <tr style="background:#f8fafc">
           <td style="font-weight:700;color:var(--muted);white-space:nowrap">${yA}→${yB} 증감률</td>
           ${allMos.map(mk=>grCell(moB[mk]||0,moA[mk]||0)).join('')}
@@ -8111,7 +8144,9 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
       </tbody>
     </table>
     </div>`;
-  })():''}
+  })():(yrT26?`<div class="table-wrap" style="margin-top:14px"><table>
+      <thead><tr><th>구분</th>${allMos.map(mk=>`<th class="nr">${parseInt(mk)}월</th>`).join('')}<th class="nr">합계</th></tr></thead>
+      <tbody>${tgtRows26(true)}</tbody></table></div>`:'')}
 </div>
 <div class="chart-card" data-period="weekly" style="margin-bottom:14px">
   <div class="chart-header"><div><div class="chart-title">${cmpYrs.length>=2?`📅 ${cmpYrs.map(y=>y+'년').join(' vs ')} 주간 매출 비교`:cmpYrs.length===1?`📅 ${cmpYrs[0]}년 주간 매출 추이`:'📅 전체 기간 주간 매출'}</div><div class="chart-sub">주차별 실매출액 · 막대 위에 마우스를 올리면 매출+수량 확인 · 클릭 시 상품별/매출처별 매출 확인</div></div></div>
@@ -8166,9 +8201,23 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
         }));
       // 2026 월별 목표 오버레이
       const tgt26=get26MonthlyTarget(f.b);
-      ds.push({type:'line',label:'2026 목표',data:allMos.map(m=>tgt26[parseInt(m)-1]||0),borderColor:'#f97316',backgroundColor:'#f9731620',borderWidth:2,borderDash:[5,4],pointRadius:3,pointBackgroundColor:'#f97316',fill:false,tension:.3,order:0});
-      charts.d1mo=new Chart(document.getElementById('d1-mo'),{type:'bar',data:{labels:moLabels,datasets:ds},
-        options:{responsive:true,maintainAspectRatio:false,onClick:(evt,els)=>{
+      ds.push({type:'line',label:'2026 목표',data:allMos.map(m=>tgt26[parseInt(m)-1]||null),borderColor:'#f97316',backgroundColor:'#f9731620',borderWidth:2,borderDash:[5,4],pointRadius:3,pointBackgroundColor:'#f97316',fill:false,tension:.3,order:0});
+      // 2026 월 달성률 라벨: 2026 막대(없으면 목표선) 위에 표시
+      const achLabelPlugin={id:'ach26',afterDatasetsDraw(ch){
+        const ctx=ch.ctx,li=ch.data.datasets.findIndex(d=>d.type==='line'),bi=ch.data.datasets.findIndex(d=>d.label==='2026년');
+        const lm=li>=0?ch.getDatasetMeta(li):null,bm=bi>=0?ch.getDatasetMeta(bi):null;
+        if(!lm||lm.hidden)return;
+        ctx.save();ctx.font='700 10px Pretendard,system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='bottom';
+        allMos.forEach((mk,i)=>{
+          const t=t26(mk),a=a26(mk);if(!t||!a)return;
+          const pt=lm.data[i],bar=bm&&!bm.hidden?bm.data[i]:null;if(!pt)return;
+          const x=bar?bar.x:pt.x,y=Math.min(pt.y,bar?bar.y:pt.y)-5;
+          const r=a/t*100;ctx.fillStyle=achColor(r);ctx.fillText(r.toFixed(0)+'%',x,y);
+        });
+        ctx.restore();
+      }};
+      charts.d1mo=new Chart(document.getElementById('d1-mo'),{type:'bar',data:{labels:moLabels,datasets:ds},plugins:[achLabelPlugin],
+        options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:16}},onClick:(evt,els)=>{
           if(!els.length)return;
           const {datasetIndex:di,index:idx}=els[0];
           const dsItem=ds[di];
@@ -8200,11 +8249,12 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
           }
           return ` ${c.dataset.label}: ${won(curr)}${g}`;
         },afterBody:c=>{
-          const item=c[0];
-          if(!item||item.dataset.type==='line')return[];
-          const tgt=tgt26[item.dataIndex];
-          if(!tgt)return[];
-          return diffRateLines(tgt,item.raw).map(s=>`목표대비 ${s}`);
+          const item=c[0];if(!item)return[];
+          const mk=allMos[item.dataIndex],t=t26(mk),a=a26(mk);
+          if(!t)return[];
+          if(item.dataset.type==='line')return a?[`2026 실매출: ${won(a)}`,`달성률: ${(a/t*100).toFixed(1)}%`]:['2026 실매출 없음'];
+          if(item.dataset.label!=='2026년')return[];
+          return [`2026 목표: ${won(t)}`,`달성률: ${(item.raw/t*100).toFixed(1)}%`,...diffRateLines(t,item.raw).map(s=>`목표대비 ${s}`)];
         }}}},
         scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:9},callback:v=>short(v)}}}}});
     }
