@@ -1732,6 +1732,17 @@ function showBarBreakdownPopup(e,periodLabel,infoLines,prodRows,sectionLabel,chR
   let ty=e.clientY+10; if(ty+tip.offsetHeight>window.innerHeight-10)ty=e.clientY-tip.offsetHeight-10; if(ty<0)ty=4;
   tip.style.left=lx+'px'; tip.style.top=ty+'px';
 }
+// 총 실매출액 KPI 클릭 → 조회 조건 전체 상품별/매출처별 판매 팝업
+// _totSalesSrc[key]={s,q,rt,prod:()=>[bi,yr,mo,wk,prod,qty,s,rt][], ch:()=>[bi,yr,mo,wk,ch,qty,s,rt][]} (렌더 시 등록, 클릭 시 지연 집계)
+const _totSalesSrc={};
+function showTotalSalesPopup(event,key){
+  event.stopPropagation();
+  const src=_totSalesSrc[key];if(!src)return;
+  const agg=rows=>{const m={};rows.forEach(r=>{if(r[2]===12&&r[3]===1)return;const k=r[4];if(!m[k])m[k]={s:0,q:0,rt:0};m[k].s+=r[6];m[k].q+=r[5];m[k].rt+=r[7]||0;});return Object.entries(m).filter(([,d])=>d.s!==0||d.q!==0).sort((a,b)=>b[1].s-a[1].s);};
+  showBarBreakdownPopup(event,'조회 조건 전체 · 총 실매출',
+    [`<div>매출: <b style="color:#fff">${won(src.s)}</b></div>`,`<div>수량: <b style="color:#fff">${wonNo(src.q)}건</b></div>`,..._drLine(src.s,src.rt)],
+    agg(src.prod()).slice(0,15),null,agg(src.ch()));
+}
 function _barTipTab(btn){
   const tip=btn.closest('#sz-detail-tip');if(!tip)return;
   const idx=btn.dataset.tab;
@@ -4036,10 +4047,11 @@ function renderTop20(filtP,filtered,filteredP,f){
     </div>`;
   })();
 
+  _totSalesSrc.top20={s:tS,q:tQ,rt:tR,prod:()=>filtP,ch:()=>filtered};
   destroyCharts();
   document.getElementById(_RENDER_TGT).innerHTML=`
 <div class="kpi-grid">
-  <div class="kpi-card accent">
+  <div class="kpi-card accent" onclick="showTotalSalesPopup(event,'top20')" title="클릭 시 상품별/매출처별 판매 보기" style="cursor:pointer">
     <div class="kpi-label">총 실매출액</div>
     <div class="kpi-val">${won(tS)}</div>
     <div class="kpi-sub">필터 조건 합산</div>
@@ -7937,6 +7949,7 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   const base=hasProd?filtPK:filtK;
   const tS=base.reduce((s,r)=>s+r[6],0),tQ=base.reduce((s,r)=>s+r[5],0),tR=base.reduce((s,r)=>s+r[7],0);
   const dr=tR>0?(tR-tS)/tR*100:0,avg=tQ?Math.round(tS/tQ):0;
+  _totSalesSrc.db1={s:tS,q:tQ,rt:tR,prod:()=>filtPK,ch:()=>_buildProdAwareChannelData(filtered,filteredP,f)};
   // 채널별
   const byCh={};
   filtC.forEach(r=>{if(!byCh[r[4]])byCh[r[4]]={s:0,q:0};byCh[r[4]].s+=r[6];byCh[r[4]].q+=r[5];});
@@ -8095,7 +8108,7 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
   destroyCharts();
   document.getElementById(_RENDER_TGT).innerHTML=`
 <div class="kpi-grid" style="margin-bottom:16px">
-  <div class="kpi-card accent"><div class="kpi-label">총 실매출액</div><div class="kpi-val">${won(tS)}</div><div class="kpi-sub">조회 조건 합산</div></div>
+  <div class="kpi-card accent" onclick="showTotalSalesPopup(event,'db1')" title="클릭 시 상품별/매출처별 판매 보기" style="cursor:pointer"><div class="kpi-label">총 실매출액</div><div class="kpi-val">${won(tS)}</div><div class="kpi-sub">조회 조건 합산</div></div>
   <div class="kpi-card"><div class="kpi-label">정상가 합계</div><div class="kpi-val">${won(tR)}</div><div class="kpi-sub">할인 전</div></div>
   <div class="kpi-card"><div class="kpi-label">평균 할인율</div><div class="kpi-val">${pct(dr)}</div><div class="kpi-badge ${dr<5?'':'red'}">${pct(dr)} 할인</div></div>
   <div class="kpi-card"><div class="kpi-label">판매 수량</div><div class="kpi-val">${wonNo(tQ)}건</div><div class="kpi-sub">총 판매 건수</div></div>
