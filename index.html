@@ -1701,6 +1701,8 @@ function hideInvStockTip(){const t=document.getElementById('sz-detail-tip');if(t
 
 // ── 막대그래프 클릭 → 현재 정보 + 상품별 판매 수량/매출 팝업 (sz-detail-tip 재사용) ──
 // chRows를 넘기면 '상품별 판매' / '매출처별 판매' 탭으로 전환하며 확인
+// 팝업 info 라인: 평균 할인율 = 1 - 실매출 ÷ 정상가 (정상가 없으면 빈 배열)
+const _drLine=(s,rt)=>rt>0?[`<div>평균 할인율: <b style="color:#fca5a5">${((1-s/rt)*100).toFixed(1)}%</b> <span style="color:rgba(255,255,255,.45)">(정상가 ${won(rt)})</span></div>`]:[];
 function showBarBreakdownPopup(e,periodLabel,infoLines,prodRows,sectionLabel,chRows){
   const tip=document.getElementById('sz-detail-tip');
   if(!tip) return;
@@ -1835,17 +1837,18 @@ function showInboundChannelPopup(event,el){
 // 목표매출 탭: 상품별/매출처별 판매 집계 (periodType: 'yr'(연간 전체) | 'mo'(1~12) | 'wk'(ISO 주차))
 function _goalBreakdown(brSet,yr,periodType,key){
   const hit=r=>brSet.has(r[0])&&r[1]===yr&&!(r[2]===12&&r[3]===1)&&(periodType==='yr'||(periodType==='mo'?r[2]===key:r[3]===key));
-  const agg=(rows,ki)=>{const m={};rows.forEach(r=>{if(!hit(r))return;const k=r[ki];if(!m[k])m[k]={s:0,q:0};m[k].s+=r[6];m[k].q+=r[5];});return Object.entries(m).filter(([,d])=>d.s!==0||d.q!==0).sort((a,b)=>b[1].s-a[1].s);};
+  const agg=(rows,ki)=>{const m={};rows.forEach(r=>{if(!hit(r))return;const k=r[ki];if(!m[k])m[k]={s:0,q:0,rt:0};m[k].s+=r[6];m[k].q+=r[5];m[k].rt+=r[7]||0;});return Object.entries(m).filter(([,d])=>d.s!==0||d.q!==0).sort((a,b)=>b[1].s-a[1].s);};
   const prodAll=agg(PROD_DATA.length?PROD_DATA:D_PROD,4);
-  return {prodRows:prodAll.slice(0,15),chRows:agg(TOP_DATA,4),q:prodAll.reduce((s,[,d])=>s+d.q,0)};
+  const chRows=agg(TOP_DATA,4);
+  return {prodRows:prodAll.slice(0,15),chRows,q:prodAll.reduce((s,[,d])=>s+d.q,0),rt:chRows.reduce((s,[,d])=>s+d.rt,0)};
 }
 // 목표매출 탭 실매출 클릭 → 2026 상품별/매출처별 판매 팝업 (brCsv: 브랜드 인덱스 콤마 구분, mo: 1~12 지정 시 해당 월, 생략 시 YTD 누적)
 function showGoalActualPopup(event,brCsv,title,mo){
   event.stopPropagation();
   const brIdxs=String(brCsv).split(',').map(Number);
-  const {prodRows,chRows,q}=_goalBreakdown(new Set(brIdxs),2026,mo?'mo':'yr',mo);
+  const {prodRows,chRows,q,rt}=_goalBreakdown(new Set(brIdxs),2026,mo?'mo':'yr',mo);
   const s=chRows.reduce((a,[,d])=>a+d.s,0);
-  const lines=[`<div>${mo?`2026년 ${mo}월 실매출`:'2026 실매출 (YTD)'}: <b style="color:#fff">${won(s)}</b></div>`,`<div>수량: <b style="color:#fff">${wonNo(q)}건</b></div>`];
+  const lines=[`<div>${mo?`2026년 ${mo}월 실매출`:'2026 실매출 (YTD)'}: <b style="color:#fff">${won(s)}</b></div>`,`<div>수량: <b style="color:#fff">${wonNo(q)}건</b></div>`,..._drLine(s,rt)];
   if(mo){
     const tgt=brIdxs.reduce((a,bi)=>a+(GOAL_DATA[bi].monthly_target[mo-1]||0),0);
     if(tgt>0)lines.push(`<div>목표: <b style="color:#fff">${won(tgt)}</b> <span style="color:${s>=tgt?'#86efac':'#fca5a5'}">· 달성률 ${(s/tgt*100).toFixed(1)}%</span></div>`);
@@ -8174,6 +8177,18 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
       });
       return Object.entries(map).sort((a,b)=>b[1].s-a[1].s).slice(0,15);
     };
+    // 막대 클릭 시 해당 기간 전체 상품 실매출/수량/정상가 합계 (평균 할인율용)
+    const periodTotByPeriod=(periodType,key,yr)=>{
+      const t={s:0,q:0,rt:0};
+      filteredP.forEach(r=>{
+        if(r[2]===12&&r[3]===1)return;
+        if(yr!=null&&r[1]!==yr)return;
+        const rk=periodType==='mo'?String(r[2]).padStart(2,'0'):String(r[3]).padStart(2,'0');
+        if(rk!==key)return;
+        t.s+=r[6];t.q+=r[5];t.rt+=r[7];
+      });
+      return t;
+    };
     // 막대 클릭 시 매출처별 매출/수량 집계 — 상품 필터 반영 채널 데이터 [bi,yr,mo,wk,ch,qty,s,rt]
     let _chDataD=null;
     const chBreakdownByPeriod=(periodType,key,yr)=>{
@@ -8233,10 +8248,10 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
           }
           const prodRows=prodBreakdownByPeriod('mo',moKey,yr);
           const chRows=chBreakdownByPeriod('mo',moKey,yr);
-          // 수량은 상위 15개 상품이 아닌 해당 월 전체 상품 기준
-          const totQ=filteredP.reduce((s,r)=>(r[2]===12&&r[3]===1)||(yr!=null&&r[1]!==yr)||String(r[2]).padStart(2,'0')!==moKey?s:s+r[5],0);
+          // 수량·할인율은 상위 15개 상품이 아닌 해당 월 전체 상품 기준
+          const tot=periodTotByPeriod('mo',moKey,yr);
           showBarBreakdownPopup(evt.native,(yr!=null?yr+'년 ':'')+moLabels[idx],
-            [`<div>매출: <b style="color:#fff">${won(curr)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(totQ)}건</b></div>`],
+            [`<div>매출: <b style="color:#fff">${won(curr)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(tot.q)}건</b></div>`,..._drLine(tot.s,tot.rt)],
             prodRows,null,chRows);
         },plugins:{legend:{display:true,position:'top',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>{
           const isLine=c.dataset.type==='line';
@@ -8290,8 +8305,9 @@ function _renderDashboard1Summary(filtered,filteredP,filteredKpi,filteredPKpi,f)
             const chRows=chBreakdownByPeriod('wk',wkNum,yr);
             const lbl=wkLabelsD[idx];
             const lblStr=Array.isArray(lbl)?lbl.join(' '):lbl;
+            const tot=periodTotByPeriod('wk',wkNum,yr);
             showBarBreakdownPopup(evt.native,(yr!=null?yr+'년 ':'')+lblStr,
-              [`<div>매출: <b style="color:#fff">${won(curr)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(qv)}건</b></div>`],
+              [`<div>매출: <b style="color:#fff">${won(curr)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(qv)}건</b></div>`,..._drLine(tot.s,tot.rt)],
               prodRows,null,chRows);
           },
           plugins:{
@@ -8378,12 +8394,12 @@ function renderMatrix(f){
     const wk=r[1]+'-W'+String(r[3]).padStart(2,'0');
     const mo=r[1]+'-'+String(r[2]).padStart(2,'0');
     // 전체 합산
-    if(!wkAgg[wk]) wkAgg[wk]={s:0,q:0};
-    wkAgg[wk].s+=r[7]; wkAgg[wk].q+=r[6];
-    if(!moAgg[mo]) moAgg[mo]={s:0,q:0};
-    moAgg[mo].s+=r[7]; moAgg[mo].q+=r[6];
-    if(!chAgg[r[4]]) chAgg[r[4]]={s:0,q:0};
-    chAgg[r[4]].s+=r[7]; chAgg[r[4]].q+=r[6];
+    if(!wkAgg[wk]) wkAgg[wk]={s:0,q:0,rt:0};
+    wkAgg[wk].s+=r[7]; wkAgg[wk].q+=r[6]; wkAgg[wk].rt+=r[8]||0;
+    if(!moAgg[mo]) moAgg[mo]={s:0,q:0,rt:0};
+    moAgg[mo].s+=r[7]; moAgg[mo].q+=r[6]; moAgg[mo].rt+=r[8]||0;
+    if(!chAgg[r[4]]) chAgg[r[4]]={s:0,q:0,rt:0};
+    chAgg[r[4]].s+=r[7]; chAgg[r[4]].q+=r[6]; chAgg[r[4]].rt+=r[8]||0;
     if(!prodAgg[r[5]]) prodAgg[r[5]]={s:0,q:0};
     prodAgg[r[5]].s+=r[7]; prodAgg[r[5]].q+=r[6];
     // 채널×상품
@@ -8617,7 +8633,7 @@ function renderMatrix(f){
               }
               const prodRows=Object.entries(wkByProd[key]||{}).sort((a,b)=>b[1].s-a[1].s).slice(0,15);
               showBarBreakdownPopup(evt.native,wkLabels[idx],
-                [`<div>매출: <b style="color:#fff">${won(cur.s)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(cur.q)}건</b></div>`],
+                [`<div>매출: <b style="color:#fff">${won(cur.s)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(cur.q)}건</b></div>`,..._drLine(cur.s,cur.rt)],
                 prodRows);
             },
             plugins:{
@@ -8683,7 +8699,7 @@ function renderMatrix(f){
               }
               const prodRows=Object.entries(wkByProd[key]||{}).sort((a,b)=>b[1].s-a[1].s).slice(0,15);
               showBarBreakdownPopup(evt.native,yr+'년 '+yrWkLabels[idx],
-                [`<div>매출: <b style="color:#fff">${won(cur.s)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(cur.q)}건</b></div>`],
+                [`<div>매출: <b style="color:#fff">${won(cur.s)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(cur.q)}건</b></div>`,..._drLine(cur.s,cur.rt)],
                 prodRows);
             },
             plugins:{
@@ -8752,7 +8768,7 @@ function renderMatrix(f){
               }
               const prodRows=Object.entries(moByProd[key]||{}).sort((a,b)=>b[1].s-a[1].s).slice(0,15);
               showBarBreakdownPopup(evt.native,moLabels[idx],
-                [`<div>매출: <b style="color:#fff">${won(cur.s)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(cur.q)}건</b></div>`],
+                [`<div>매출: <b style="color:#fff">${won(cur.s)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(cur.q)}건</b></div>`,..._drLine(cur.s,cur.rt)],
                 prodRows);
             },
             plugins:{
@@ -8814,7 +8830,7 @@ function renderMatrix(f){
               }
               const prodRows=Object.entries(moByProd[key]||{}).sort((a,b)=>b[1].s-a[1].s).slice(0,15);
               showBarBreakdownPopup(evt.native,yr+'년 '+yrMoLabels[idx],
-                [`<div>매출: <b style="color:#fff">${won(cur.s)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(cur.q)}건</b></div>`],
+                [`<div>매출: <b style="color:#fff">${won(cur.s)}</b>${g}</div>`,`<div>수량: <b style="color:#fff">${wonNo(cur.q)}건</b></div>`,..._drLine(cur.s,cur.rt)],
                 prodRows);
             },
             plugins:{
@@ -8932,7 +8948,7 @@ function renderMatrix(f){
       if(!ch)return;
       const pct=totalS>0?(d.s/totalS*100).toFixed(1):'0.0';
       showBarBreakdownPopup(nativeEvt,ch,
-        [`<div>매출: <b style="color:#fff">${won(d.s)}</b> <span style="color:rgba(255,255,255,.45)">(${pct}%)</span></div>`,`<div>수량: <b style="color:#fff">${wonNo(d.q)}건</b></div>`],
+        [`<div>매출: <b style="color:#fff">${won(d.s)}</b> <span style="color:rgba(255,255,255,.45)">(${pct}%)</span></div>`,`<div>수량: <b style="color:#fff">${wonNo(d.q)}건</b></div>`,..._drLine(d.s,d.rt)],
         chProdBreakdown(ch));
     };
     const chDonutEl=document.getElementById('c-mx-ch-donut');
@@ -10214,10 +10230,10 @@ ${brands.map(bi=>{
   // ── 막대 클릭 → 상품별/매출처별 판매 팝업 (brSet: 브랜드 인덱스 Set, periodType: 'mo'(1~12) | 'wk'(ISO 주차)) ──
   const goalBreakdown=_goalBreakdown;
   const goalBarPopup=(evt,title,brSet,yr,periodType,key,extraLines)=>{
-    const {prodRows,chRows,q}=goalBreakdown(brSet,yr,periodType,key);
+    const {prodRows,chRows,q,rt}=goalBreakdown(brSet,yr,periodType,key);
     const s=chRows.reduce((a,[,d])=>a+d.s,0);
     showBarBreakdownPopup(evt.native,title,
-      [`<div>${yr}년 실매출: <b style="color:#fff">${won(s)}</b></div>`,`<div>수량: <b style="color:#fff">${wonNo(q)}건</b></div>`,...(extraLines||[])],
+      [`<div>${yr}년 실매출: <b style="color:#fff">${won(s)}</b></div>`,`<div>수량: <b style="color:#fff">${wonNo(q)}건</b></div>`,..._drLine(s,rt),...(extraLines||[])],
       prodRows,null,chRows);
   };
   const goalMoLines=(tgtV,actV)=>tgtV>0?[`<div>목표: <b style="color:#fff">${won(tgtV)}</b> <span style="color:${actV>=tgtV?'#86efac':'#fca5a5'}">· 달성률 ${(actV/tgtV*100).toFixed(1)}%</span></div>`]:[];
