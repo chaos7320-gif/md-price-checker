@@ -4419,10 +4419,11 @@ function parseWB(wb,fname){
     if(kl==='상품명')cm.prod=k;
     if(kl==='규격')cm.size=k;
     if(kl==='수량')cm.qty=k;
-    if(kl==='실매출액'||kl==='판매가')cm.sales=k;
-    if(kl==='정상가합계')cm.retail=k;
+    if(kl==='실매출액'||kl==='판매가'||kl==='금액')cm.sales=k;
+    if(kl==='정상가합계'||kl==='인터넷총액')cm.retail=k;
     if(kl.includes('온/오프')||kl.includes('온오프')||kl==='ON/OFF')cm.online=k;
   });
+  if(!cm.sales){hideLoadingOverlay();showToast('❌ 매출 금액 컬럼(실매출액/판매가/금액)을 찾을 수 없습니다. 헤더: '+keys.map(k=>k.trim()).join(', '));return;}
   const aggCh={},aggPr={},aggSz={},aggChPr={},ps={},chSet={},prodBrandMap={};
   const newChOnline={};
   rows.forEach(row=>{
