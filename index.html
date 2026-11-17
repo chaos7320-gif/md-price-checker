@@ -10815,24 +10815,42 @@ async function saveToServer(data){
     })
     .catch(e=>{showToast('⚠️ 서버 저장 실패',6000);console.warn('서버 저장 실패:',e);});
 }
+// ── 데이터 로딩: 로컬 캐시(IndexedDB) 즉시 표시 → 서버 버전 확인 → 바뀐 경우에만 전체 다운로드 ──
+function _readIDB(){
+  return openIDB().then(db=>new Promise(res=>{
+    const req=db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).get(IDB_KEY);
+    req.onsuccess=e=>{db.close();res(e.target.result||null);};
+    req.onerror=()=>{db.close();res(null);};
+  })).catch(()=>null);
+}
+function _hasSaved(d){return !!(d&&((d.top&&d.top.length)||(d.prod&&d.prod.length)||(d.chp&&d.chp.length)));}
+function _afterDataLoad(){
+  const ts=TOP_DATA.reduce((s,r)=>s+r[6],0);
+  const lastUpload=_uploadHistory[_uploadHistory.length-1];
+  const ago=lastUpload?Math.round((Date.now()-lastUpload.ts)/60000):null;
+  const agoTxt=ago===null?'':(ago<60?` · ${ago}분 전 업로드`:` · ${Math.floor(ago/60)}시간 전 업로드`);
+  const countTxt=(_uploadHistory.length>1)?` · 누적 ${_uploadHistory.length}회`:'';
+  document.getElementById('status-txt').textContent=`🔄 ${lastUpload?.fname||'저장된 데이터'}${countTxt} · ${won(ts)}${agoTxt}`;
+  onBrandChange();
+  try{if(typeof activeTab!=='undefined'&&activeTab)apply();}catch(e){console.warn('재렌더 실패:',e);}
+}
 function restoreFromServer(){
-  fetch('/api/data',{cache:'no-store'})
-    .then(r=>r.ok?r.json():null)
-    .then(saved=>{
-      if(saved===null){restoreFromIDB();return;}  // 서버 통신 실패 시만 IDB 폴백
-      const hasAny=(saved.top&&saved.top.length)||(saved.prod&&saved.prod.length)||(saved.chp&&saved.chp.length);
-      if(!hasAny){clearIDB();return;}  // 서버 초기화 시 IDB도 동기화
-      applyUploadedData(saved);
-      saveToIDB({top:_savedUploaded.top,prod:_savedUploaded.prod,sz:_savedUploaded.sz,chp:_savedUploaded.chp,inv:INV_DATA,chOnline:CH_ONLINE,ins:INS_DATA,yrStock:YR_STOCK_DATA,dojo:DOJO_DATA,products:PRODUCTS,channels:CHANNELS,history:_uploadHistory});
-      const ts=TOP_DATA.reduce((s,r)=>s+r[6],0);
-      const lastUpload=_uploadHistory[_uploadHistory.length-1];
-      const ago=lastUpload?Math.round((Date.now()-lastUpload.ts)/60000):null;
-      const agoTxt=ago===null?'':(ago<60?` · ${ago}분 전 업로드`:` · ${Math.floor(ago/60)}시간 전 업로드`);
-      const countTxt=(_uploadHistory.length>1)?` · 누적 ${_uploadHistory.length}회`:'';
-      document.getElementById('status-txt').textContent=`🔄 ${lastUpload?.fname||'저장된 데이터'}${countTxt} · ${won(ts)}${agoTxt}`;
-      onBrandChange();
-    })
-    .catch(()=>restoreFromIDB());
+  _readIDB().then(cached=>{
+    const hasCache=_hasSaved(cached);
+    if(hasCache){applyUploadedData(cached);_afterDataLoad();}   // 1) 캐시로 즉시 표시
+    return fetch('/api/data?meta=1',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null).then(meta=>{
+      if(meta&&meta.empty){if(hasCache)clearIDB();return;}          // 서버 초기화 상태
+      if(hasCache&&meta&&meta.v&&cached._v===meta.v)return;          // 2) 최신 → 다운로드 생략
+      if(hasCache&&!meta)return;                                       // 서버 확인 실패 → 캐시 유지
+      return fetch('/api/data',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(saved=>{  // 3) 변경 시에만 전체 다운로드
+        if(!_hasSaved(saved)){if(saved!==null&&hasCache)clearIDB();return;}
+        applyUploadedData(saved);
+        saveToIDB({top:_savedUploaded.top,prod:_savedUploaded.prod,sz:_savedUploaded.sz,chp:_savedUploaded.chp,inv:INV_DATA,chOnline:CH_ONLINE,ins:INS_DATA,yrStock:YR_STOCK_DATA,dojo:DOJO_DATA,products:PRODUCTS,channels:CHANNELS,history:_uploadHistory,_v:(meta&&meta.v)||null});
+        _afterDataLoad();
+        if(hasCache&&typeof showToast==='function')showToast('🔄 최신 데이터로 갱신되었습니다',4000);
+      });
+    });
+  }).catch(e=>{console.warn('데이터 로딩 실패:',e);restoreFromIDB();});
 }
 restoreFromServer();
 onBrandChange();

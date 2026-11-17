@@ -42,6 +42,12 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const { blobs } = await list({ prefix: BLOB_PREFIX });
+      if (req.query && req.query.meta) {
+        // 버전 확인 전용: blob 목록만 조회 (본문 다운로드 없음 → 빠름)
+        if (!blobs.length) return res.status(200).json({ v: null, empty: true });
+        blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+        return res.status(200).json({ v: String(blobs[0].uploadedAt), size: blobs[0].size });
+      }
       if (!blobs.length) return res.status(200).json(null);
       // 가장 최근에 업로드된 blob 사용
       blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
