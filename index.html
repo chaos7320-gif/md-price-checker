@@ -210,6 +210,34 @@ h1,h2,h3,.chart-title,.kpi-val{letter-spacing:-0.02em}
 .nav-item{padding:8px 16px;border-radius:9999px;font-size:14px;cursor:pointer;color:var(--slate);border:none;background:none;transition:color .15s,background .15s;font-weight:500;letter-spacing:-0.005em}
 .nav-item.active{background:var(--ink);color:#fff;font-weight:600}
 .nav-item:not(.active):hover{color:var(--ink)}
+/* ── 도조 매출 탭: 기존 탭과 구분되는 틸(teal) 아웃라인 필 ── */
+.nav-item.nav-dojo{position:relative;margin-left:14px;color:#0f766e;background:#f0fdfa;box-shadow:inset 0 0 0 1.5px #14b8a6;font-weight:700}
+.nav-item.nav-dojo::before{content:'';position:absolute;left:-9px;top:22%;height:56%;width:1px;background:var(--hairline)}
+.nav-item.nav-dojo:not(.active):hover{color:#115e59;background:#ccfbf1}
+.nav-item.nav-dojo.active{background:linear-gradient(135deg,#0f766e,#14b8a6);color:#fff;box-shadow:none}
+[data-theme="dark"] .nav-item.nav-dojo{color:#5eead4;background:rgba(20,184,166,.12)}
+[data-theme="dark"] .nav-item.nav-dojo.active{background:linear-gradient(135deg,#0f766e,#14b8a6);color:#fff}
+.more-sheet-item.nav-dojo{margin-left:0;margin-top:6px}
+.more-sheet-item.nav-dojo::before{display:none}
+.dojo-hero{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:22px 26px;margin-bottom:16px;border-radius:16px;color:#fff;background:linear-gradient(135deg,#0f766e 0%,#14b8a6 100%)}
+.dojo-hero h2{margin:0;font-size:22px;font-weight:700;letter-spacing:-0.025em}
+.dojo-hero .dojo-hero-sub{font-size:12px;opacity:.85;margin-top:4px}
+.dojo-hero .dojo-hero-stats{display:flex;gap:24px;flex-wrap:wrap}
+.dojo-hero .dojo-stat-l{font-size:11px;opacity:.8}
+.dojo-hero .dojo-stat-v{font-size:20px;font-weight:700;letter-spacing:-0.02em}
+.dojo-sec-tag{display:inline-block;font-size:10px;font-weight:700;color:#0f766e;background:#ccfbf1;border-radius:9999px;padding:2px 8px;margin-right:6px;vertical-align:2px}
+[data-theme="dark"] .dojo-sec-tag{color:#5eead4;background:rgba(20,184,166,.18)}
+.dojo-card{border-top:3px solid #14b8a6 !important}
+.dojo-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:16px}
+.dojo-grid2>.chart-card,.dojo-grid2>.table-card{margin-bottom:0}
+.dojo-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.dojo-tbl th{position:sticky;top:0;background:var(--card);text-align:right;font-weight:600;color:var(--steel);padding:8px 10px;border-bottom:1px solid var(--hairline);white-space:nowrap}
+.dojo-tbl th:first-child,.dojo-tbl td:first-child,.dojo-tbl td.l,.dojo-tbl th.l{text-align:left}
+.dojo-tbl td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--hairline);white-space:nowrap}
+.dojo-tbl td.wrap{white-space:normal;word-break:break-word}
+.dojo-tbl tfoot td{font-weight:700;border-top:2px solid var(--hairline)}
+.dojo-bar{height:6px;border-radius:3px;background:#14b8a6;min-width:2px}
+@media(max-width:768px){.dojo-grid2{grid-template-columns:1fr}.dojo-hero{padding:16px 18px}.dojo-hero h2{font-size:18px}.dojo-hero .dojo-stat-v{font-size:16px}.nav-item.nav-dojo{margin-left:10px}}
 .topbar-right{display:flex;align-items:center;gap:8px;position:relative;margin-left:auto;flex-shrink:0}
 .upload-btn{display:flex;align-items:center;gap:6px;padding:11px 22px;background:var(--ink);color:#fff;border:none;border-radius:9999px;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s;white-space:nowrap;letter-spacing:-0.005em}
 .upload-btn:hover{background:var(--charcoal)}
@@ -915,6 +943,7 @@ body[data-db1-mode="weekly"] [data-period="monthly"]{display:none !important}
     <!-- <button class="nav-item" onclick="setTab('restock',this)">🔄 재입고 우선순위</button> -->
     <button class="nav-item" data-navkey="inbound" onclick="setTab('inbound',this)">📦 입고 현황</button>
     <button class="nav-item" data-navkey="forecast" onclick="setTab('forecast',this)">🔮 오더 예측</button>
+    <button class="nav-item nav-dojo" data-navkey="dojo" onclick="setTab('dojo',this)" title="매출처명에 도조가 포함된 매출만 보기">🥋 도조 매출</button>
   </nav>
   <div class="topbar-right">
     <!-- 통합 검색 트리거 (검색 인풋 형태로 노출, 클릭/단축키로 모달 열기) -->
@@ -986,6 +1015,7 @@ body[data-db1-mode="weekly"] [data-period="monthly"]{display:none !important}
   <button class="nav-item more-sheet-item" data-navkey="deadstock" onclick="setTab('deadstock',this);closeMoreSheet()">💀 데드스톡</button>
   <button class="nav-item more-sheet-item" data-navkey="inbound" onclick="setTab('inbound',this);closeMoreSheet()">📦 입고 현황</button>
   <button class="nav-item more-sheet-item" data-navkey="forecast" onclick="setTab('forecast',this);closeMoreSheet()">🔮 오더 예측</button>
+  <button class="nav-item more-sheet-item nav-dojo" data-navkey="dojo" onclick="setTab('dojo',this);closeMoreSheet()">🥋 도조 매출</button>
 </div>
 <nav class="bottom-nav" id="bottom-nav">
   <button class="bottom-nav-item nav-item active" data-navkey="goal" onclick="setTab('goal',this)"><span class="bni-ico">🎯</span><span class="bni-label">목표매출</span></button>
@@ -2527,6 +2557,7 @@ function apply(){
 
   // 입고 현황·목표매출은 매출 데이터 없이도 독립 렌더링
   if(activeTab==='inbound'){renderInbound(f);return;}
+  if(activeTab==='dojo'){renderDojo(f);return;}
   if(activeTab==='forecast'){renderForecast();return;}
   if(activeTab==='goal'){renderGoalSales();return;}
 
@@ -7442,6 +7473,145 @@ function get26MonthlyTarget(brandFilter){
 }
 
 // ── 📦 입고 현황 탭 ──
+// ── 🥋 도조 매출: 매출처명에 '도조'가 포함된 매출만 별도 집계 ──
+// 상단 필터 중 브랜드·연도·월·주차만 반영 (매출처·상품 필터는 무시 — 도조 매출처 고정)
+let _dojoProdAll=false;
+function _dojoToggleProd(){_dojoProdAll=!_dojoProdAll;apply();}
+function renderDojo(f){
+  destroyCharts();
+  const _olBar=document.getElementById('online-off-bar');if(_olBar)_olBar.style.display='none';
+  const isDojo=ch=>String(ch||'').includes('도조');
+  const bIdx=f.b==='ALL'?-1:parseInt(f.b);
+  const yrsF=f.yrs&&f.yrs.length?f.yrs:null;
+  const mosF=f.mos&&f.mos.length?f.mos:null;
+  const wksF=f.wks&&f.wks.length?f.wks:null;
+  const pass=r=>!(bIdx>=0&&r[0]!==bIdx)&&!(yrsF&&!yrsF.includes(r[1]))&&!(mosF&&!mosF.includes(r[2]))&&!(wksF&&!wksF.includes(r[3]));
+  const top=TOP_DATA.filter(r=>isDojo(r[4])&&pass(r));   // [bi,yr,mo,wk,ch,qty,s,rt]
+  const chp=CHP_DATA.filter(r=>isDojo(r[4])&&pass(r));   // [bi,yr,mo,wk,ch,prod,qty,s,rt]
+  const el=document.getElementById('content');
+  if(!top.length){
+    el.innerHTML=`<div class="dojo-hero"><div><h2>🥋 도조 매출</h2><div class="dojo-hero-sub">매출처명에 '도조'가 포함된 매출</div></div></div>
+      <div class="empty"><div class="empty-icon">🔍</div>조건에 맞는 도조 매출 데이터가 없습니다</div>`;
+    return;
+  }
+  const esc=v=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const n0=v=>Math.round(v).toLocaleString('ko-KR');
+  const pct=(a,b)=>b?(a/b*100).toFixed(1)+'%':'-';
+  const totS=top.reduce((a,r)=>a+r[6],0), totQ=top.reduce((a,r)=>a+r[5],0), totRt=top.reduce((a,r)=>a+r[7],0);
+  const disc=totRt>0?(1-totS/totRt)*100:null;
+  const years=[...new Set(top.map(r=>r[1]))].sort();
+  const chNames=[...new Set(top.map(r=>r[4]))].sort();
+  const YR_COL={2024:'#94a3b8',2025:'#2563eb',2026:'#14b8a6',2027:'#f97316'};
+  const yrCol=y=>YR_COL[y]||'#64748b';
+  const wonTick=v=>Math.abs(v)>=1e8?(v/1e8).toFixed(1)+'억':Math.abs(v)>=1e4?Math.round(v/1e4).toLocaleString('ko-KR')+'만':v;
+
+  // 1) 주간 매출: 연도별 ISO 주차
+  const wkAgg={};years.forEach(y=>wkAgg[y]={});
+  top.forEach(r=>{const o=wkAgg[r[1]];o[r[3]]=o[r[3]]||{s:0,q:0};o[r[3]].s+=r[6];o[r[3]].q+=r[5];});
+  const wkMin=Math.min(...top.map(r=>r[3])), wkMax=Math.max(...top.map(r=>r[3]));
+  const wkLabels=[];for(let w=wkMin;w<=wkMax;w++)wkLabels.push('W'+w);
+  // 2) 월간 매출
+  const moAgg={};years.forEach(y=>moAgg[y]={});
+  top.forEach(r=>{const o=moAgg[r[1]];o[r[2]]=o[r[2]]||{s:0,q:0};o[r[2]].s+=r[6];o[r[2]].q+=r[5];});
+  const moList=[...new Set(top.map(r=>r[2]))].sort((a,b)=>a-b);
+  // 3) 온/오프라인
+  const OL={ON:{l:'온라인',c:'#0284c7'},OFF:{l:'오프라인',c:'#16a34a'},WHL:{l:'홀세일',c:'#a855f7'},UNK:{l:'미분류',c:'#94a3b8'}};
+  const olAgg={},olCh={};
+  top.forEach(r=>{const t=CH_ONLINE[r[4]]||'UNK';olAgg[t]=olAgg[t]||{s:0,q:0};olAgg[t].s+=r[6];olAgg[t].q+=r[5];
+    olCh[r[4]]=olCh[r[4]]||{t,s:0,q:0};olCh[r[4]].s+=r[6];olCh[r[4]].q+=r[5];});
+  const olKeys=['ON','OFF','WHL','UNK'].filter(k=>olAgg[k]);
+  // 4) 브랜드별
+  const bAgg={};
+  top.forEach(r=>{bAgg[r[0]]=bAgg[r[0]]||{s:0,q:0,rt:0};bAgg[r[0]].s+=r[6];bAgg[r[0]].q+=r[5];bAgg[r[0]].rt+=r[7];});
+  const bRows=Object.entries(bAgg).map(([bi,v])=>({bi:+bi,...v})).sort((a,b)=>b.s-a.s);
+  const bMax=Math.max(...bRows.map(r=>r.s),1);
+  // 5) 상품별 (채널×상품 데이터 기반)
+  const pAgg={};
+  chp.forEach(r=>{const k=r[0]+'|'+r[5];pAgg[k]=pAgg[k]||{bi:r[0],p:r[5],s:0,q:0,rt:0};pAgg[k].s+=r[7];pAgg[k].q+=r[6];pAgg[k].rt+=r[8];});
+  const pRows=Object.values(pAgg).filter(r=>r.s!==0||r.q!==0).sort((a,b)=>b.s-a.s);
+  const pTotS=pRows.reduce((a,r)=>a+r.s,0), pTotQ=pRows.reduce((a,r)=>a+r.q,0);
+  const PROD_LIMIT=50;
+  const pShow=_dojoProdAll?pRows:pRows.slice(0,PROD_LIMIT);
+  const bName=bi=>bi>=0&&BNAMES[bi]?BNAMES[bi]:'기타';
+  const bDot=bi=>`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${BCOLORS[bi]||'#94a3b8'};margin-right:6px"></span>`;
+  const filterNote=[bIdx>=0?BNAMES[bIdx]:'전체 브랜드',yrsF?yrsF.join('·')+'년':'전체 연도',mosF?mosF.join('·')+'월':null,wksF?'주차 필터':null].filter(Boolean).join(' · ');
+
+  el.innerHTML=`
+<div class="dojo-hero">
+  <div>
+    <h2>🥋 도조 매출</h2>
+    <div class="dojo-hero-sub">매출처: ${chNames.map(esc).join(', ')}<br>${esc(filterNote)}</div>
+  </div>
+  <div class="dojo-hero-stats">
+    <div><div class="dojo-stat-l">실매출액</div><div class="dojo-stat-v">${won(totS)}</div></div>
+    <div><div class="dojo-stat-l">판매 수량</div><div class="dojo-stat-v">${n0(totQ)}개</div></div>
+    ${disc!==null?`<div><div class="dojo-stat-l">평균 할인율</div><div class="dojo-stat-v">${disc.toFixed(1)}%</div></div>`:''}
+  </div>
+</div>
+
+<div class="chart-card dojo-card" style="margin-bottom:16px">
+  <div class="chart-title"><span class="dojo-sec-tag">WEEKLY</span>주간 매출</div>
+  <div class="chart-sub">연도별 ISO 주차 기준 실매출액 · 막대에 마우스를 올리면 수량 표시</div>
+  <div style="position:relative;height:280px;margin-top:16px"><canvas id="c-dojo-wk"></canvas></div>
+</div>
+
+<div class="dojo-grid2">
+  <div class="chart-card dojo-card">
+    <div class="chart-title"><span class="dojo-sec-tag">MONTHLY</span>월간 매출</div>
+    <div class="chart-sub">월별 실매출액 (연도 비교)</div>
+    <div style="position:relative;height:240px;margin-top:16px"><canvas id="c-dojo-mo"></canvas></div>
+    <div class="table-wrap" style="margin-top:14px;max-height:260px"><table class="dojo-tbl">
+      <thead><tr><th>월</th>${years.map(y=>`<th>${y} 수량</th><th>${y} 매출</th>`).join('')}</tr></thead>
+      <tbody>${moList.map(m=>`<tr><td>${m}월</td>${years.map(y=>{const v=moAgg[y][m];return `<td>${v?n0(v.q):'-'}</td><td>${v?n0(v.s):'-'}</td>`;}).join('')}</tr>`).join('')}</tbody>
+      <tfoot><tr><td>합계</td>${years.map(y=>{const v=Object.values(moAgg[y]);return `<td>${n0(v.reduce((a,x)=>a+x.q,0))}</td><td>${n0(v.reduce((a,x)=>a+x.s,0))}</td>`;}).join('')}</tr></tfoot>
+    </table></div>
+  </div>
+  <div class="chart-card dojo-card">
+    <div class="chart-title"><span class="dojo-sec-tag">ON / OFF</span>온라인 · 오프라인 매출</div>
+    <div class="chart-sub">매출처의 온/오프 구분 기준</div>
+    <div style="position:relative;height:200px;margin-top:16px"><canvas id="c-dojo-ol"></canvas></div>
+    <div class="table-wrap" style="margin-top:14px;max-height:260px"><table class="dojo-tbl">
+      <thead><tr><th>구분</th><th>수량</th><th>매출</th><th>비중</th></tr></thead>
+      <tbody>${olKeys.map(k=>`<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${OL[k].c};margin-right:6px"></span><b>${OL[k].l}</b></td><td>${n0(olAgg[k].q)}</td><td>${n0(olAgg[k].s)}</td><td>${pct(olAgg[k].s,totS)}</td></tr>`
+        +Object.entries(olCh).filter(([,v])=>v.t===k).sort((a,b)=>b[1].s-a[1].s).map(([c,v])=>`<tr><td class="wrap" style="padding-left:24px;color:var(--steel)">${esc(c)}</td><td>${n0(v.q)}</td><td>${n0(v.s)}</td><td>${pct(v.s,totS)}</td></tr>`).join('')).join('')}</tbody>
+    </table></div>
+  </div>
+</div>
+
+<div class="table-card dojo-card">
+  <div class="chart-title"><span class="dojo-sec-tag">BRAND</span>브랜드별 판매 수량 · 매출</div>
+  <div class="table-wrap" style="margin-top:14px"><table class="dojo-tbl">
+    <thead><tr><th>브랜드</th><th>수량</th><th>실매출액</th><th>평균 판매가</th><th>할인율</th><th>비중</th><th class="l" style="width:28%"></th></tr></thead>
+    <tbody>${bRows.map(r=>`<tr><td>${bDot(r.bi)}<b>${esc(bName(r.bi))}</b></td><td>${n0(r.q)}</td><td>${n0(r.s)}</td><td>${r.q?n0(r.s/r.q):'-'}</td><td>${r.rt>0?((1-r.s/r.rt)*100).toFixed(1)+'%':'-'}</td><td>${pct(r.s,totS)}</td><td class="l"><div class="dojo-bar" style="width:${Math.max(0,r.s/bMax*100).toFixed(1)}%;background:${BCOLORS[r.bi]||'#14b8a6'}"></div></td></tr>`).join('')}</tbody>
+    <tfoot><tr><td>합계</td><td>${n0(totQ)}</td><td>${n0(totS)}</td><td>${totQ?n0(totS/totQ):'-'}</td><td>${disc!==null?disc.toFixed(1)+'%':'-'}</td><td>100%</td><td></td></tr></tfoot>
+  </table></div>
+</div>
+
+<div class="table-card dojo-card">
+  <div class="chart-title"><span class="dojo-sec-tag">PRODUCT</span>상품별 판매 수량 · 매출</div>
+  <div class="chart-sub">${pRows.length?`총 ${n0(pRows.length)}개 상품 · 매출순${pRows.length>PROD_LIMIT&&!_dojoProdAll?` · 상위 ${PROD_LIMIT}개 표시`:''}`:'상품별 데이터가 없습니다 (엑셀 업로드 후 표시)'}</div>
+  ${pRows.length?`<div class="table-wrap" style="margin-top:14px;max-height:640px"><table class="dojo-tbl">
+    <thead><tr><th>#</th><th class="l">상품명</th><th class="l">브랜드</th><th>수량</th><th>실매출액</th><th>평균 판매가</th><th>비중</th></tr></thead>
+    <tbody>${pShow.map((r,i)=>`<tr><td style="color:var(--stone)">${i+1}</td><td class="l wrap">${esc(r.p)}</td><td class="l">${bDot(r.bi)}${esc(bName(r.bi))}</td><td>${n0(r.q)}</td><td>${n0(r.s)}</td><td>${r.q?n0(r.s/r.q):'-'}</td><td>${pct(r.s,pTotS)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td></td><td class="l">합계</td><td></td><td>${n0(pTotQ)}</td><td>${n0(pTotS)}</td><td>${pTotQ?n0(pTotS/pTotQ):'-'}</td><td>100%</td></tr></tfoot>
+  </table></div>
+  ${pRows.length>PROD_LIMIT?`<div style="text-align:center;margin-top:12px"><button type="button" class="dojo-sec-tag" style="border:none;cursor:pointer;font-size:12px;padding:6px 14px" onclick="_dojoToggleProd()">${_dojoProdAll?'상위 '+PROD_LIMIT+'개만 보기':'전체 '+n0(pRows.length)+'개 보기'}</button></div>`:''}`:''}
+</div>`;
+
+  const tipQty=(agg,keyFn)=>({callbacks:{label:c=>{const y=c.dataset.label;const v=agg[y]?.[keyFn(c.dataIndex)];return `${y}년: ${won(c.parsed.y)}${v?` · ${n0(v.q)}개`:''}`;}}});
+  charts.dojoWk=new Chart(document.getElementById('c-dojo-wk'),{type:'bar',
+    data:{labels:wkLabels,datasets:years.map(y=>({label:String(y),data:wkLabels.map((_,i)=>wkAgg[y][wkMin+i]?.s||0),backgroundColor:yrCol(y)+'CC',borderRadius:4,barPercentage:.8,categoryPercentage:.85}))},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:years.length>1,position:'top',labels:{boxWidth:12,font:{weight:'600'}}},tooltip:tipQty(wkAgg,i=>wkMin+i)},
+      scales:{x:{grid:{display:false},ticks:{autoSkip:true,maxRotation:0}},y:{ticks:{callback:wonTick}}}}});
+  charts.dojoMo=new Chart(document.getElementById('c-dojo-mo'),{type:'bar',
+    data:{labels:moList.map(m=>m+'월'),datasets:years.map(y=>({label:String(y),data:moList.map(m=>moAgg[y][m]?.s||0),backgroundColor:yrCol(y)+'CC',borderRadius:6,barPercentage:.75,categoryPercentage:.8}))},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:years.length>1,position:'top',labels:{boxWidth:12,font:{weight:'600'}}},tooltip:tipQty(moAgg,i=>moList[i])},
+      scales:{x:{grid:{display:false}},y:{ticks:{callback:wonTick}}}}});
+  charts.dojoOl=new Chart(document.getElementById('c-dojo-ol'),{type:'doughnut',
+    data:{labels:olKeys.map(k=>OL[k].l),datasets:[{data:olKeys.map(k=>Math.max(0,olAgg[k].s)),backgroundColor:olKeys.map(k=>OL[k].c),borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{position:'right',labels:{boxWidth:12,font:{weight:'600'}}},
+      tooltip:{callbacks:{label:c=>`${c.label}: ${won(c.parsed)} (${pct(c.parsed,totS)})`}}}}});
+}
 function renderInbound(f){
   if(!INS_DATA.length){
     document.getElementById('content').innerHTML='<div class="empty"><div class="empty-icon">📦</div><div>입고 데이터가 없습니다</div><div style="font-size:13px;color:var(--hint);margin-top:8px">엑셀 파일의 \'입고데이터\' 시트를 포함해 업로드해주세요</div></div>';
