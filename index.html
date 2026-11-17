@@ -237,6 +237,11 @@ h1,h2,h3,.chart-title,.kpi-val{letter-spacing:-0.02em}
 .dojo-tbl td.wrap{white-space:normal;word-break:break-word}
 .dojo-tbl tfoot td{font-weight:700;border-top:2px solid var(--hairline)}
 .dojo-bar{height:6px;border-radius:3px;background:#14b8a6;min-width:2px}
+.dojo-ch-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 16px}
+.dojo-ch-tab{border:1.5px solid #14b8a6;background:var(--card);color:#0f766e;font:inherit;font-size:13px;font-weight:700;padding:8px 16px;border-radius:9999px;cursor:pointer;transition:background .15s,color .15s}
+.dojo-ch-tab:not(.on):hover{background:#ccfbf1}
+.dojo-ch-tab.on{background:#0f766e;border-color:#0f766e;color:#fff}
+[data-theme="dark"] .dojo-ch-tab:not(.on){color:#5eead4;background:transparent}
 .dojo-own{display:inline-block;font-size:10px;font-weight:700;color:#fff;background:#0f766e;border-radius:4px;padding:1px 5px;margin-left:4px;vertical-align:1px}
 @media(max-width:768px){.dojo-grid2{grid-template-columns:1fr}.dojo-hero{padding:16px 18px}.dojo-hero h2{font-size:18px}.dojo-hero .dojo-stat-v{font-size:16px}.nav-item.nav-dojo{margin-left:10px}}
 .topbar-right{display:flex;align-items:center;gap:8px;position:relative;margin-left:auto;flex-shrink:0}
@@ -7489,6 +7494,9 @@ function get26MonthlyTarget(brandFilter){
 let _dojoProdMode='recent';   // 'recent' = 최근 2주, 'all' = 조회 기간 전체
 const _dojoClick={};          // 차트 클릭 팝업용 집계 캐시
 function _dojoSetProdMode(m){_dojoProdMode=m;apply();}
+let _dojoCh='ALL';           // 'ALL' = 통합, 그 외 = 매출처명
+function _dojoSetCh(i){_dojoCh=i<0?'ALL':(_dojoChList[i]||'ALL');apply();}
+let _dojoChList=[];
 function _dojoRows(){
   if(DOJO_DATA.length) return {rows:DOJO_DATA,legacy:false};
   // 재업로드 전: 기존 채널×상품 데이터(4개 브랜드)로 대체
@@ -7516,12 +7524,18 @@ function renderDojo(f){
   const mosF=f.mos&&f.mos.length?f.mos:null;
   const wksF=f.wks&&f.wks.length?f.wks:null;
   const passB=r=>!(bIdx>=0&&getBrandIdx(r[4])!==bIdx);
-  const base=all.filter(passB);                       // 브랜드 필터만 (최근 2주 계산용)
+  // 매출처 선택 (통합 / 개별 채널) — 채널 목록은 브랜드 필터 무관하게 전체 도조 데이터 기준
+  const _chSum={};all.forEach(r=>{_chSum[r[3]]=(_chSum[r[3]]||0)+r[7];});
+  _dojoChList=Object.keys(_chSum).sort((a,b)=>_chSum[b]-_chSum[a]);
+  if(_dojoCh!=='ALL'&&!_dojoChList.includes(_dojoCh))_dojoCh='ALL';
+  const passCh=r=>_dojoCh==='ALL'||r[3]===_dojoCh;
+  const chTabs=_dojoChList.length?'<div class="dojo-ch-tabs">'+[['통합',-1,_dojoCh==='ALL']].concat(_dojoChList.map((c,i)=>[c,i,_dojoCh===c])).map(([l,i,on])=>'<button type="button" class="dojo-ch-tab'+(on?' on':'')+'" onclick="_dojoSetCh('+i+')">'+String(l).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))+'</button>').join('')+'</div>':'';
+  const base=all.filter(r=>passB(r)&&passCh(r));                       // 브랜드 필터만 (최근 2주 계산용)
   const rows=base.filter(r=>!(yrsF&&!yrsF.includes(r[0]))&&!(mosF&&!mosF.includes(r[1]))&&!(wksF&&!wksF.includes(r[2])));
   const el=document.getElementById('content');
   const legacyNote=legacy?`<div style="margin-bottom:16px;padding:12px 16px;border-radius:12px;background:#fef3c7;color:#92400e;font-size:13px">⚠️ 현재는 4개 운영 브랜드 데이터만 표시됩니다. 엑셀 파일을 <b>다시 업로드</b>하면 도조에서 판매된 <b>모든 브랜드</b>가 표시됩니다.</div>`:'';
   if(!rows.length){
-    el.innerHTML=`<div class="dojo-hero"><div><h2>🥋 도조 매출</h2><div class="dojo-hero-sub">매출처명에 '도조'가 포함된 매출</div></div></div>${legacyNote}
+    el.innerHTML=`<div class="dojo-hero"><div><h2>🥋 도조 매출</h2><div class="dojo-hero-sub">매출처명에 '도조'가 포함된 매출</div></div></div>${chTabs}${legacyNote}
       <div class="empty"><div class="empty-icon">🔍</div>조건에 맞는 도조 매출 데이터가 없습니다</div>`;
     return;
   }
@@ -7578,7 +7592,7 @@ function renderDojo(f){
   el.innerHTML=`
 <div class="dojo-hero">
   <div>
-    <h2>🥋 도조 매출</h2>
+    <h2>🥋 도조 매출 <span style="font-size:14px;font-weight:600;opacity:.9">· ${_dojoCh==='ALL'?'통합':esc(_dojoCh)}</span></h2>
     <div class="dojo-hero-sub">매출처: ${chNames.map(esc).join(', ')}<br>${esc(filterNote)}</div>
   </div>
   <div class="dojo-hero-stats">
@@ -7588,7 +7602,7 @@ function renderDojo(f){
     ${disc!==null?`<div><div class="dojo-stat-l">평균 할인율</div><div class="dojo-stat-v">${disc.toFixed(1)}%</div></div>`:''}
   </div>
 </div>
-${legacyNote}
+${chTabs}${legacyNote}
 <div class="chart-card dojo-card" style="margin-bottom:16px">
   <div class="chart-title"><span class="dojo-sec-tag">WEEKLY</span>주간 매출</div>
   <div class="chart-sub">연도별 ISO 주차 기준 실매출액 · <b>막대를 클릭하면 해당 주차 판매 상품</b>을 볼 수 있습니다</div>
