@@ -1643,7 +1643,7 @@ function wonNo(n){return _NF_KO.format(Math.round(n));}   // 원 없이
 // _lz(()=>html) → 자리표시자 <i data-lz> 삽입, 행에 마우스/터치가 들어오면 그 행의 자리표시자만 실제 HTML로 교체
 const _LZ={cur:new Map(),prev:new Map(),n:0};
 function _lz(fn){const id=++_LZ.n;_LZ.cur.set(id,fn);return '<i data-lz="'+id+'" hidden></i>';}
-function _lzRotate(){_LZ.prev=_LZ.cur;_LZ.cur=new Map();}
+function _lzRotate(){_LZ.prev=_LZ.cur;_LZ.cur=new Map();if(typeof _RC!=="undefined")_RC.m.clear();}
 function _lzHydrate(root){if(!root||!root.querySelectorAll)return;root.querySelectorAll('[data-lz]').forEach(el=>{const id=+el.dataset.lz;const fn=_LZ.cur.get(id)||_LZ.prev.get(id);let h='';try{h=fn?fn():'';}catch(e){console.warn('툴팁 생성 실패:',e);}el.outerHTML=h;});}
 function _lzOnEnter(e){const t=e.target;if(!t||!t.closest)return;const root=t.closest('tr')||t.closest('.sz-tooltip-wrap,[onmouseenter]');if(root&&root.querySelector('[data-lz]'))_lzHydrate(root);}
 ['mouseover','touchstart','focusin'].forEach(ev=>document.addEventListener(ev,_lzOnEnter,{capture:true,passive:true}));
@@ -3450,7 +3450,7 @@ function renderTop20(filtP,filtered,filteredP,f){
       const tFirstW=wkTotalsT20[wFirst]||0,tLastW=wkTotalsT20[wLast]||0;
       const totalDiffW=tLastW-tFirstW;
       const totalGrW=tFirstW>0?(totalDiffW/tFirstW*100):0;
-      const rows=top20ByLastWk.map(([prod,d],i)=>{
+      const rows=_rowCap(top20ByLastWk,([prod,d],i)=>{
         const wData=wks.map(wk=>(byProdWk[wk]&&byProdWk[wk][prod])||{s:0,q:0});
         const dFirst=wData[0],dLast=wData[wData.length-1];
         const diff=dLast.s-dFirst.s;
@@ -3487,7 +3487,7 @@ function renderTop20(filtP,filtered,filteredP,f){
           <td class="nr">${stkHtml}</td>
           <td><div style="display:flex;flex-direction:column;gap:3px;min-width:100px">${bars}</div></td>
         </tr>`;
-      }).join('');
+      });
       const wkChips=wks.map((wk,k)=>{
         const p=wPals[k];
         return `<span style="padding:4px 12px;border-radius:12px;font-size:12px;font-weight:700;background:${p.hdr};color:${p.text};border:1.5px solid ${p.border}">${wkLbl(wk)}</span>`;
@@ -3782,7 +3782,7 @@ function renderTop20(filtP,filtered,filteredP,f){
     ).join('');
     // 브랜드 선택 시(bI>=0) 전체 상품, 미선택(전체 브랜드) 시 TOP20만 표시 · 상품명 오름차순 정렬
     const cumList=(bI>=0?allProds:top20).slice().sort((a,b)=>a[0].localeCompare(b[0],'ko'));
-    const rows=cumList.map(([prod,d],i)=>{
+    const rows=_rowCap(cumList,([prod,d],i)=>{
       const wkData=wkQtyByProd[prod]||{};
       const insData=insWkByProd[prod]||{};
       const stock=stockByProd[prod]||0;
@@ -3835,7 +3835,7 @@ function renderTop20(filtP,filtered,filteredP,f){
         <td class="nr" data-v="${swSortV}"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${swBg};color:${swCol}">${swTxt}</span></td>
         <td class="nr" data-v="${totSellRate}"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${totSellBg};color:${totSellCol}">${totSellRate.toFixed(1)}%</span></td>
       </tr>`;
-    }).join('');
+    });
     // 합계 행
     const totalsByWk={};
     const insTotalsByWk={};
@@ -3987,7 +3987,7 @@ function renderTop20(filtP,filtered,filteredP,f){
     ).join('');
     // 브랜드 선택 시(bI>=0) 전체 상품, 미선택(전체 브랜드) 시 TOP20만 표시 · 상품명 오름차순 정렬
     const cumList=(bI>=0?allProds:top20).slice().sort((a,b)=>a[0].localeCompare(b[0],'ko'));
-    const rows=cumList.map(([prod,d],i)=>{
+    const rows=_rowCap(cumList,([prod,d],i)=>{
       const moData=moQtyByProd[prod]||{};
       const insData=insMoByProd[prod]||{};
       const stock=stockByProd[prod]||0;
@@ -4038,7 +4038,7 @@ function renderTop20(filtP,filtered,filteredP,f){
         <td class="nr" data-v="${swSortV}"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${swBg};color:${swCol}">${swTxt}</span></td>
         <td class="nr" data-v="${totSellRate}"><span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${totSellBg};color:${totSellCol}">${totSellRate.toFixed(1)}%</span></td>
       </tr>`;
-    }).join('');
+    });
     // 합계 행
     const totalsByMo={};
     const insTotalsByMo={};
@@ -7178,6 +7178,35 @@ function _prodHistoryTipHTML(prod){
 }
 
 // ── 상품 TOP 20 상세 / 누적 추이 검색 필터 (검색창 양쪽 동기화) ──
+// ── 긴 상품 표: 처음 100행만 그리고 나머지는 '더 보기'로 이어서 표시 (탭 전환 속도) ──
+var _RC={m:new Map(),n:0},_RC_FIRST=100,_RC_STEP=300;
+function _rowCap(list,fn){
+  if(list.length<=_RC_FIRST+30) return list.map(fn).join('');
+  const id=++_RC.n;_RC.m.set(id,{list,fn,next:_RC_FIRST});
+  requestAnimationFrame(()=>_rcFixSpan(document.querySelector('tr[data-rc-more="'+id+'"]')));
+  return list.slice(0,_RC_FIRST).map(fn).join('')+_rcMoreRow(id,list.length-_RC_FIRST);
+}
+function _rcMoreRow(id,left){
+  const b='padding:6px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--text);margin:0 4px';
+  return '<tr data-rc-more="'+id+'"><td colspan="1" style="text-align:center;padding:12px;background:var(--sky-light,#f0f9ff)">'
+    +'<span style="font-size:12px;color:var(--muted);margin-right:8px">'+left+'개 상품 더 있음</span>'
+    +'<button type="button" style="'+b+'" onclick="_rcMore('+id+')">▼ '+Math.min(left,_RC_STEP)+'개 더 보기</button>'
+    +'<button type="button" style="'+b+'" onclick="_rcMore('+id+',true)">전체 보기</button></td></tr>';
+}
+function _rcFixSpan(tr){if(!tr)return;const prev=tr.previousElementSibling;if(prev)tr.firstElementChild.colSpan=[...prev.children].reduce((a,c)=>a+(c.colSpan||1),0);}
+function _rcMore(id,all){
+  const st=_RC.m.get(id),tr=document.querySelector('tr[data-rc-more="'+id+'"]');
+  if(!st||!tr)return;
+  const end=all?st.list.length:Math.min(st.list.length,st.next+_RC_STEP);
+  let html='';for(let i=st.next;i<end;i++)html+=st.fn(st.list[i],i);
+  st.next=end;tr.insertAdjacentHTML('beforebegin',html);
+  const table=tr.closest('table');
+  if(table&&table.classList.contains('responsive-stack')){const hr=table.querySelector('thead tr');if(hr){const heads=[...hr.children].map(th=>th.textContent.trim());table.querySelectorAll('tbody tr').forEach(r=>_respLabelRow(r,heads));}}
+  if(end>=st.list.length){tr.remove();_RC.m.delete(id);}
+  else{tr.insertAdjacentHTML('afterend',_rcMoreRow(id,st.list.length-end));const nt=tr.nextElementSibling;tr.remove();_rcFixSpan(nt);}
+  const q=document.querySelector('.t20-search');if(q&&q.value.trim())filterT20Rows();
+}
+function _rcFlushAll(root){(root||document).querySelectorAll('tr[data-rc-more]').forEach(tr=>_rcMore(+tr.dataset.rcMore,true));}
 function filterT20Rows(srcEl){
   let raw='';
   if(srcEl) raw=srcEl.value;
@@ -7185,6 +7214,7 @@ function filterT20Rows(srcEl){
   // 다른 검색창만 동기화 — 입력 중인 창은 그대로 두어 끝 공백 입력이 끊기지 않도록 함
   document.querySelectorAll('.t20-search').forEach(inp=>{ if(inp!==srcEl && inp.value!==raw) inp.value=raw; });
   const lq=raw.trim().toLowerCase();
+  if(lq&&document.querySelector('tr[data-rc-more]')){_rcFlushAll();}
   document.querySelectorAll('tr[data-t20-prod]').forEach(tr=>{
     const p=(tr.getAttribute('data-t20-prod')||'').toLowerCase();
     tr.style.display=(!lq||p.includes(lq))?'':'none';
@@ -7193,6 +7223,7 @@ function filterT20Rows(srcEl){
 function _tblSort(th){
   const tbl=th.closest('table'),tbody=tbl&&tbl.querySelector('tbody');
   if(!tbody)return;
+  _rcFlushAll(tbl);
   const asc=th.classList.contains('sort-desc');
   const ci=[...th.closest('tr').children].indexOf(th);
   th.closest('tr').querySelectorAll('th.sortable').forEach(t=>t.classList.remove('sort-asc','sort-desc'));
@@ -7214,6 +7245,7 @@ function _tblSort(th){
 function _cumTrendSort(th){
   const tbl=th.closest('table'),tbody=tbl&&tbl.querySelector('tbody');
   if(!tbody)return;
+  _rcFlushAll(tbl);
   const asc=th.classList.contains('sort-desc');
   const ci=[...th.closest('tr').children].indexOf(th);
   th.closest('tr').querySelectorAll('th.sortable').forEach(t=>t.classList.remove('sort-asc','sort-desc'));
