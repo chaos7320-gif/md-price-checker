@@ -1636,8 +1636,17 @@ let charts={};
 
 // ── 숫자 포맷 ──
 // 모든 숫자를 한국식 천단위 콤마로 완전 표기
-function won(n){return Math.round(n).toLocaleString('ko-KR')+'원';}
-function wonNo(n){return Math.round(n).toLocaleString('ko-KR');}   // 원 없이
+const _NF_KO=new Intl.NumberFormat('ko-KR');
+function won(n){return _NF_KO.format(Math.round(n))+'원';}
+function wonNo(n){return _NF_KO.format(Math.round(n));}   // 원 없이
+// ── 지연 툴팁: 표의 hover 툴팁 HTML을 렌더 시점이 아니라 마우스를 올릴 때 생성 ──
+// _lz(()=>html) → 자리표시자 <i data-lz> 삽입, 행에 마우스/터치가 들어오면 그 행의 자리표시자만 실제 HTML로 교체
+const _LZ={cur:new Map(),prev:new Map(),n:0};
+function _lz(fn){const id=++_LZ.n;_LZ.cur.set(id,fn);return '<i data-lz="'+id+'" hidden></i>';}
+function _lzRotate(){_LZ.prev=_LZ.cur;_LZ.cur=new Map();}
+function _lzHydrate(root){if(!root||!root.querySelectorAll)return;root.querySelectorAll('[data-lz]').forEach(el=>{const id=+el.dataset.lz;const fn=_LZ.cur.get(id)||_LZ.prev.get(id);let h='';try{h=fn?fn():'';}catch(e){console.warn('툴팁 생성 실패:',e);}el.outerHTML=h;});}
+function _lzOnEnter(e){const t=e.target;if(!t||!t.closest)return;const root=t.closest('tr')||t.closest('.sz-tooltip-wrap,[onmouseenter]');if(root&&root.querySelector('[data-lz]'))_lzHydrate(root);}
+['mouseover','touchstart','focusin'].forEach(ev=>document.addEventListener(ev,_lzOnEnter,{capture:true,passive:true}));
 // 차트 툴팁용: base 대비 cur의 차액/증감율 두 줄 생성
 function diffRateLines(base,cur){
   const diff=cur-base;
@@ -2488,6 +2497,7 @@ function _buildChAwareProdData(f){
 }
 
 function apply(){
+  _lzRotate();
   const f=getF();
   const filtered=filterArr(TOP_DATA,f,false);       // 선택연도+전년도 모두
   const _chAwareP=_buildChAwareProdData(f);
@@ -3450,12 +3460,12 @@ function renderTop20(filtP,filtered,filteredP,f){
         const grCol=gr>0?'#15803d':gr<0?'#dc2626':'#64748b';
         const grTxt=gr===999?'NEW':dFirst.s===0&&dLast.s===0?'-':(gr>0?'+':'')+gr.toFixed(1)+'%';
         const stk=invStockMap[prod]??-1;
-        const stkHtml=stk<0?`<span style="color:var(--hint);font-size:11px">-</span>`:stk===0?`<span style="color:var(--red);font-weight:700">품절</span>`:`<span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)">${wonNo(stk)}개<div class="sz-tooltip-box"><div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${prod.length>24?prod.slice(0,24)+'…':prod} 사이즈별 잔여재고</div>${invSizeGridHTML(prod)}</div></span>`;
+        const stkHtml=stk<0?`<span style="color:var(--hint);font-size:11px">-</span>`:stk===0?`<span style="color:var(--red);font-weight:700">품절</span>`:`<span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)">${wonNo(stk)}개<div class="sz-tooltip-box"><div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${prod.length>24?prod.slice(0,24)+'…':prod} 사이즈별 잔여재고</div>${_lz(()=>invSizeGridHTML(prod))}</div></span>`;
         const wkCells=wks.map((wk,k)=>{
           const dd=wData[k],p=wPals[k],t=wTotalsArr[k];
           const sh=t>0?(dd.s/t*100):0;
           const sCell=dd.s
-            ?`<td class="nr" style="background:${p.bg};font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:${p.text};border-bottom-color:${p.border}">${won(dd.s)}${_prodChTipHTML(prod,null)}</span></td>`
+            ?`<td class="nr" style="background:${p.bg};font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:${p.text};border-bottom-color:${p.border}">${won(dd.s)}${_lz(()=>_prodChTipHTML(prod,null))}</span></td>`
             :`<td class="nr" style="background:${p.bg};color:var(--hint);font-weight:400">-</td>`;
           return `${sCell}
             <td class="nr" style="background:${p.bg};color:${p.text};font-size:11px">${dd.s?sh.toFixed(1)+'%':'-'}</td>
@@ -3470,7 +3480,7 @@ function renderTop20(filtP,filtered,filteredP,f){
         }).join('');
         return`<tr data-t20-prod="${escHtml(prod)}">
           <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
-          <td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
+          <td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_lz(()=>_prodHistoryTipHTML(prod))}</div></span></td>
           ${wkCells}
           <td class="nr" style="font-weight:600;color:${diff>0?'#059669':diff<0?'#dc2626':'var(--muted)'}">${diff!==0?(diff>0?'+':'')+won(Math.abs(diff)):'-'}</td>
           <td class="nr"><span style="padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;background:${grBg};color:${grCol}">${grTxt}</span></td>
@@ -3553,12 +3563,12 @@ function renderTop20(filtP,filtered,filteredP,f){
         const grCol=gr>0?'#15803d':gr<0?'#dc2626':'#64748b';
         const grTxt=gr===999?'NEW':dFirst.s===0&&dLast.s===0?'-':(gr>0?'+':'')+gr.toFixed(1)+'%';
         const stk=invStockMap[prod]??-1;
-        const stkHtml=stk<0?`<span style="color:var(--hint);font-size:11px">-</span>`:stk===0?`<span style="color:var(--red);font-weight:700">품절</span>`:`<span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)">${wonNo(stk)}개<div class="sz-tooltip-box"><div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${prod.length>24?prod.slice(0,24)+'\u2026':prod} 사이즈별 잔여재고</div>${invSizeGridHTML(prod)}</div></span>`;
+        const stkHtml=stk<0?`<span style="color:var(--hint);font-size:11px">-</span>`:stk===0?`<span style="color:var(--red);font-weight:700">품절</span>`:`<span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)">${wonNo(stk)}개<div class="sz-tooltip-box"><div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${prod.length>24?prod.slice(0,24)+'\u2026':prod} 사이즈별 잔여재고</div>${_lz(()=>invSizeGridHTML(prod))}</div></span>`;
         const yrCells=yrs.map((yr,k)=>{
           const dd=yData[k],p=yPals[k],t=yTotalsArr[k];
           const sh=t>0?(dd.s/t*100):0;
           const sCell=dd.s
-            ?`<td class="nr" style="background:${p.bg};font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:${p.text};border-bottom-color:${p.border}">${won(dd.s)}${_prodChTipHTML(prod,yr)}</span></td>`
+            ?`<td class="nr" style="background:${p.bg};font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:${p.text};border-bottom-color:${p.border}">${won(dd.s)}${_lz(()=>_prodChTipHTML(prod,yr))}</span></td>`
             :`<td class="nr" style="background:${p.bg};color:var(--hint);font-weight:400">-</td>`;
           return `${sCell}
             <td class="nr" style="background:${p.bg};color:${p.text};font-size:11px">${dd.s?sh.toFixed(1)+'%':'-'}</td>
@@ -3573,7 +3583,7 @@ function renderTop20(filtP,filtered,filteredP,f){
         }).join('');
         return`<tr data-t20-prod="${escHtml(prod)}">
           <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
-          <td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
+          <td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_lz(()=>_prodHistoryTipHTML(prod))}</div></span></td>
           ${yrCells}
           <td class="nr" style="font-weight:600;color:${diff>0?'#059669':diff<0?'#dc2626':'var(--muted)'}">${diff!==0?(diff>0?'+':'')+won(Math.abs(diff)):'-'}</td>
           <td class="nr"><span style="padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;background:${grBg};color:${grCol}">${grTxt}</span></td>
@@ -3661,8 +3671,8 @@ function renderTop20(filtP,filtered,filteredP,f){
         const da=d.rt-d.s;const dr=d.rt>0?da/d.rt*100:0;const p=tS>0?Math.round(d.s/tS*100):0;const stk=invStockMap[prod]??-1;
         return`<tr data-t20-prod="${escHtml(prod)}">
           <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
-          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:500">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
-          <td class="nr" style="font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--green);border-bottom-color:#86efac">${won(d.s)}${_prodChTipHTML(prod,null)}</span></td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:500">${escHtml(prod)}<div class="sz-tooltip-box">${_lz(()=>_prodHistoryTipHTML(prod))}</div></span></td>
+          <td class="nr" style="font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--green);border-bottom-color:#86efac">${won(d.s)}${_lz(()=>_prodChTipHTML(prod,null))}</span></td>
           <td class="nr" style="color:var(--hint)">${won(d.rt)}</td>
           <td class="nr" style="color:var(--red)">-${won(da)}</td>
           <td class="nr"><span class="disc-pill ${discClass(dr)}">${pct(dr)}</span></td>
@@ -3671,7 +3681,7 @@ function renderTop20(filtP,filtered,filteredP,f){
               ${wonNo(d.q)}건
               <div class="sz-tooltip-box">
                 <div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">\u{1F4D0} ${prod} 사이즈별 판매수량</div>
-                ${sizeGridHTML(prod,d.bi)}
+                ${_lz(()=>sizeGridHTML(prod,d.bi))}
               </div>
             </span>
           </td>
@@ -3683,7 +3693,7 @@ function renderTop20(filtP,filtered,filteredP,f){
               ${wonNo(stk)}개
               <div class="sz-tooltip-box">
                 <div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">\u{1F4E6} ${prod.length>24?prod.slice(0,24)+'\u2026':prod} 사이즈별 잔여재고</div>
-                ${invSizeGridHTML(prod)}
+                ${_lz(()=>invSizeGridHTML(prod))}
               </div>
             </span>`;
           })()}</td>
@@ -3814,10 +3824,10 @@ function renderTop20(filtP,filtered,filteredP,f){
       const swSortV=stock<=0?-1:(sellableWks===null?9999:sellableWks);
       const stkHtml=stock<=0
         ?'<span style="color:var(--red);font-weight:700">품절</span>'
-        :`<span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)">${wonNo(stock)}개<div class="sz-tooltip-box"><div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${prod.length>24?prod.slice(0,24)+'…':prod} 사이즈별 판매·재고</div>${invSizeGridHTML(prod)}</div></span>`;
+        :`<span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)">${wonNo(stock)}개<div class="sz-tooltip-box"><div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${prod.length>24?prod.slice(0,24)+'…':prod} 사이즈별 판매·재고</div>${_lz(()=>invSizeGridHTML(prod))}</div></span>`;
       return `<tr data-t20-prod="${escHtml(prod)}" data-cum-row="1">
         <td><span class="rank">${i+1}</span></td>
-        <td data-v="${escHtml(prod)}" style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
+        <td data-v="${escHtml(prod)}" style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_lz(()=>_prodHistoryTipHTML(prod))}</div></span></td>
         ${wkCells}
         <td class="nr" style="font-weight:600">${wonNo(initStock)}개</td>
         <td class="nr" data-v="${totIns}" style="font-weight:600"><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" data-prod="${escHtml(prod)}" data-sched="${escHtml(JSON.stringify(Object.fromEntries(Object.entries(insData).map(([k,v])=>[k,Math.round(v)]))))}" onclick="showInboundSchedPopup(event,this)">${wonNo(totIns)}개</span></td>
@@ -4017,10 +4027,10 @@ function renderTop20(filtP,filtered,filteredP,f){
       const swSortV=stock<=0?-1:(sellableMos===null?9999:sellableMos);
       const stkHtml=stock<=0
         ?'<span style="color:var(--red);font-weight:700">품절</span>'
-        :`<span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)">${wonNo(stock)}개<div class="sz-tooltip-box"><div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${prod.length>24?prod.slice(0,24)+'…':prod} 사이즈별 판매·재고</div>${invSizeGridHTML(prod)}</div></span>`;
+        :`<span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)">${wonNo(stock)}개<div class="sz-tooltip-box"><div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${prod.length>24?prod.slice(0,24)+'…':prod} 사이즈별 판매·재고</div>${_lz(()=>invSizeGridHTML(prod))}</div></span>`;
       return `<tr data-t20-prod="${escHtml(prod)}" data-cum-row="1">
         <td><span class="rank">${i+1}</span></td>
-        <td data-v="${escHtml(prod)}" style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_prodHistoryTipHTML(prod)}</div></span></td>
+        <td data-v="${escHtml(prod)}" style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(prod)}"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--text);border-bottom-color:rgba(15,30,54,.25);font-weight:600">${escHtml(prod)}<div class="sz-tooltip-box">${_lz(()=>_prodHistoryTipHTML(prod))}</div></span></td>
         ${moCells}
         <td class="nr" style="font-weight:600">${wonNo(initStock)}개</td>
         <td class="nr" data-v="${totIns}" style="font-weight:600"><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" data-prod="${escHtml(prod)}" data-sched="${escHtml(JSON.stringify(Object.fromEntries(Object.entries(insData).map(([k,v])=>[k,Math.round(v)]))))}" onclick="showInboundSchedPopup(event,this)">${wonNo(totIns)}개</span></td>
@@ -5920,7 +5930,7 @@ function renderChannel(filtered,filteredP,f){
           const dd=wData[k],p=wPals[k],t=wTotalsArr[k];
           const sh=t>0?(dd.s/t*100):0;
           const sCell=dd.s
-            ?`<td class="nr" style="background:${p.bg};font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:${p.text};border-bottom-color:${p.border}">${won(dd.s)}${_chProdTipHTML(d.ch,null)}</span></td>`
+            ?`<td class="nr" style="background:${p.bg};font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:${p.text};border-bottom-color:${p.border}">${won(dd.s)}${_lz(()=>_chProdTipHTML(d.ch,null))}</span></td>`
             :`<td class="nr" style="background:${p.bg};color:var(--hint);font-weight:400">-</td>`;
           return `${sCell}
             <td class="nr" style="background:${p.bg};color:${p.text};font-size:11px">${dd.s?sh.toFixed(1)+'%':'-'}</td>`;
@@ -6007,7 +6017,7 @@ function renderChannel(filtered,filteredP,f){
           const dd=yData[k],p=yPals[k],t=yTotalsArr[k];
           const sh=t>0?(dd.s/t*100):0;
           const sCell=dd.s
-            ?`<td class="nr" style="background:${p.bg};font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:${p.text};border-bottom-color:${p.border}">${won(dd.s)}${_chProdTipHTML(d.ch,yr)}</span></td>`
+            ?`<td class="nr" style="background:${p.bg};font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:${p.text};border-bottom-color:${p.border}">${won(dd.s)}${_lz(()=>_chProdTipHTML(d.ch,yr))}</span></td>`
             :`<td class="nr" style="background:${p.bg};color:var(--hint);font-weight:400">-</td>`;
           return `${sCell}
             <td class="nr" style="background:${p.bg};color:${p.text};font-size:11px">${dd.s?sh.toFixed(1)+'%':'-'}</td>`;
@@ -6091,7 +6101,7 @@ function renderChannel(filtered,filteredP,f){
           <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
           <td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(d.ch)}">${escHtml(d.ch)}</td>
           <td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bLabels}</td>
-          <td class="nr" style="font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--green);border-bottom-color:#86efac">${won(d.s)}${_chProdTipHTML(d.ch,null)}</span></td>
+          <td class="nr" style="font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:var(--green);border-bottom-color:#86efac">${won(d.s)}${_lz(()=>_chProdTipHTML(d.ch,null))}</span></td>
           <td class="nr" style="color:var(--muted)">${share.toFixed(1)}%</td>
           <td class="nr" style="color:var(--hint)">${won(d.rt)}</td>
           <td class="nr"><span class="disc-pill ${discClass(dr)}">${pct(dr)}</span></td>
@@ -6534,7 +6544,7 @@ function _dsRows(data){
           ${wonNo(r.stock)}개
           <div class="sz-tooltip-box">
             <div class="sz-title" style="font-size:11px;font-weight:700;color:#6ee7b7;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.15)">📦 ${r.prod.length>24?r.prod.slice(0,24)+'…':escHtml(r.prod)} 사이즈별 잔여재고</div>
-            ${invSizeGridHTML(r.prod)}
+            ${_lz(()=>invSizeGridHTML(r.prod))}
           </div>
         </span>
       </td>
@@ -7338,7 +7348,7 @@ function toggleSzPanel(btn,prod,bi,colCount){
     newRow.innerHTML=`<td colspan="${colCount}" style="padding:0!important;border-bottom:1px solid var(--border)!important">
       <div class="sz-panel">
         <div class="sz-title">📐 사이즈별 판매수량 — ${prod}</div>
-        ${sizeGridHTML(prod,bi)}
+        ${_lz(()=>sizeGridHTML(prod,bi))}
       </div>
     </td>`;
     curRow.after(newRow);
