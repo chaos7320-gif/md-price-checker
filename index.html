@@ -1675,11 +1675,11 @@ function showInvStockTip(event, el){
     if(prodSzRows.length){
       hasSzData=true;
       // 이 상품 기준 최신 2주 (wk도 zero-pad해야 사전순=숫자순 정렬됨)
-      const wkKeys=[...new Set(prodSzRows.map(r=>`${r[1]}-${String(r[2]).padStart(2,'0')}-${String(r[3]).padStart(2,'0')}`))].sort().reverse();
+      const wkKeys=[...new Set(prodSzRows.map(r=>_wkKey(r)).filter(Boolean))].sort().reverse();
       const last2=new Set(wkKeys.slice(0,2));
       const numWks=Math.max(last2.size,1);
       prodSzRows.forEach(r=>{
-        if(!last2.has(`${r[1]}-${String(r[2]).padStart(2,'0')}-${String(r[3]).padStart(2,'0')}`)) return;
+        if(!last2.has(_wkKey(r))) return;
         const sz=r[5].trim();
         if(!szSalesMap[sz])szSalesMap[sz]=0;
         szSalesMap[sz]+=r[6];
@@ -1709,7 +1709,7 @@ function showInvStockTip(event, el){
       const warn=wksLeft>0&&wksLeft<=12&&wkSales>0;
       return{...r,wkSales,wksLeft,warn};
     })
-    .sort((a,b)=>parseFloat(a.size)||0-parseFloat(b.size)||0||a.size.localeCompare(b.size));
+    .sort((a,b)=>((parseFloat(a.size)||0)-(parseFloat(b.size)||0))||String(a.size).localeCompare(String(b.size)));
   if(!sizes.length) return;
   const tip=document.getElementById('sz-detail-tip');
   tip.innerHTML=`<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.12)">📦 사이즈별 재고</div>`
@@ -1976,17 +1976,20 @@ function showInboundSchedPopup(event,el){
   event.stopPropagation();
 }
 
+// ── 주차 키: 월이 바뀌는 주차(예: 3월·4월에 나뉜 W14)를 한 주로 묶기 위해 연-ISO주차 기준.
+//    12월 1주차(연도 경계 오류 행)는 null → 호출부에서 제외. 1월의 52/53주차는 전년도 주차로 처리.
+function _wkKey(r,yi,mi,wi){yi=yi||1;mi=mi||2;wi=wi||3;const y=r[yi],m=r[mi],w=r[wi];if(m===12&&w===1)return null;return `${(m===1&&w>=52)?y-1:y}-W${String(w).padStart(2,'0')}`;}
 // ── 최근 2주 상품별 주당평균판매수량 계산 (PROD_DATA 기반) ──
 function calcProdWkSales(){
   const base=PROD_DATA.length?PROD_DATA:D_PROD;
   if(!base.length) return {};
   // 유니크 (yr-mo-wk) 내림차순 정렬 → 최신 2주
-  const wkKeys=[...new Set(base.map(r=>`${r[1]}-${String(r[2]).padStart(2,'0')}-${String(r[3]).padStart(2,'0')}`))].sort().reverse();
+  const wkKeys=[...new Set(base.map(r=>_wkKey(r)).filter(Boolean))].sort().reverse();
   const last2=new Set(wkKeys.slice(0,2));
   const numWks=Math.max(last2.size,1);
   const map={};
   base.forEach(r=>{
-    if(!last2.has(`${r[1]}-${String(r[2]).padStart(2,'0')}-${String(r[3]).padStart(2,'0')}`)) return;
+    if(!last2.has(_wkKey(r))) return;
     const k=`${r[0]}|${r[4]}`;
     if(!map[k]) map[k]=0;
     map[k]+=r[5]; // qty 합산
@@ -2010,12 +2013,12 @@ function calcSzWkSales(){
   });
   const map={};
   Object.values(byProd).forEach(rows=>{
-    const wkKeys=[...new Set(rows.map(r=>`${r[1]}-${String(r[2]).padStart(2,'0')}-${String(r[3]).padStart(2,'0')}`))].sort().reverse();
+    const wkKeys=[...new Set(rows.map(r=>_wkKey(r)).filter(Boolean))].sort().reverse();
     const last2=new Set(wkKeys.slice(0,2));
     const numWks=Math.max(last2.size,1);
     const tmp={};
     rows.forEach(r=>{
-      if(!last2.has(`${r[1]}-${String(r[2]).padStart(2,'0')}-${String(r[3]).padStart(2,'0')}`)) return;
+      if(!last2.has(_wkKey(r))) return;
       // 키: bi|prod정규화|size
       const k=`${r[0]}|${r[4].trim().toLowerCase()}|${r[5].trim()}`;
       if(!tmp[k]) tmp[k]=0;
@@ -2131,6 +2134,8 @@ function onBrandChange(){
   document.getElementById('f-ch').value=_chCnt===1?SELECTED_CHS[0]:(_chCnt===0?'ALL':'MULTI');
   updateChBtn();
   refreshProdList('');
+  // 다른 브랜드에서 고른 상품이 남아 있으면 결과가 비므로 새 브랜드 상품 목록에 없는 선택은 해제
+  if(b!=='ALL'&&SELECTED_PRODS.length){const _ps=new Set(_prodAllList);SELECTED_PRODS=SELECTED_PRODS.filter(p=>_ps.has(p));}
   document.getElementById('f-size').innerHTML='<option value="ALL">전체</option>';
   // 브랜드 배지 업데이트
   const badge=document.getElementById('hdr-badge');
@@ -2411,7 +2416,7 @@ function renderFilterTags(){
     var lbl='👟 '+(p.length>18?p.slice(0,18)+'…':p);
     tags.appendChild(makeTag(lbl,function(){removeProdTag(p);apply();}));
   });
-  const hasFilter=f.b!=='ALL'||f.yr!=='ALL'||SELECTED_MOS.length>0||SELECTED_WKS.length>0||SELECTED_CHS.length>0||f.size!=='ALL'||SELECTED_PRODS.length>0;
+  const hasFilter=f.b!=='ALL'||(f.yrs&&f.yrs.length>0)||SELECTED_MOS.length>0||SELECTED_WKS.length>0||SELECTED_CHS.length>0||f.size!=='ALL'||SELECTED_PRODS.length>0;
   if(resetBtn) resetBtn.style.display=hasFilter?'':'none';
   // 모바일 필터 토글 버튼에 활성 필터 개수 배지 표시
   const toggleCount=document.getElementById('filter-toggle-count');
@@ -2428,7 +2433,7 @@ function getF(){
     const isoSet=new Set();
     moList.forEach(mo=>{
       const wksInMo=[...new Set(TOP_DATA
-        .filter(r=>(!yrSet||yrSet.has(r[1]))&&r[2]===mo)
+        .filter(r=>(!yrSet||yrSet.has(r[1]))&&r[2]===mo&&!(r[2]===12&&r[3]===1))
         .map(r=>r[3]))].sort((a,b)=>a-b);
       SELECTED_WKS.forEach(uw=>{
         const w=wksInMo[uw-1];
@@ -3172,9 +3177,11 @@ function renderTop20(filtP,filtered,filteredP,f){
   _top20InvMap=invStockMap;
   const isCustomSel=f.prods&&f.prods.length>0;
   const top20Title=isCustomSel?`선택 상품 ${top20.length}개 상세`:(_db1Mode==='weekly'?`전체 상품 ${top20.length}개 상세`:'상품 TOP 20 상세');
-  const tS=filtP.reduce((s,r)=>s+r[6],0);
-  const tQ=filtP.reduce((s,r)=>s+r[5],0);
-  const tR=filtP.reduce((s,r)=>s+r[7],0);
+  // 합계는 표의 상품 값(byProd)과 같은 기준 — 채널 비율 보정 시에도 비중 합이 100%가 되도록
+  const _bpV=Object.values(byProd);
+  const tS=chFilter?_bpV.reduce((s,d)=>s+d.s,0):filtP.reduce((s,r)=>s+r[6],0);
+  const tQ=chFilter?_bpV.reduce((s,d)=>s+d.q,0):filtP.reduce((s,r)=>s+r[5],0);
+  const tR=chFilter?_bpV.reduce((s,d)=>s+d.rt,0):filtP.reduce((s,r)=>s+r[7],0);
   const maxS=top20[0]?.[1]?.s||1;
 
   // ── 매출분석 데이터 준비 ──
@@ -4194,7 +4201,7 @@ function renderDiscount(filtered,filtP,f){
   let chRatio_d=1;
   if(chFilter_d){
     const bI=f.b==='ALL'?-1:parseInt(f.b);
-    const tAll=TOP_DATA.filter(r=>(bI<0||r[0]===bI)&&(f.yr==='ALL'||r[1]===parseInt(f.yr))&&(!f.mos||!f.mos.length||f.mos.includes(r[2]))&&(!f.wks||!f.wks.length||f.wks.includes(r[3])));
+    const tAll=TOP_DATA.filter(r=>(bI<0||r[0]===bI)&&(f.yrs&&f.yrs.length?f.yrs.includes(r[1]):(f.yr==='ALL'||r[1]===parseInt(f.yr)))&&(!f.mos||!f.mos.length||f.mos.includes(r[2]))&&(!f.wks||!f.wks.length||f.wks.includes(r[3])));
     const tAllSum=tAll.reduce((s,r)=>s+r[6],0);
     const tChSum=tAll.filter(r=>chOk(r,f)).reduce((s,r)=>s+r[6],0);
     chRatio_d=tAllSum>0?tChSum/tAllSum:0;
@@ -4208,7 +4215,7 @@ function renderDiscount(filtered,filtP,f){
 
   // 기간별
   const byWk={};
-  filtered.forEach(r=>{const k=`${r[1]}-W${String(r[3]).padStart(2,'0')}`;if(!byWk[k])byWk[k]={s:0,rt:0};byWk[k].s+=r[6];byWk[k].rt+=r[7];});
+  filtered.forEach(r=>{if(r[2]===12&&r[3]===1)return;const k=`${r[1]}-W${String(r[3]).padStart(2,'0')}`;if(!byWk[k])byWk[k]={s:0,rt:0};byWk[k].s+=r[6];byWk[k].rt+=r[7];});
   const pList=Object.entries(byWk).sort((a,b)=>a[0].localeCompare(b[0]));
 
   // 비교 모드 (N개 연도 선택 시): 기간별·상품별 모두 연도별 분리
@@ -4423,7 +4430,14 @@ function handleFile(file){
         if(saved.products) PRODUCTS=saved.products;
         if(saved.channels) CHANNELS=saved.channels;
         if(saved.history) _uploadHistory=saved.history;
-        saveToIDB({top:TOP_DATA,prod:PROD_DATA,sz:SZ_DATA,chp:CHP_DATA,dojo:DOJO_DATA,inv:INV_DATA,products:PRODUCTS,channels:CHANNELS,history:_uploadHistory});
+        if(saved.ins) INS_DATA=saved.ins;
+        if(saved.yrStock) YR_STOCK_DATA=saved.yrStock;
+        if(saved.chOnline) Object.assign(CH_ONLINE,saved.chOnline);
+        // 다음 엑셀 업로드가 이전 업로드 상태로 병합해 복원 데이터를 덮어쓰지 않도록 동기화
+        _savedUploaded={top:TOP_DATA,prod:PROD_DATA,sz:SZ_DATA,chp:CHP_DATA,chOnline:CH_ONLINE,ins:INS_DATA,yrStock:YR_STOCK_DATA};
+        const _restored={top:TOP_DATA,prod:PROD_DATA,sz:SZ_DATA,chp:CHP_DATA,dojo:DOJO_DATA,inv:INV_DATA,chOnline:CH_ONLINE,ins:INS_DATA,yrStock:YR_STOCK_DATA,products:PRODUCTS,channels:CHANNELS,history:_uploadHistory};
+        saveToIDB(_restored);
+        saveToServer(_restored);
         const ts=TOP_DATA.reduce((s,r)=>s+r[6],0);
         document.getElementById('status-txt').textContent=`✅ 백업 복원 완료 · ${won(ts)} · 누적 ${_uploadHistory.length}회`;
         onBrandChange(); reset();
@@ -4443,7 +4457,7 @@ function handleFile(file){
 }
 function backupData(){
   if(!TOP_DATA||!TOP_DATA.length){alert('백업할 데이터가 없습니다.\n먼저 엑셀 파일을 업로드해주세요.');return;}
-  const payload={top:TOP_DATA,prod:PROD_DATA,sz:SZ_DATA,chp:CHP_DATA,dojo:DOJO_DATA,inv:INV_DATA,products:PRODUCTS,channels:CHANNELS,history:_uploadHistory,savedAt:new Date().toISOString()};
+  const payload={top:TOP_DATA,prod:PROD_DATA,sz:SZ_DATA,chp:CHP_DATA,dojo:DOJO_DATA,inv:INV_DATA,ins:INS_DATA,yrStock:YR_STOCK_DATA,chOnline:CH_ONLINE,products:PRODUCTS,channels:CHANNELS,history:_uploadHistory,savedAt:new Date().toISOString()};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -4468,8 +4482,11 @@ function parseWB(wb,fname){
     if(kl==='상품명')cm.prod=k;
     if(kl==='규격')cm.size=k;
     if(kl==='수량')cm.qty=k;
-    if(kl==='실매출액'||kl==='판매가'||kl==='금액')cm.sales=k;
-    if(kl==='정상가합계'||kl==='인터넷총액')cm.retail=k;
+    // 우선순위: 실매출액 > 금액 > 판매가 (단가 컬럼이 뒤에 있어도 실매출액을 덮어쓰지 않도록)
+    const _sp={'실매출액':3,'금액':2,'판매가':1}[kl];
+    if(_sp&&(!cm.sales||_sp>cm._sp)){cm.sales=k;cm._sp=_sp;}
+    const _rp={'정상가합계':2,'인터넷총액':1}[kl];
+    if(_rp&&(!cm.retail||_rp>cm._rp)){cm.retail=k;cm._rp=_rp;}
     if(kl.includes('온/오프')||kl.includes('온오프')||kl==='ON/OFF')cm.online=k;
   });
   if(!cm.sales){hideLoadingOverlay();showToast('❌ 매출 금액 컬럼(실매출액/판매가/금액)을 찾을 수 없습니다. 헤더: '+keys.map(k=>k.trim()).join(', '));return;}
@@ -4491,8 +4508,9 @@ function parseWB(wb,fname){
       else return;
       if(!yr||!mo||!day||yr<2000||yr>2099)return;
       wk=(()=>{const tmp=new Date(Date.UTC(yr,mo-1,day));tmp.setUTCDate(tmp.getUTCDate()+4-(tmp.getUTCDay()||7));const ys=new Date(Date.UTC(tmp.getUTCFullYear(),0,1));return Math.ceil((((tmp-ys)/86400000)+1)/7);})();
-      if(mo===12&&wk===1){yr++;mo=1;}  // 12월 말이 다음해 1주차 → 연·월 모두 조정
-      if(mo===1&&wk>=52){yr--;mo=12;} // 1월 초가 전년 52주차 → 연·월 모두 조정
+      // 연·월은 달력 기준 그대로 유지 (새 포맷과 동일한 규칙).
+      // 이전에는 12월 말(다음해 1주차)을 yr+1로 옮겼는데, 그러면 2025년 파일만 올려도
+      // (브랜드·2026) 조합이 교체 대상에 들어가 2026년 데이터 전체가 3일치로 덮어써졌음.
     }
     const ch=String(row[cm.ch]||''),prod=String(row[cm.prod]||'').trim(),size=String(row[cm.size]||'').trim();
     if(cm.online&&ch){const ol=String(row[cm.online]||'').toUpperCase();if(ol==='ON'||ol==='OFF'||ol==='WHL')newChOnline[ch]=ol;}
@@ -4604,9 +4622,11 @@ function parseWB(wb,fname){
       const nowYr=Math.floor(now/100), nowMo=now%100;
       // 최근 2개월 상품별 판매수량 합산
       const recentSales={};
+      const _recentWkSet=new Set();
       _prodBase.forEach(r=>{
         const diffMo=(r[1]-nowYr)*12+(r[2]-nowMo);
-        if(diffMo>=-1){// 최근 약 4주 (1~2달)
+        if(diffMo>=-1&&!(r[2]===12&&r[3]===1)){// 최근 1~2달 — 실제 포함된 주차 수로 나눔
+          _recentWkSet.add(_wkKey(r));
           const k=`${r[0]}|${r[4]}`; // r[4]=상품명 (PROD_DATA)
           if(!recentSales[k])recentSales[k]=0;
           recentSales[k]+=r[5]; // qty
@@ -4621,7 +4641,7 @@ function parseWB(wb,fname){
         const size=String(row[im.size]||'').trim();
         const stock=parseInt(row[im.stock])||0;
         const key=`${bi}|${prod}`;
-        const wkSales=Math.round((recentSales[key]||0)/4*10)/10;
+        const wkSales=Math.round((recentSales[key]||0)/Math.max(_recentWkSet.size,1)*10)/10;
         const wksLeft=wkSales>0&&stock>0?Math.round(stock/wkSales*10)/10:(stock>0?999:0);
         const warn=wksLeft>0&&wksLeft<=12;
         newInv.push({bi,brand,prod,size,stock,wkSales,wksLeft,warn});
@@ -4691,8 +4711,9 @@ function parseWB(wb,fname){
         });
         console.log('[입고파싱] 파싱결과:',newIns.length,'건 / 전체행:',insRows.length);
         if(newIns.length>0){
-          const newInsYrs=new Set(newIns.map(r=>r[1]));
-          INS_DATA=INS_DATA.filter(r=>!newInsYrs.has(r[1])).concat(newIns);
+          // (브랜드·연도) 단위로 교체 — 연도만으로 교체하면 다른 브랜드 입고까지 지워짐
+          const newInsKeys=new Set(newIns.map(r=>`${r[0]}|${r[1]}`));
+          INS_DATA=INS_DATA.filter(r=>!newInsKeys.has(`${r[0]}|${r[1]}`)).concat(newIns);
         }
       }
     }catch(e){console.warn('[입고파싱] 오류:',e);}
@@ -4732,8 +4753,8 @@ function parseWB(wb,fname){
         }
         console.log('[기초재고파싱] 시트:',yrStockSheet,'/ 컬럼 idx(date,prod,qty):',dateCol,prodCol,qtyCol,'/ 파싱결과:',newStock.length,'건');
         if(newStock.length>0){
-          const newStockYrs=new Set(newStock.map(r=>r[1]));
-          YR_STOCK_DATA=YR_STOCK_DATA.filter(r=>!newStockYrs.has(r[1])).concat(newStock);
+          const newStockKeys=new Set(newStock.map(r=>`${r[0]}|${r[1]}`));
+          YR_STOCK_DATA=YR_STOCK_DATA.filter(r=>!newStockKeys.has(`${r[0]}|${r[1]}`)).concat(newStock);
           yrStockMsg=` · 기초재고 ${newStock.length.toLocaleString()}건`;
         }
       }
@@ -5244,7 +5265,7 @@ function renderCompResult(){
       const totalChS=topCh.reduce((s,r)=>s+r[6],0);
       const ratio=totalAllS>0?totalChS/totalAllS:0;
       // 비율로 prodRows 보정
-      filteredProdRows=prodRows.map(r=>[...r.slice(0,6), Math.round(r[6]*ratio), Math.round(r[7]*ratio)]);
+      filteredProdRows=prodRows.map(r=>[...r.slice(0,5), Math.round(r[5]*ratio), Math.round(r[6]*ratio), Math.round(r[7]*ratio)]);
     }
 
     // 월별 집계
@@ -5505,8 +5526,10 @@ function renderGrowth(filtered,filteredP,f){
   // YoY/MoM 테이블: 25 vs 26 동일기간만
   const momRows=mos.map((m,i)=>{
     const v24=mo24[i], v25=mo25[i], v26=mo26[i];
-    const yoy  = v25>0?((v26-v25)/v25*100):null;
-    const mom26= i>0&&mo26[i-1]>0?((v26-mo26[i-1])/mo26[i-1]*100):null;
+    // 2026 데이터가 아직 없는 달(최신 월 이후)은 -100%가 아니라 '-'로 표시
+    const _future=parseInt(m)>MAX_MO_26&&!v26;
+    const yoy  = !_future&&v25>0?((v26-v25)/v25*100):null;
+    const mom26= !_future&&i>0&&mo26[i-1]>0?((v26-mo26[i-1])/mo26[i-1]*100):null;
     const yoy_ref = v24>0?((v25-v24)/v24*100):null;
     return{m:parseInt(m),v24,v25,v26,yoy,mom26,yoy_ref};
   }).filter(r=>r.v24>0||r.v25>0||r.v26>0);
@@ -5652,7 +5675,8 @@ function renderChannel(filtered,filteredP,f){
   const totalQ=chList.reduce((s,r)=>s+r.q,0);
   const avgS=chList.length?Math.round(totalS/chList.length):0;
   const yrTotals={};
-  if(multiYr)yrs.forEach(yr=>{yrTotals[yr]=filtered.filter(r=>r[1]===yr).reduce((s,r)=>s+r[6],0);});
+  const yrTotalsQ={};
+  if(multiYr)yrs.forEach(yr=>{const _r=filtered.filter(r=>r[1]===yr);yrTotals[yr]=_r.reduce((s,r)=>s+r[6],0);yrTotalsQ[yr]=_r.reduce((s,r)=>s+r[5],0);});
 
   // 주간 모드: 최근 2주 비교 데이터 (multiYr보다 우선)
   const _isWkModeCh2=(_db1Mode==='weekly');
@@ -6010,7 +6034,7 @@ function renderChannel(filtered,filteredP,f){
       const yFirst=yrs[0],yLast=yrs[yrs.length-1];
       const tFirst=yrTotals[yFirst]||0,tLast=yrTotals[yLast]||0;
       const rows=chListByLastYr.map((d,i)=>{
-        const yData=yrs.map(yr=>(byChYr[yr]&&byChYr[yr][d.ch])||{s:0});
+        const yData=yrs.map(yr=>(byChYr[yr]&&byChYr[yr][d.ch])||{s:0,q:0});
         const dFirst=yData[0],dLast=yData[yData.length-1];
         const diff=dLast.s-dFirst.s;
         const gr=dFirst.s>0?((diff/dFirst.s)*100):dLast.s>0?999:0;
@@ -6025,6 +6049,7 @@ function renderChannel(filtered,filteredP,f){
             ?`<td class="nr" style="background:${p.bg};font-weight:700"><span class="sz-tooltip-wrap" onmouseenter="showSzTip(event,this)" onmouseleave="hideSzTip(this)" style="color:${p.text};border-bottom-color:${p.border}">${won(dd.s)}${_lz(()=>_chProdTipHTML(d.ch,yr))}</span></td>`
             :`<td class="nr" style="background:${p.bg};color:var(--hint);font-weight:400">-</td>`;
           return `${sCell}
+            <td class="nr" style="background:${p.bg};color:${dd.q?p.text:'var(--hint)'};font-weight:${dd.q?600:400}">${dd.q?wonNo(dd.q):'-'}</td>
             <td class="nr" style="background:${p.bg};color:${p.text};font-size:11px">${dd.s?sh.toFixed(1)+'%':'-'}</td>`;
         }).join('');
         const bars=yrs.map((yr,k)=>{
@@ -6051,16 +6076,18 @@ function renderChannel(filtered,filteredP,f){
       }).join('<span style="font-size:13px;color:var(--muted);font-weight:600">vs</span>');
       const headTop=yrs.map((yr,k)=>{
         const p=yPals[k];
-        return `<th colspan="2" style="text-align:center;background:${p.hdr};color:${p.text};border-bottom:2px solid ${p.border}">${yr}년</th>`;
+        return `<th colspan="3" style="text-align:center;background:${p.hdr};color:${p.text};border-bottom:2px solid ${p.border}">${yr}년</th>`;
       }).join('');
       const headSub=yrs.map((yr,k)=>{
         const p=yPals[k];
         return `<th class="nr" style="background:${p.light};color:${p.text}">실매출액</th>
+          <th class="nr" style="background:${p.light};color:${p.text}">판매수량</th>
           <th class="nr" style="background:${p.light};color:${p.text}">비중</th>`;
       }).join('');
       const totalCells=yrs.map((yr,k)=>{
         const p=yPals[k],t=yTotalsArr[k];
         return `<td class="nr" style="background:${p.hdr};color:${p.text}">${won(t)}</td>
+          <td class="nr" style="background:${p.hdr};color:${p.text}">${wonNo(yrTotalsQ[yr]||0)}</td>
           <td class="nr" style="background:${p.hdr};color:${p.text}">100%</td>`;
       }).join('');
       return`<div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
@@ -6173,7 +6200,10 @@ function renderChannel(filtered,filteredP,f){
       if(!m[r[4]])m[r[4]]=0;
       m[r[4]]+=r[6];
     });
-    return Object.entries(m).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const all=Object.entries(m).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+    const top=all.slice(0,10);
+    top._total=all.reduce((s,[,v])=>s+v,0); // 비중 분모: 해당 기간 전체 매출처 합계 (TOP10 합계 아님)
+    return top;
   }
   const chArrByYrCh={};
   const totalByYrCh={};
@@ -6181,7 +6211,7 @@ function renderChannel(filtered,filteredP,f){
   (cmpYrsCh.length===0?['ALL']:cmpYrsCh).forEach(key=>{
     const arr=chTopByKey(key==='ALL'?null:key);
     chArrByYrCh[key]=arr;
-    totalByYrCh[key]=arr.reduce((s,[,v])=>s+v,0);
+    totalByYrCh[key]=arr._total;
     mapByYrCh[key]=Object.fromEntries(arr);
   });
 
@@ -6343,7 +6373,7 @@ function rstFilter(){
   setTxt('rst-kpi-urgent',wonNo(urgentCount)+'개');
   setTxt('rst-kpi-soon',wonNo(soonCount)+'개');
   setTxt('rst-kpi-caution',wonNo(cautionCount)+'개');
-  setTxt('rst-kpi-total-sub',q?`'${q}' 검색결과`:'최근 4주 판매속도 ≥ 3/주');
+  setTxt('rst-kpi-total-sub',q?`'${q}' 검색결과`:'최근 2주 판매속도 ≥ 3/주');
   // 테이블 갱신 (결과 없을 때 안내)
   tbody.innerHTML=rows.length?rows.map((r,i)=>`<tr style="background:${r[4]<=4?'#fff8f8':r[4]<=8?'#fffdf0':''}">
     <td><span class="rank ${i===0?'gold':i===1?'silver':i===2?'bronze':''}">${i+1}</span></td>
@@ -6388,7 +6418,7 @@ function renderRestock(f){
   const bIdx=f.b==='ALL'?-1:parseInt(f.b);
   let data=buildRstData().filter(r=>bIdx<0||r[0]===bIdx);
   // 정렬: 주당판매 높고 재고주차 적은 순
-  data.sort((a,b)=>b[2]-a[2]||a[4]-b[4]);
+  data.sort((a,b)=>a[4]-b[4]||b[3]-a[3]);  // 재고 소진 주차 짧은 순 → 주당판매 높은 순
 
   const urgentCount=data.filter(r=>r[4]<=4).length;
   const soonCount=data.filter(r=>r[4]>4&&r[4]<=8).length;
@@ -6402,7 +6432,7 @@ function renderRestock(f){
   <div class="kpi-card accent">
     <div class="kpi-label">재입고 대상 상품</div>
     <div class="kpi-val" id="rst-kpi-total">${wonNo(data.length)}개</div>
-    <div class="kpi-sub" id="rst-kpi-total-sub">최근 4주 판매속도 ≥ 3/주</div>
+    <div class="kpi-sub" id="rst-kpi-total-sub">최근 2주 판매속도 ≥ 3/주</div>
   </div>
   <div class="kpi-card">
     <div class="kpi-label">🔴 긴급 (4주 이내)</div>
@@ -6422,7 +6452,7 @@ function renderRestock(f){
   <div class="kpi-card">
     <div class="kpi-label">기준 판매속도</div>
     <div class="kpi-val">4주</div>
-    <div class="kpi-sub">최근 4주 평균</div>
+    <div class="kpi-sub">최근 2주 평균</div>
   </div>
 </div>
 <div class="charts-grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
@@ -6439,7 +6469,7 @@ function renderRestock(f){
   <div class="chart-header">
     <div>
       <div class="chart-title">재입고 우선순위 상세</div>
-      <div class="chart-sub">판매속도 높고 재고 적은 순 정렬 | 기준: 최근 4주 판매 ≥ 3개/주, 재고 12주 이내</div>
+      <div class="chart-sub">재고 소진 임박 순 정렬 | 기준: 최근 2주 판매 ≥ 3개/주, 재고 12주 이내</div>
     </div>
     <input type="text" id="rst-search-txt" placeholder="상품명 검색..." oninput="rstFilter()"
       style="font-size:12px;padding:6px 12px;border:1px solid #e8edf2;border-radius:8px;width:180px;outline:none">
@@ -6494,7 +6524,7 @@ function buildDeadStockData(){
   const base=(PROD_DATA.length?PROD_DATA:D_PROD).filter(r=>!(r[2]===12&&r[3]===1));
   if(!base.length) return [];
   // 모든 주차 정렬 (오래된→최신)
-  const wkOf=r=>`${r[1]}-${String(r[2]).padStart(2,'0')}-${String(r[3]).padStart(2,'0')}`;
+  const wkOf=r=>_wkKey(r);
   const wkKeys=[...new Set(base.map(wkOf))].sort();
   const wkPos=Object.fromEntries(wkKeys.map((k,i)=>[k,i]));
   const nowPos=wkKeys.length-1;
@@ -6732,7 +6762,7 @@ function _mgGradeColor(p){
   return {bg:'#dcfce7',color:'#15803d',label:'우수'};
 }
 function _mgRows(data){
-  if(!data.length) return `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--hint)">매출+입고원가 데이터가 모두 있는 상품이 없습니다 (입고 시트에 공급가 컬럼 필요)</td></tr>`;
+  if(!data.length) return `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--hint)">매출+입고원가 데이터가 모두 있는 상품이 없습니다 (입고 시트에 공급가 컬럼 필요)</td></tr>`;
   return data.map((r,i)=>{
     const g=_mgGradeColor(r.marginPct);
     return `<tr style="background:${r.marginPct<0?'#fff5f5':''}">
@@ -6811,7 +6841,7 @@ function renderMargin(f){
   <div class="chart-header" style="flex-wrap:wrap;gap:10px">
     <div>
       <div class="chart-title">💰 상품별 마진 상세</div>
-      <div class="chart-sub">입고 평균단가 × 판매수량으로 추정 매출원가 산출 · 매출 ÷ (매출−원가) 마진율</div>
+      <div class="chart-sub">입고 평균단가 × 판매수량으로 추정 매출원가 산출 · 마진율 = (매출−원가) ÷ 매출</div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <span style="font-size:11px;color:var(--muted);font-weight:600">정렬:</span>
@@ -7577,7 +7607,7 @@ function renderDojo(f){
   if(_dojoCh!=='ALL'&&!_dojoChList.includes(_dojoCh))_dojoCh='ALL';
   const passCh=r=>_dojoCh==='ALL'||r[3]===_dojoCh;
   const chTabs=_dojoChList.length?'<div class="dojo-ch-tabs">'+[['통합',-1,_dojoCh==='ALL']].concat(_dojoChList.map((c,i)=>[c,i,_dojoCh===c])).map(([l,i,on])=>'<button type="button" class="dojo-ch-tab'+(on?' on':'')+'" onclick="_dojoSetCh('+i+')">'+String(l).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))+'</button>').join('')+'</div>':'';
-  const base=all.filter(r=>passB(r)&&passCh(r));                       // 브랜드 필터만 (최근 2주 계산용)
+  const base=all.filter(r=>passB(r)&&passCh(r)&&!(r[1]===12&&r[2]===1)); // 브랜드 필터만 (최근 2주 계산용) · 12월 1주차(연도 경계 오류 행) 제외
   const rows=base.filter(r=>!(yrsF&&!yrsF.includes(r[0]))&&!(mosF&&!mosF.includes(r[1]))&&!(wksF&&!wksF.includes(r[2])));
   const el=document.getElementById('content');
   const legacyNote=legacy?`<div style="margin-bottom:16px;padding:12px 16px;border-radius:12px;background:#fef3c7;color:#92400e;font-size:13px">⚠️ 현재는 4개 운영 브랜드 데이터만 표시됩니다. 엑셀 파일을 <b>다시 업로드</b>하면 도조에서 판매된 <b>모든 브랜드</b>가 표시됩니다.</div>`:'';
@@ -7621,12 +7651,13 @@ function renderDojo(f){
   const bRows=Object.entries(bAgg).map(([n,v])=>({n,...v})).filter(r=>r.s!==0||r.q!==0).sort((a,b)=>b.s-a.s);
   const bMax=Math.max(...bRows.map(r=>r.s),1);
   // 5) 상품별 — 기본: 최근 2주 (데이터상 마지막 주차 + 직전 주차)
-  const lastKey=base.reduce((m,r)=>Math.max(m,r[0]*100+r[2]),0);
+  const _dKey=r=>((r[1]===1&&r[2]>=52)?r[0]-1:r[0])*100+r[2]; // 1월의 52·53주차는 전년도 주차
+  const lastKey=base.reduce((m,r)=>Math.max(m,_dKey(r)),0);
   const lY=Math.floor(lastKey/100), lW=lastKey%100;
   const prevYrMaxWk=Math.max(52,...base.filter(r=>r[0]===lY-1).map(r=>r[2]));
   const pKey=lW>1?(lY*100+lW-1):((lY-1)*100+prevYrMaxWk);
   const recent=_dojoProdMode==='recent';
-  const pSrc=recent?base.filter(r=>{const k=r[0]*100+r[2];return k===lastKey||k===pKey;}):rows;
+  const pSrc=recent?base.filter(r=>{const k=_dKey(r);return k===lastKey||k===pKey;}):rows;
   const pAgg={};
   pSrc.forEach(r=>{const k=r[4]+'|'+r[5];(pAgg[k]=pAgg[k]||{n:r[4],p:r[5],s:0,q:0,rt:0,wk:{}});const a=pAgg[k];a.s+=r[7];a.q+=r[6];a.rt+=r[8];const wk=r[0]*100+r[2];a.wk[wk]=(a.wk[wk]||0)+r[6];});
   const pRows=Object.values(pAgg).filter(r=>r.s!==0||r.q!==0).sort((a,b)=>b.s-a.s||b.q-a.q);
@@ -9046,7 +9077,7 @@ function renderMatrix(f){
                   html+='</div>';
                 });
                 if(wkYears.length>=2&&wkIdx>=0){
-                  const pv=yrWkData[0]?.[wkIdx]||0;const cv=yrWkData[1]?.[wkIdx]||0;
+                  const pv=yrWkData[yrWkData.length-2]?.[wkIdx]||0;const cv=yrWkData[yrWkData.length-1]?.[wkIdx]||0;
                   if(pv>0&&cv>0){const yoy=(cv-pv)/pv*100;const yc=yoy>=0?'#ff7b7b':'#7bb8ff';const ys=yoy>=0?'▲':'▼';
                     html+=`<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.15);font-size:11px"><span style="color:#a0adb8">전년대비</span> <span style="color:${yc};font-weight:700;margin-left:6px">${ys}${Math.abs(yoy).toFixed(1)}%</span></div>`;
                   }
@@ -9173,7 +9204,7 @@ function renderMatrix(f){
                   html+='</div>';
                 });
                 if(moYears.length>=2&&moIdx>=0){
-                  const pv=yrMoData[0]?.[moIdx]||0;const cv=yrMoData[1]?.[moIdx]||0;
+                  const pv=yrMoData[yrMoData.length-2]?.[moIdx]||0;const cv=yrMoData[yrMoData.length-1]?.[moIdx]||0;
                   if(pv>0&&cv>0){const yoy=(cv-pv)/pv*100;const yc=yoy>=0?'#ff7b7b':'#7bb8ff';const ys=yoy>=0?'▲':'▼';
                     html+=`<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.15);font-size:11px"><span style="color:#a0adb8">전년대비</span> <span style="color:${yc};font-weight:700;margin-left:6px">${ys}${Math.abs(yoy).toFixed(1)}%</span></div>`;
                   }
@@ -9604,7 +9635,8 @@ function _ofInitState(){
   const bIdx=bSel==='ALL'?-1:parseInt(bSel);
   const rows=PROD_DATA.filter(r=>(bIdx<0||r[0]===bIdx)&&!_ofExcl(r));
   const maxYr=rows.length?Math.max(...rows.map(r=>r[1])):new Date().getFullYear();
-  const maxWk=Math.max(0,...rows.filter(r=>r[1]===maxYr).map(r=>r[3]));
+  // 1월에 찍힌 52·53주차(전년도 주차)는 최신 주차 판정에서 제외 — 안 그러면 1월에 기본 기간이 다음 해로 튐
+  const maxWk=Math.max(0,...rows.filter(r=>r[1]===maxYr&&!(r[2]===1&&r[3]>=52)).map(r=>r[3]));
   // 기본 판매 목표 기간: 최근 데이터 다음 주부터 12주 (연말을 넘기면 다음 해 W1~W12)
   let tYr=maxYr,tFrom=maxWk+1;
   if(tFrom>52){tYr++;tFrom=1;}
